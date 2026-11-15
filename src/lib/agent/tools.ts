@@ -9,7 +9,19 @@ import { askQuestion } from "@/lib/questions";
 import { formatHits, letta, rememberAnswer, rememberLesson, searchMemory } from "@/lib/memory";
 import { ROLES } from "@/lib/memory/lettaCore";
 import { IMAGE_LIMIT, imagesConfigured, makeImage } from "@/lib/images";
-import { AGENTIC_MAP, adviceFileName, mustReview, adviceMarkdown, signoffReviewProblem, stageGateBlock } from "./advisorGates";
+import {
+  AGENTIC_MAP,
+  OPTIONS_CATALOGUE,
+  PICKS_FILE,
+  adviceFileName,
+  adviceMarkdown,
+  catalogueProblems,
+  mustReview,
+  picksMarkdown,
+  resolvePicks,
+  signoffReviewProblem,
+  stageGateBlock,
+} from "./advisorGates";
 
 const AGENT_KEYS = Object.keys(AGENTS) as [string, ...string[]];
 const ROLE_KEYS = ROLES.map((r) => r.key) as [string, ...string[]];
@@ -103,7 +115,7 @@ export function baccTools(useCaseId: string, slug: string, tally: RunTally) {
       ),
       tool(
         "set_stage",
-        "Show which BMAD stage the work is in and which agent is working now. Handing over to a BMAD agent needs your expert advice for it first (mcp__bacc__advise), Sally also needs bacc/design/concept.md, and Winston (architect) needs bacc/advisor/agentic-map.md (bacc-agentic-advisor skill); otherwise this refuses and says what to do.",
+        "Show which BMAD stage the work is in and which agent is working now. Handing over to a BMAD agent needs your expert advice for it first (mcp__bacc__advise), Sally also needs bacc/design/concept.md, Sally also needs the options catalogue bacc/design/options.md, and Winston (architect) needs bacc/advisor/agentic-map.md (bacc-agentic-advisor skill); otherwise this refuses and says what to do.",
         { stage: z.enum(STAGE_KEYS), agent: z.enum(AGENT_KEYS) },
         async ({ stage, agent }) => {
           const block = stageGateBlock({
@@ -111,6 +123,7 @@ export function baccTools(useCaseId: string, slug: string, tally: RunTally) {
             advised: await advisedFor(agent),
             conceptExists: await fileExists(workspacePath(slug, "bacc", "design", "concept.md")),
             agenticMapExists: await fileExists(workspacePath(slug, AGENTIC_MAP)),
+            optionsExists: await fileExists(workspacePath(slug, OPTIONS_CATALOGUE)),
           });
           if (block) return ok(block);
           await prisma.useCase.update({ where: { id: useCaseId }, data: { stage, activeAgent: agent } });
@@ -132,6 +145,25 @@ export function baccTools(useCaseId: string, slug: string, tally: RunTally) {
           await fs.mkdir(advisorDir, { recursive: true });
           await fs.writeFile(path.join(advisorDir, adviceFileName(for_agent, when)), adviceMarkdown(for_agent, ideas, when));
           return ok("Saved. Offer the best one or two to the client with ask, then pass what they accept to the agent as their input.");
+        },
+      ),
+      tool(
+        "record_picks",
+        "Record the option numbers the client picked from the options catalogue (bacc/design/options.md), with their own words. Only numbers the client said themselves; never pick for them. Saved in bacc/design/picks.md, which Sally and Generate follow.",
+        {
+          codes: z.array(z.number().int().positive()).min(1),
+          client_words: z.string().min(1),
+        },
+        async ({ codes, client_words }) => {
+          const md = await fs.readFile(workspacePath(slug, OPTIONS_CATALOGUE), "utf8").catch(() => "");
+          if (!md) return ok(`There is no ${OPTIONS_CATALOGUE} yet. Write it first (bacc-expert-advisor skill, section 2a).`);
+          const { picked, unknown } = resolvePicks(codes, md);
+          if (unknown.length)
+            return ok(`Not recorded: ${unknown.join(", ")} ${unknown.length === 1 ? "is" : "are"} not a current option in the catalogue. Ask the client which option they meant.`);
+          const file = workspacePath(slug, PICKS_FILE);
+          const head = (await fileExists(file)) ? "" : "# Client's picks from the options catalogue\n\nNewest last. Sally designs with these; Generate builds them.\n";
+          await fs.appendFile(file, head + picksMarkdown(picked, client_words, new Date()));
+          return ok(`Recorded: ${picked.map((p) => `${p.code} ${p.name}`).join("; ")}. Pass them to Sally as the client's input.`);
         },
       ),
       tool(
@@ -252,8 +284,16 @@ export function baccTools(useCaseId: string, slug: string, tally: RunTally) {
           } catch {
             return ok("No file at that path yet.");
           }
-          // The design concept, component list and agentic map always go to the client for approval.
-          if (mustReview(path.relative(workspacePath(slug), abs))) args.review = true;
+          // The design concept, component list, agentic map and options catalogue always go to the client for approval.
+          const rel = path.relative(workspacePath(slug), abs).replace(/\\/g, "/");
+          if (mustReview(rel)) args.review = true;
+          // The options catalogue's code numbers never change meaning once the client has seen them.
+          const lastCatalogue = workspacePath(slug, "bacc", "design", ".options-registered.md");
+          if (rel === OPTIONS_CATALOGUE) {
+            const problem = catalogueProblems(await fs.readFile(abs, "utf8"), await fs.readFile(lastCatalogue, "utf8").catch(() => ""));
+            if (problem) return ok(`${problem} Fix the file, then register it again.`);
+            await fs.copyFile(abs, lastCatalogue);
+          }
           const existing = await prisma.document.findFirst({ where: { useCaseId, storagePath: abs } });
           const data = {
             fileName: args.title,

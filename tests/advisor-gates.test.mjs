@@ -1,7 +1,7 @@
 // Run: node --test tests/  (Node 22 strips the TypeScript types itself.)
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { stageGateBlock, signoffReviewProblem, adviceFileName, adviceMarkdown, mustReview } from "../src/lib/agent/advisorGates.ts";
+import { stageGateBlock, signoffReviewProblem, adviceFileName, adviceMarkdown, mustReview, catalogueItems, catalogueProblems, resolvePicks, picksMarkdown } from "../src/lib/agent/advisorGates.ts";
 
 test("handover to a BMAD agent needs advice first", () => {
   assert.match(stageGateBlock({ agent: "pm", advised: false, conceptExists: false }), /mcp__bacc__advise for "pm"/);
@@ -13,7 +13,8 @@ test("Sally needs advice and the design concept", () => {
   assert.match(both, /advise/);
   assert.match(both, /concept\.md/);
   assert.match(stageGateBlock({ agent: "ux", advised: true, conceptExists: false }), /concept\.md/);
-  assert.equal(stageGateBlock({ agent: "ux", advised: true, conceptExists: true }), "");
+  assert.match(stageGateBlock({ agent: "ux", advised: true, conceptExists: true, optionsExists: false }), /options\.md/);
+  assert.equal(stageGateBlock({ agent: "ux", advised: true, conceptExists: true, optionsExists: true }), "");
 });
 
 test("Winston needs the agentic map", () => {
@@ -44,4 +45,34 @@ test("advice is written as a dated file", () => {
 test("concept, component list and agentic map always need the client's approval", () => {
   for (const p of ["bacc/design/concept.md", "./bacc/design/components.md", "bacc/advisor/agentic-map.md"]) assert.equal(mustReview(p), true, p);
   assert.equal(mustReview("bacc/advisor/app-review-v5.md"), false);
+});
+
+const rows = (n, from = 1) => Array.from({ length: n }, (_, i) => `| ${from + i} | Option ${from + i} | what | where | link |`).join("\n");
+const CAT = `# Options\n\n## Buttons\n| Code | Option | What you'd see | Where | Look |\n|---|---|---|---|---|\n${rows(12)}\n`;
+
+test("the options catalogue goes to the client and reads its code numbers", () => {
+  assert.equal(mustReview("bacc/design/options.md"), true);
+  const items = catalogueItems(CAT);
+  assert.equal(items.length, 12);
+  assert.deepEqual(items[5], { code: 6, name: "Option 6", retired: false });
+  assert.equal(catalogueProblems(CAT), "");
+  assert.match(catalogueProblems("| 1 | Only one | a | b | c |"), /at least 10/);
+  assert.match(catalogueProblems(CAT + "| 3 | Again | a | b | c |\n"), /code 3 is used twice/);
+});
+
+test("code numbers never change meaning", () => {
+  const renamed = CAT.replace("| 6 | Option 6 |", "| 6 | Something else |");
+  assert.match(catalogueProblems(renamed, CAT), /code 6 was "Option 6"/);
+  const dropped = CAT.replace(/\| 7 \| Option 7 .*\n/, "");
+  assert.match(catalogueProblems(dropped, CAT), /code 7 .*disappeared/);
+  const retired = CAT.replace("| 7 | Option 7 |", "| 7 | Option 7 (retired) |");
+  assert.equal(catalogueProblems(retired + rows(1, 13) + "\n", CAT), "");
+});
+
+test("picks resolve to options; unknown and retired numbers are refused", () => {
+  const cat = CAT.replace("| 7 | Option 7 |", "| 7 | Option 7 (retired) |");
+  const { picked, unknown } = resolvePicks([6, 5, 6, 7, 99], cat);
+  assert.deepEqual(picked.map((p) => p.code), [6, 5]);
+  assert.deepEqual(unknown, [7, 99]);
+  assert.match(picksMarkdown(picked, "I like 6 and 5", new Date("2026-11-15T13:00:00Z")), /- 6: Option 6/);
 });
