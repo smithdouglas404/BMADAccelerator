@@ -46,6 +46,10 @@ export type ReviewT = {
   answer?: string;
   createdAt: string;
   resolvedAt?: string | null;
+  includeInBuild: boolean;
+  builtInVersion: number;
+  refinedAt?: string | null;
+  previousAnswer?: string;
 };
 
 export type UseCaseFull = {

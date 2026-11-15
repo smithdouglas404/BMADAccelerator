@@ -152,6 +152,13 @@ model ReviewItem {
   answer     String    @default("")
   createdAt  DateTime  @default(now())
   resolvedAt DateTime?
+  // Goes into the next Generate run. On for decisions the client made; off for open to-dos until they answer or tick it.
+  includeInBuild Boolean @default(false)
+  // The app version this decision was built into (0 = not built yet).
+  builtInVersion Int @default(0)
+  // When the client refined an earlier decision from History, and what they had said before.
+  refinedAt      DateTime?
+  previousAnswer String    @default("")
   useCase    UseCase   @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
 }
 

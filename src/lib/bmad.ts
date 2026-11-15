@@ -13,6 +13,7 @@ export const STAGES: {
     key: "clarify",
     label: "Clarify",
     docs: [
+      { key: "intake", label: "Use-case brief" },
       { key: "brief", label: "Product brief" },
       { key: "prfaq", label: "PRFAQ" },
       { key: "research", label: "Research" },

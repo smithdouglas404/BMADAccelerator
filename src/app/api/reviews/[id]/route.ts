@@ -4,24 +4,50 @@ import { prisma } from "@/lib/db";
 import { enqueue, agentsEnabled } from "@/lib/agent/runner";
 import { AGENTS, KANBAN_COLUMNS } from "@/lib/bmad";
 import { onGatePassed, rememberDecision } from "@/lib/memory";
+import { defaultInclude, isBuildDecision } from "@/lib/buildQueue";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 const Body = z.object({
-  status: z.enum(["approved", "edited", "answered", "dismissed"]),
+  status: z.enum(["approved", "edited", "answered", "dismissed"]).optional(),
   answer: z.string().max(20000).optional(),
+  // Whether this decision goes into the next Generate run.
+  include: z.boolean().optional(),
+  // A change to a decision already in History.
+  refine: z.boolean().optional(),
 });
 
 // Resolves a review-queue item. Every resolution goes back to the concierge, who
 // passes it to the BMAD agent that owns it (a skipped card move still reaches Sofia).
+// With only `include`, it just ticks the item in or out of the next build.
 export async function PATCH(req: Request, { params }: Ctx) {
   const { id } = await params;
   const parsed = Body.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: "Invalid" }, { status: 400 });
+  const { include, refine } = parsed.data;
+  const before = await prisma.reviewItem.findUnique({ where: { id } });
+  if (!before) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  if (!parsed.data.status && !refine) {
+    if (include === undefined) return NextResponse.json({ error: "Nothing to change" }, { status: 400 });
+    const item = await prisma.reviewItem.update({ where: { id }, data: { includeInBuild: include && isBuildDecision(before.kind) } });
+    return NextResponse.json(item);
+  }
+
+  if (refine) return refineDecision(before, parsed.data.answer?.trim() ?? "", include);
+
+  const status = parsed.data.status!;
   const item = await prisma.reviewItem.update({
     where: { id },
-    data: { status: parsed.data.status, answer: parsed.data.answer ?? "", resolvedAt: new Date() },
+    data: {
+      status,
+      answer: parsed.data.answer ?? "",
+      resolvedAt: new Date(),
+      includeInBuild: isBuildDecision(before.kind) && (include ?? defaultInclude(status)),
+      builtInVersion: 0,
+    },
   });
+  parsed.data.status = status;
   const answer = parsed.data.answer?.trim() ?? "";
   if (answer) {
     await prisma.message.create({ data: { useCaseId: item.useCaseId, role: "user", content: `${item.title}: ${answer}` } });
@@ -59,6 +85,38 @@ export async function PATCH(req: Request, { params }: Ctx) {
       prompt = `The client ${parsed.data.status === "dismissed" ? "put off" : answer ? "answered" : "approved"} this review item (${item.kind}): "${item.title}"${answer ? `. Their answer: "${answer}"` : ""}. Use it in the BMAD work where it belongs.`;
   }
   await enqueue(item.useCaseId, "review", prompt);
+  return NextResponse.json(item);
+}
+
+type Item = NonNullable<Awaited<ReturnType<typeof prisma.reviewItem.findUnique>>>;
+
+// The client changed a decision they made earlier. The old answer is kept, the item shows "Updated",
+// it goes into the next build unless they untick it, and the owning BMAD agent hears about it.
+async function refineDecision(before: Item, answer: string, include: boolean | undefined) {
+  if (!answer) return NextResponse.json({ error: "Write what changes" }, { status: 400 });
+  const item = await prisma.reviewItem.update({
+    where: { id: before.id },
+    data: {
+      status: "edited",
+      previousAnswer: before.answer || (before.status === "approved" ? "Approved as written" : before.status === "dismissed" ? "Put off" : ""),
+      answer,
+      refinedAt: new Date(),
+      resolvedAt: before.resolvedAt ?? new Date(),
+      includeInBuild: isBuildDecision(before.kind) && (include ?? true),
+      builtInVersion: 0,
+    },
+  });
+  await prisma.message.create({ data: { useCaseId: item.useCaseId, role: "user", content: `Change to an earlier decision, "${item.title}": ${answer}` } });
+  await rememberReview(item, "answered", answer);
+  if (agentsEnabled() && item.kind !== "document") {
+    await enqueue(
+      item.useCaseId,
+      "review",
+      `The client refined an earlier decision (${item.kind}): "${item.title}". Before, they said: "${item.previousAnswer || "approved as written"}". Now: "${answer}". The new answer replaces the old one. Pass it to the BMAD agent that owns this in its own update workflow, so the documents say the new thing, and tell the client in one line what you changed.${
+        item.includeInBuild ? " It is ticked for the next build, so Generate will also read it directly." : ""
+      }`,
+    );
+  }
   return NextResponse.json(item);
 }
 

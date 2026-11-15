@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { AGENTS, type AgentKey, type StageKey } from "@/lib/bmad";
 import { patchUseCase, type UseCaseFull } from "@/lib/types";
+import { buildSummary, pendingForBuild } from "@/lib/buildQueue";
 import ProcessRail from "./ProcessRail";
 import Conversation from "./Conversation";
 import KanbanBoard from "./KanbanBoard";
@@ -62,14 +63,12 @@ export default function Workspace({ data, reload }: { data: UseCaseFull; reload:
   const agent = AGENTS[agentKey];
   const openCount = data.reviews.filter((r) => r.status === "open").length;
   const ready = readiness(data);
-  // Decisions the client made after the latest build, which the running app doesn't have yet.
-  const builtAt = data.lastGeneratedAt ?? "";
-  const changesSince = builtAt
-    ? data.reviews.filter(
-        (r) => r.kind !== "move" && r.kind !== "document" && ["approved", "answered", "edited"].includes(r.status) && (r.resolvedAt ?? "") > builtAt,
-      ).length + data.feedback.filter((f) => f.status !== "built" && f.createdAt > builtAt).length
-    : 0;
+  // What the next build takes in: ticked review-queue decisions not built yet, plus unbuilt screen mark-ups.
+  const tickedCount = pendingForBuild(data.reviews).length;
+  const markupCount = data.feedback.filter((f) => f.status !== "built").length;
+  const changesSince = tickedCount + markupCount;
   const [wide, setWide] = useState(false);
+  const [boardFull, setBoardFull] = useState(false);
 
   async function generate(mode: "" | "redesign" | "fresh" = "") {
     setNotice("");
@@ -99,7 +98,7 @@ export default function Workspace({ data, reload }: { data: UseCaseFull; reload:
   }
 
   const generateTip = changesSince
-    ? `${changesSince} decision${changesSince === 1 ? "" : "s"} since version ${data.generateCount} aren't in the app yet. Regenerate to build them in.`
+    ? `${buildSummary(tickedCount, markupCount, data.generateCount + 1)}${ready.ready ? "" : ` ${ready.reason}.`}`
     : ready.ready
       ? "Build the app now"
       : `${ready.reason}. You can still generate now; it builds from what BMAD has so far.`;
@@ -180,8 +179,8 @@ export default function Workspace({ data, reload }: { data: UseCaseFull; reload:
                 <Hammer />
                 {data.generateBusy ? "Generating..." : data.generateCount ? "Regenerate" : "Generate"}
                 {!data.generateBusy && changesSince > 0 && (
-                  <Badge className="bg-warn text-white" aria-label={`${changesSince} new decisions not built yet`}>
-                    {changesSince} new
+                  <Badge className="bg-warn text-white" aria-label={`${changesSince} changes go into the next build`}>
+                    {changesSince} to build
                   </Badge>
                 )}
                 {data.generateBusy && <BorderBeam size={60} duration={3} colorFrom="#ffffff" colorTo="#c4b5fd" />}
@@ -249,8 +248,11 @@ export default function Workspace({ data, reload }: { data: UseCaseFull; reload:
       </div>
 
       {!focus && (
-        <Card className="flex flex-col gap-0 overflow-hidden py-0" style={{ height: boardHeight }}>
-          <div
+        <Card
+          className={cn("flex flex-col gap-0 overflow-hidden py-0", boardFull && "fixed inset-x-3 top-16 bottom-3 z-40 shadow-2xl")}
+          style={boardFull ? undefined : { height: boardHeight }}
+        >
+          {!boardFull && <div
             role="separator"
             aria-orientation="horizontal"
             aria-label="Resize board"
@@ -260,9 +262,9 @@ export default function Workspace({ data, reload }: { data: UseCaseFull; reload:
             className="group flex h-3 shrink-0 cursor-row-resize items-center justify-center"
           >
             <span className="h-1 w-12 rounded-full bg-border transition-colors group-hover:bg-primary/50" />
-          </div>
+          </div>}
           <div className="min-h-0 flex-1">
-            <KanbanBoard data={data} reload={reload} />
+            <KanbanBoard data={data} reload={reload} full={boardFull} onToggleFull={() => setBoardFull((f) => !f)} />
           </div>
         </Card>
       )}

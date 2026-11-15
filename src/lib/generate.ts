@@ -1,4 +1,5 @@
 import { promises as fs } from "fs";
+import { decisionsForPrompt, pendingForBuild } from "./buildQueue";
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
@@ -79,6 +80,7 @@ function generatePrompt(
   feedback: { comment: string; imagePath: string; pageUrl: string }[],
   redesign: boolean,
   fresh = false,
+  decisions = "",
 ) {
   const first = uc.generateCount === 0 || fresh;
   const fb = feedback
@@ -100,7 +102,11 @@ function generatePrompt(
   return `${opening}${components}${stackCheck}
 
 ${docs.length ? `BMAD documents ${first || redesign ? "available now" : "changed since the last generation"}:\n${docs.map((d) => `- ${d}`).join("\n")}` : first ? "BMAD has no documents yet: build from bacc/intake.md." : "No BMAD document changed since the last generation."}
-${fb ? `\nScreen feedback from the client since the last generation (open each screenshot with Read: the drawings show the spot they mean):\n${fb}\n` : ""}
+${fb ? `\nScreen feedback from the client since the last generation (open each screenshot with Read: the drawings show the spot they mean):\n${fb}\n` : ""}${
+    decisions
+      ? `\nDecisions from the client's review queue that they ticked for this build. Build each one in, even where a BMAD document doesn't say it yet; a newer decision here wins over an older document line. List any you couldn't build, and why, in the notes:\n${decisions}\n`
+      : ""
+  }
 Save your screenshots in \`${workspacePath(uc.slug, "bacc", "design", "shots")}\`.
 
 When the app works and you have checked the screenshots, write \`${notesPath}\` for BMAD, with these sections:
@@ -188,6 +194,8 @@ export async function runGenerate(useCaseId: string, opts: { redesign?: boolean;
     }
     const docs = await changedDocs(redesign || fresh ? { ...uc, lastGeneratedAt: null } : uc);
     const feedback = await prisma.feedback.findMany({ where: { useCaseId, status: { in: ["new", "sent"] } } });
+    // Review-queue decisions the client ticked for this build (see buildQueue.ts).
+    const ticked = pendingForBuild(await prisma.reviewItem.findMany({ where: { useCaseId, includeInBuild: true, builtInVersion: 0 }, orderBy: { createdAt: "asc" } }));
     const tally: RunTally = { spoke: 0 };
 
     if (process.env.BACC_FAKE_AGENT === "1" && !claudeConfigured()) {
@@ -196,7 +204,15 @@ export async function runGenerate(useCaseId: string, opts: { redesign?: boolean;
       await runSdkTurn({
         useCaseId,
         slug: uc.slug,
-        prompt: generatePrompt(uc, notesPath, docs, feedback.map((f) => ({ ...f, imagePath: path.relative(workspacePath(uc.slug), f.imagePath) })), redesign, fresh),
+        prompt: generatePrompt(
+          uc,
+          notesPath,
+          docs,
+          feedback.map((f) => ({ ...f, imagePath: path.relative(workspacePath(uc.slug), f.imagePath) })),
+          redesign,
+          fresh,
+          decisionsForPrompt(ticked),
+        ),
         // A fresh build starts a new session, so nothing from the old app's build carries over.
         resume: fresh ? "" : uc.generateSessionId,
         appendSystem: GENERATOR_RULES,
@@ -218,6 +234,9 @@ export async function runGenerate(useCaseId: string, opts: { redesign?: boolean;
     await prisma.useCase.update({ where: { id: useCaseId }, data: { generateCount: n, lastGeneratedAt: new Date(), ...(uc.stage === "clarify" || uc.stage === "plan" ? { stage: "build" } : {}) } });
     await stopPreview(useCaseId);
     await startPreview(useCaseId);
+    if (ticked.length) {
+      await prisma.reviewItem.updateMany({ where: { id: { in: ticked.map((r) => r.id) } }, data: { builtInVersion: n } });
+    }
     if (feedback.length) {
       await prisma.feedback.updateMany({ where: { id: { in: feedback.map((f) => f.id) } }, data: { status: "built" } });
       // Their cards on the board move to Done too.

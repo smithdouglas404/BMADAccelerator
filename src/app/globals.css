@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@plugin "@tailwindcss/typography";
 
 /* The accelerator's own screens use shadcn/ui (new-york v4) with its CSS variables,
    plus Magic UI for motion. Neutral zinc surfaces, one violet brand colour. */
