@@ -89,7 +89,7 @@ function generatePrompt(
   const fullProduct =
     "First read `bacc/intake.md` and `bacc/floor.md` (the product floor: the category, its leading products and everything this kind of product has; build every [confirmed] and [assumed] item and never an [out] one) and picture what you would build if the client had typed only their idea into Claude Code: the complete product a leading company in this category ships. Build that. Then read the BMAD documents and decisions below and layer them on as additions and changes. If `bacc/floor.md` doesn't exist yet, write it first with the bacc-floor skill (`.claude/skills/bacc-floor/SKILL.md`), marking only what the client said or a document settled as [confirmed], and register it with `mcp__bacc__register_document` (path `bacc/floor.md`, type `brief`, title \"Product floor\", review true).";
   const opening = fresh
-    ? `Build the app from scratch (version ${uc.generateCount + 1}). The client set the earlier app aside: \`app/\` is empty and there is no design direction yet. Never open \`bacc/archive/\`: it holds the old app and must not shape this one. ${fullProduct}`
+    ? `Build the app from scratch (version ${uc.generateCount + 1}). The client set the earlier app and its whole design aside: \`app/\` is empty, and there is no design concept, options catalogue, picks, direction or UX document. Never open \`bacc/archive/\` or an older version in git: the old design must not shape this one in any way. Build only from the client's requirements (intake, uploads, the product floor, their answers and the requirement documents) and your own judgement for this category. ${fullProduct}`
     : first
       ? `Generate the first version of the app. ${fullProduct}`
     : redesign
@@ -162,12 +162,25 @@ async function setAsideApp(uc: UseCase) {
   const stamp = `v${uc.generateCount}-${new Date().toISOString().replace(/[:.]/g, "-")}`;
   const archive = workspacePath(uc.slug, "bacc", "archive", stamp);
   await fs.mkdir(archive, { recursive: true });
-  for (const [from, to] of [
-    [appDir(uc.slug), "app"],
-    [workspacePath(uc.slug, "bacc", "design", "direction.md"), "direction.md"],
-    [workspacePath(uc.slug, "bacc", "design", "shots"), "shots"],
-  ]) {
-    await fs.rename(from, path.join(archive, to)).catch(() => {});
+  // Doug, 2026-11-15: "Abandon the old design... everything should be based off the requirements."
+  // Every design artefact goes: the app, the whole design folder (concept, options, picks, components,
+  // direction, shots), BMAD's UX documents and the advisor's old app reviews. Requirements stay.
+  await fs.rename(appDir(uc.slug), path.join(archive, "app")).catch(() => {});
+  await fs.rename(workspacePath(uc.slug, "bacc", "design"), path.join(archive, "design")).catch(() => {});
+  const advisor = workspacePath(uc.slug, "bacc", "advisor");
+  for (const f of await fs.readdir(advisor).catch(() => [] as string[])) {
+    if (/^(app-review|comparison)|^ux-designer-/i.test(f)) {
+      await fs.mkdir(path.join(archive, "advisor"), { recursive: true });
+      await fs.rename(path.join(advisor, f), path.join(archive, "advisor", f)).catch(() => {});
+    }
+  }
+  const out = workspacePath(uc.slug, "_bmad-output");
+  for (const ini of await fs.readdir(out).catch(() => [] as string[])) {
+    for (const d of await fs.readdir(path.join(out, ini)).catch(() => [] as string[])) {
+      if (!/^ux-/i.test(d)) continue;
+      await fs.mkdir(path.join(archive, "bmad-ux", ini), { recursive: true });
+      await fs.rename(path.join(out, ini, d), path.join(archive, "bmad-ux", ini, d)).catch(() => {});
+    }
   }
   await fs.mkdir(appDir(uc.slug), { recursive: true });
 }
@@ -242,6 +255,13 @@ export async function runGenerate(useCaseId: string, opts: { redesign?: boolean;
     if (fresh) {
       await prisma.useCase.update({ where: { id: useCaseId }, data: { generateStatus: "Setting the old app aside" } });
       await setAsideApp(uc);
+      // The concierge's own session remembers the old design: tell it, in its queue, that it's gone.
+      if (agentsEnabled())
+        await enqueue(
+          useCaseId,
+          "user",
+          "The client started fresh and abandoned the old design completely (Doug: \"Abandon the old design... everything should be based off the requirements\"). The old app, design concept, options, picks, components list, direction and UX documents are set aside in bacc/archive/. Never open them, quote them or refer to the old design again, in any message or document. From here, design comes only from the client's requirements and their answers: ask the probing questions a leading product of this kind needs, and let each answer raise more questions. When Sally's stage comes, write a new concept and options catalogue from the requirements. Don't reply to this note.",
+        );
     }
     const docs = await changedDocs(redesign || fresh ? { ...uc, lastGeneratedAt: null } : uc);
     // A quick build carries only the product-map changes; feedback and ticked decisions wait for the next full one.
