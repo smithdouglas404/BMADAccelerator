@@ -36,7 +36,7 @@ export async function describeDocument(documentId: string) {
   const response = await client.messages
     .parse({
     model: MODEL,
-    max_tokens: 4000,
+    max_tokens: 6000,
     output_config: { effort: "low", format: zodOutputFormat(Suggestion) },
     messages: [
       {
@@ -44,9 +44,9 @@ export async function describeDocument(documentId: string) {
         content: `A business user uploaded "${doc.fileName}" to plan a software pilot with the BMAD Method. Read it and suggest:
 - bmadType: which kind of BMAD input it is, one of:
 ${types}
-- description: one plain sentence saying what the document covers.
-- summary: three to five plain sentences with what matters for planning the pilot.
-- tags: three to six short lowercase tags.
+- description: one plain sentence saying what kind of file this is and what it covers (for example "A 12-slide sales deck describing the new onboarding offer").
+- summary: a narrative of one or two short paragraphs, in plain words for a non-technical reader. Cover what the document is, who it is for or who wrote it, the main points, any issues, risks or open questions it raises, and the outcomes or decisions it points to. Leave out anything the document doesn't say.
+- tags: three to six short lowercase tags a business person would use (topics, teams, systems).
 ${truncated ? "\nThe document is long; you are seeing the first part only.\n" : ""}
 <document>
 ${text}

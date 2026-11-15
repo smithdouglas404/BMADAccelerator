@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import VoiceRecorder from "@/components/VoiceRecorder";
 import { BMAD_DOC_TYPES, DOC_STAGES } from "@/lib/bmad";
 import type { DocumentT } from "@/lib/types";
 
@@ -15,13 +16,30 @@ const BADGE: Record<string, { label: string; cls: string }> = {
   in_review: { label: "In review", cls: "bg-warn/15 text-warn" },
 };
 
+// Common tags a person can tap to add, besides the ones the document agent suggests.
+const COMMON_TAGS = ["requirements", "customers", "design", "data", "security", "compliance", "budget", "timeline", "integration", "reporting"];
+
+const add = (prev: string, t: string) => (prev ? `${prev} ${t}` : t);
+
 // One uploaded document: the document agent's summary, its stage and BMAD type,
 // and the person's decision (in review, approved or declined).
 export default function DocumentCard({ doc, onSaved }: { doc: DocumentT; onSaved: () => void }) {
   const [type, setType] = useState(doc.bmadType);
   const [stage, setStage] = useState(doc.stage || "general");
-  const [tags, setTags] = useState(doc.tags.join(", "));
+  const [tags, setTags] = useState<string[]>(doc.tags);
+  const [newTag, setNewTag] = useState("");
   const [description, setDescription] = useState(doc.description);
+  const [summary, setSummary] = useState(doc.summary);
+  const pending = !doc.summary || doc.summary.startsWith("No summary yet");
+  // Fill in what the document agent writes while the person hasn't started editing.
+  const edited = useRef(false);
+  useEffect(() => {
+    if (edited.current) return;
+    setDescription(doc.description);
+    setSummary(doc.summary);
+    setTags(doc.tags);
+    setType(doc.bmadType);
+  }, [doc.description, doc.summary, doc.tags, doc.bmadType]);
   const [declining, setDeclining] = useState(false);
   const [note, setNote] = useState(doc.declineNote || "");
   const [busy, setBusy] = useState(false);
@@ -37,22 +55,27 @@ export default function DocumentCard({ doc, onSaved }: { doc: DocumentT; onSaved
       body: JSON.stringify({
         bmadType: type,
         stage,
-        tags: tags
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean),
+        tags,
         description,
+        ...(summary && !summary.startsWith("No summary yet") ? { summary } : {}),
         ...(next ? { status: next } : {}),
         ...(next === "declined" ? { declineNote: note } : {}),
       }),
     });
     setBusy(false);
     setDeclining(false);
+    edited.current = false;
     onSaved();
   }
 
   return (
-    <div className={`glass pop-in rounded-xl p-4 ${status === "declined" ? "opacity-70" : ""}`}>
+    <div
+      className={`glass pop-in rounded-xl p-4 ${status === "declined" ? "opacity-70" : ""}`}
+      onInput={() => (edited.current = true)}
+      onClickCapture={(e) => {
+        if ((e.target as HTMLElement).closest("button")) edited.current = true;
+      }}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate font-medium">{doc.fileName}</p>
@@ -62,10 +85,30 @@ export default function DocumentCard({ doc, onSaved }: { doc: DocumentT; onSaved
         </div>
         <span className={`chip shrink-0 border-transparent ${badge.cls}`}>{badge.label}</span>
       </div>
-      <div className="mt-2 rounded-lg bg-white/40 p-2 text-sm dark:bg-white/5">
-        <p className="text-xs font-semibold text-muted">Summary</p>
-        <p className="mt-0.5 whitespace-pre-wrap">{doc.summary || "The document agent is reading this file. Its summary appears here in a moment."}</p>
-      </div>
+      <label className="mt-3 block text-xs font-semibold text-muted">
+        Description <span className="font-normal">(what this file is, in one line)</span>
+        <div className="mt-1 flex items-start gap-2">
+          <input
+            className="field flex-1 text-sm font-normal"
+            value={description}
+            placeholder={pending ? "Claude fills this in after reading the file" : ""}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+          <VoiceRecorder label="" onTranscript={(t) => setDescription((v) => add(v, t))} />
+        </div>
+      </label>
+      <label className="mt-3 block text-xs font-semibold text-muted">
+        Summary <span className="font-normal">(what it says, who it&apos;s for, issues and outcomes)</span>
+        <div className="mt-1 flex items-start gap-2">
+          <textarea
+            className="field min-h-36 flex-1 text-sm font-normal leading-relaxed"
+            value={pending && !summary ? "" : summary}
+            placeholder={doc.summary || "Claude is reading the file. Its summary appears here in a moment, and you can change or add to it."}
+            onChange={(e) => setSummary(e.target.value)}
+          />
+          <VoiceRecorder label="" onTranscript={(t) => setSummary((v) => add(v.startsWith("No summary yet") ? "" : v, t))} />
+        </div>
+      </label>
       {status === "declined" && doc.declineNote && <p className="mt-2 text-xs text-muted">Declined because: {doc.declineNote}</p>}
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
         <label className="text-xs text-muted">
@@ -89,22 +132,46 @@ export default function DocumentCard({ doc, onSaved }: { doc: DocumentT; onSaved
           </select>
         </label>
       </div>
-      <label className="mt-2 block text-xs text-muted">
-        Tags (comma separated)
-        <input className="field mt-1 text-sm" value={tags} onChange={(e) => setTags(e.target.value)} />
-      </label>
-      <label className="mt-2 block text-xs text-muted">
-        One-line description
-        <input className="field mt-1 text-sm" value={description} onChange={(e) => setDescription(e.target.value)} />
-      </label>
+      <div className="mt-3 text-xs text-muted">
+        <p className="font-semibold">Tags <span className="font-normal">(labels that help the agents find this file; tap to add or remove)</span></p>
+        <div className="mt-1 flex flex-wrap gap-1">
+          {tags.map((t) => (
+            <button key={t} className="chip border-accent bg-accent/15 text-ink" onClick={() => setTags(tags.filter((x) => x !== t))} aria-label={`Remove tag ${t}`}>
+              {t} ×
+            </button>
+          ))}
+          {COMMON_TAGS.filter((t) => !tags.includes(t)).map((t) => (
+            <button key={t} className="chip" onClick={() => setTags([...tags, t])} aria-label={`Add tag ${t}`}>
+              + {t}
+            </button>
+          ))}
+        </div>
+        <form
+          className="mt-2 flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const t = newTag.trim().toLowerCase();
+            if (t && !tags.includes(t)) setTags([...tags, t]);
+            setNewTag("");
+          }}
+        >
+          <input className="field flex-1 py-1 text-sm" value={newTag} placeholder="Your own tag" onChange={(e) => setNewTag(e.target.value)} aria-label="Add your own tag" />
+          <button className="btn btn-ghost py-1 text-xs" type="submit" disabled={!newTag.trim()}>
+            Add
+          </button>
+        </form>
+      </div>
       {declining && (
         <label className="mt-2 block text-xs text-muted">
           Why decline it? (optional)
-          <input className="field mt-1 text-sm" value={note} onChange={(e) => setNote(e.target.value)} autoFocus />
+          <div className="mt-1 flex items-start gap-2">
+            <input className="field flex-1 text-sm" value={note} onChange={(e) => setNote(e.target.value)} autoFocus />
+            <VoiceRecorder label="" onTranscript={(t) => setNote((v) => add(v, t))} />
+          </div>
         </label>
       )}
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-xs text-muted">Goes to: {route}</span>
+        <span className="text-xs text-muted">Goes to: {route}. Tap a mic button to talk instead of typing.</span>
         <div className="flex flex-wrap gap-2">
           {declining ? (
             <>
