@@ -4,6 +4,9 @@
 cd "$(dirname "$0")/.." || exit 1
 
 LOG="$(mktemp -t claude-plan)"
+# Make the window wide enough that the token fits on one line.
+printf '\e[8;40;260t'; sleep 0.5
+export COLUMNS=260
 trap 'rm -f "$LOG"' EXIT
 
 echo "Step 1 of 2: a browser opens. Sign in with your Claude account and approve."
@@ -15,8 +18,11 @@ script -q "$LOG" "${CMD[@]}"
 # Find the token, joining it back together where the window wrapped it onto several lines.
 TOKEN="$(perl -0777 -ne '
   s/\e\[[0-9;?]*[A-Za-z]//g; s/\e\][^\a]*\a//g; s/\r//g;
+  s/[\x00-\x08\x0b-\x1f]//g;
   s/([A-Za-z0-9_-])[ \t]*\n[ \t]*(?=[A-Za-z0-9_-])/$1/g;
-  print $1 if /(sk-ant-oat[A-Za-z0-9_-]+)/;' "$LOG")"
+  my @all = /(sk-ant-oat[A-Za-z0-9_-]+)/g;
+  my ($best) = sort { length($b) <=> length($a) } @all;
+  print $best if $best;' "$LOG")"
 
 if [ "${#TOKEN}" -lt 90 ]; then
   echo
