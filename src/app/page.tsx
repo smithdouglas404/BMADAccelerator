@@ -51,7 +51,7 @@ export default async function Home() {
                 <div className="mt-4 space-y-1 text-sm">
                   <div>
                     <span className="text-muted">Stopped at: </span>
-                    {setup ? `Setup, step ${u.onboardingStep + 1} of 3` : stage}
+                    {setup ? `Setup, step ${u.onboardingStep < 2 ? u.onboardingStep + 1 : (u.inspiration as { picks?: unknown } | null)?.picks ? 4 : 3} of 4` : stage}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="inline-block h-2 w-2 rounded-full" style={{ background: agent.color }} />

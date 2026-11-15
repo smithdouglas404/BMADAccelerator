@@ -54,6 +54,14 @@ Open http://localhost:3000. Each use case's generated app runs on its own port
 - **Memory across use cases:** self-hosted Mem0 and Letta (open source), in the same Docker
   setup. See below.
 
+## How generated apps are designed
+
+- **Picture it** (setup step 3): Claude researches products like the use case and offers clickable features and three visual directions, each with a small rendered preview. The picks go into `bacc/intake.md` for John, Sally and Generate.
+- **Base design system:** every app is built on [shadcn/ui](https://ui.shadcn.com) (React, Vite, Tailwind CSS, Google fonts), themed to the use case's design direction. A client's own design system replaces it when they upload one.
+- **Design pass:** Generate loads Anthropic's `frontend-design` skill and ECC's `frontend-design-direction`, writes `bacc/design/direction.md` before coding, then screenshots desktop and phone (`scripts/shot.mjs`), critiques and fixes until it looks finished.
+- **Images:** drawn as SVG, except where real-looking pictures make the product (shops, food, places): those use OpenAI's image model through the `make_image` tool, on `OPENAI_API_KEY`, at most `BACC_IMAGE_LIMIT` (12) per Generate. `BACC_IMAGES=off` turns them off.
+- **Redesign:** keeps every feature and rebuilds the look from a fresh direction.
+
 ## Running on your Claude subscription
 
 If you're the only person using the accelerator, the BMAD agents, the concierge, Generate and

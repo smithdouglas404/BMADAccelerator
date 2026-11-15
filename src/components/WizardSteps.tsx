@@ -1,4 +1,4 @@
-const STEPS = ["Describe", "Documents and skills", "Confirm"];
+const STEPS = ["Describe", "Documents and skills", "Picture it", "Confirm"];
 
 export default function WizardSteps({ current }: { current: number }) {
   return (

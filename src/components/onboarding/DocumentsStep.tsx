@@ -53,7 +53,7 @@ export default function DocumentsStep({ data, reload }: { data: UseCaseFull; rel
           Save and exit
         </Link>
         <button className="btn btn-primary" disabled={busy} onClick={() => next(2)}>
-          Next: confirm
+          Next: picture it
         </button>
       </div>
     </main>

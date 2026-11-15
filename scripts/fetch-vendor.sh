@@ -12,6 +12,9 @@ CIS_REPO="https://github.com/bmad-code-org/bmad-module-creative-intelligence-sui
 CIS_SHA="${CIS_SHA:-658e71030be808181c1031f5461ee3613e7ff530}"
 ECC_REPO="https://github.com/affaan-m/everything-claude-code"
 ECC_SHA="${ECC_SHA:-d2ef2680594f9a17526a6e1a2e18b3d242c5d17b}"
+# Anthropic's official skills (Apache 2.0): Generate uses frontend-design.
+ANTHROPIC_SKILLS_REPO="https://github.com/anthropics/skills"
+ANTHROPIC_SKILLS_SHA="${ANTHROPIC_SKILLS_SHA:-1780c5e5a552fd4d1c9d6a7b0cab26b0c2bef064}"
 
 fetch() { # repo sha dest
   local repo="$1" sha="$2" dest="$3"
@@ -29,4 +32,5 @@ fetch "$BMAD_REPO" "$BMAD_SHA" vendor/bmad
 fetch "$TEA_REPO" "$TEA_SHA" vendor/tea
 fetch "$CIS_REPO" "$CIS_SHA" vendor/cis
 fetch "$ECC_REPO" "$ECC_SHA" vendor/ecc
-echo "vendor ready: BMAD ${BMAD_SHA:0:7}, TEA ${TEA_SHA:0:7}, CIS ${CIS_SHA:0:7}, ECC ${ECC_SHA:0:7}"
+fetch "$ANTHROPIC_SKILLS_REPO" "$ANTHROPIC_SKILLS_SHA" vendor/anthropic
+echo "vendor ready: BMAD ${BMAD_SHA:0:7}, TEA ${TEA_SHA:0:7}, CIS ${CIS_SHA:0:7}, ECC ${ECC_SHA:0:7}, Anthropic skills ${ANTHROPIC_SKILLS_SHA:0:7}"

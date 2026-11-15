@@ -3,6 +3,7 @@ import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { prisma } from "@/lib/db";
+import { inspirationMarkdown } from "@/lib/inspire";
 import { workspacePath, WORKSPACES_DIR } from "@/lib/workspace";
 import { AGENTS, BMAD_DOC_TYPES, DOC_STAGES, type Routing } from "@/lib/bmad";
 
@@ -52,6 +53,13 @@ async function skillSources(useCaseId: string) {
     for (const name of await fs.readdir(modDir)) sources.push({ name, dir: path.join(modDir, name) });
   }
   for (const name of await fs.readdir(CONCIERGE_DIR)) sources.push({ name, dir: path.join(CONCIERGE_DIR, name) });
+  // Design skills Generate always uses: Anthropic's frontend-design and ECC's design direction.
+  for (const [name, dir] of [
+    ["frontend-design", path.join(VENDOR_DIR, "anthropic", "skills", "frontend-design")],
+    ["frontend-design-direction", path.join(VENDOR_DIR, "ecc", "skills", "frontend-design-direction")],
+  ] as const) {
+    if (await exists(dir)) sources.push({ name, dir });
+  }
   const chosen = await prisma.useCaseSkill.findMany({ where: { useCaseId } });
   for (const s of chosen) {
     const dir = path.join(VENDOR_DIR, "ecc", "skills", s.skillId);
@@ -78,6 +86,17 @@ export async function installSkills(useCaseId: string, slug: string) {
     const dir = path.join(ws, t);
     await fs.mkdir(dir, { recursive: true });
     for (const s of sources) await copyDir(s.dir, path.join(dir, s.name));
+  }
+}
+
+// The design skills Generate reads, copied into workspaces made before they were added.
+export async function installDesignSkills(slug: string) {
+  const ws = workspacePath(slug);
+  for (const [name, dir] of [
+    ["frontend-design", path.join(VENDOR_DIR, "anthropic", "skills", "frontend-design")],
+    ["frontend-design-direction", path.join(VENDOR_DIR, "ecc", "skills", "frontend-design-direction")],
+  ] as const) {
+    if (await exists(dir)) await copyDir(dir, path.join(ws, ".claude/skills", name));
   }
 }
 
@@ -231,7 +250,7 @@ ${docs || "(none)"}
 ## Extra skills they chose
 
 ${uc.skills.map((s) => `- ${s.skillId}`).join("\n") || "(none)"}
-`;
+${inspirationMarkdown(uc.inspiration) ? `\n${inspirationMarkdown(uc.inspiration)}` : ""}`;
   await fs.mkdir(path.join(ws, "bacc"), { recursive: true });
   await fs.writeFile(path.join(ws, "bacc/intake.md"), md);
 }

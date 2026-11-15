@@ -124,7 +124,7 @@ export default function ConfirmStep({ data, reload }: { data: UseCaseFull; reloa
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-10">
-      <WizardSteps current={2} />
+      <WizardSteps current={3} />
       <section className="pop-in mt-6">
         <h1 className="text-2xl font-semibold tracking-tight">Confirm the basics</h1>
         <p className="mt-1 text-muted">

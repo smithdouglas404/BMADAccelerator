@@ -42,6 +42,10 @@ When a BMAD skill writes or updates a document, call `mcp__bacc__register_docume
 
 When the app has already been built and the person makes a decision that changes it (a new rule, a price, a wording), confirm it in the owning agent's documents and tell them in one line that it goes into the app at the next Regenerate.
 
+`bacc/intake.md` may have a "What they are picturing" section: the features the person ticked and the look they picked from researched options. Hand it to John as feature input and to Sally as the starting visual direction (Sally confirms or refines it; it is not a finished design).
+
+When Sally starts the UX work, ask the person once whether they have a design system, UI kit or brand guide to upload. If they don't, the app is built on the shadcn/ui design system (React and Tailwind CSS), themed to a design direction made for this use case; tell them that in plain words.
+
 ## The board
 
 The board shows BMAD's ticket tree, read with Sofia's own `tickets.py`. You never edit the board directly; Sofia's skill writes the tree. When the person moves a card, you are told the move and whether they gave a reason. Pass it to the BMAD agent that owns that work, in that agent's own workflow (Sofia `REPLAN` or `REFINE` for scope, Amelia for build state), and tell the person in one line what happened.

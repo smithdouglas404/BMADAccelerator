@@ -24,6 +24,10 @@ export const claudeConfigured = () => authOrder().length > 0;
 /** The environment for a Claude Code run that signs in one way only. */
 export function authEnv(auth: Auth): Record<string, string> {
   const env = { ...process.env, IS_SANDBOX: "1" } as Record<string, string>;
+  // Keys the agents never need: images go through the make_image tool, memory through the app.
+  delete env.OPENAI_API_KEY;
+  delete env.ELEVENLABS_API_KEY;
+  for (const k of ["DATABASE_URL", "LINEAR_API_KEY", "JIRA_API_TOKEN", "MEM0_API_KEY", "LETTA_API_KEY"]) delete env[k];
   if (auth === "plan") delete env.ANTHROPIC_API_KEY;
   else delete env.CLAUDE_CODE_OAUTH_TOKEN;
   return env;

@@ -86,6 +86,7 @@ export type UseCaseFull = {
   generateStatus: string;
   generateCount: number;
   lastGeneratedAt: string | null;
+  inspiration: import("@/lib/inspire").Inspiration | null;
   previewPort: number;
   preview: { hasApp: boolean; port: number; running: boolean; starting: boolean };
   agentsEnabled: boolean;

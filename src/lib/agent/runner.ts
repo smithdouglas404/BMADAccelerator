@@ -154,6 +154,8 @@ async function runSdkTurnOnce(opts: {
   tally: RunTally;
   maxTurns?: number;
   auth?: Auth;
+  model?: string;
+  effort?: "low" | "medium" | "high";
 }) {
   const auth = opts.auth ?? authOrder()[0] ?? "key";
   const ws = workspacePath(opts.slug);
@@ -162,7 +164,8 @@ async function runSdkTurnOnce(opts: {
     prompt: opts.prompt,
     options: {
       cwd: ws,
-      model: MODEL,
+      model: opts.model || MODEL,
+      ...(opts.effort ? { effort: opts.effort } : {}),
       settingSources: ["project"],
       systemPrompt: { type: "preset", preset: "claude_code", append: opts.appendSystem },
       mcpServers: { bacc: baccTools(opts.useCaseId, opts.slug, opts.tally) },

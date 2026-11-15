@@ -39,6 +39,8 @@ model UseCase {
   onboardingStep Int      @default(0)
   // Where the user stopped (pause and resume)
   stage          String   @default("clarify") // clarify | plan | build | learn
+  // The "picture it" step: researched feature and style options, and what the client picked.
+  inspiration    Json?
   activeAgent    String   @default("concierge")
   pendingQuestion String  @default("")
   claudeSessionId String  @default("")

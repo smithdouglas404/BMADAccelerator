@@ -52,10 +52,14 @@ export default function Workspace({ data, reload }: { data: UseCaseFull; reload:
     : 0;
   const [wide, setWide] = useState(false);
 
-  async function generate() {
+  async function generate(redesign = false) {
     setNotice("");
     setSide("preview");
-    const r = await fetch(`/api/use-cases/${data.id}/generate`, { method: "POST" });
+    const r = await fetch(`/api/use-cases/${data.id}/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ redesign }),
+    });
     if (!r.ok) setNotice((await r.json()).error || "Generate could not start.");
     reload();
   }
@@ -101,6 +105,16 @@ export default function Workspace({ data, reload }: { data: UseCaseFull; reload:
           <Link href="/" className="btn btn-ghost">
             Save and exit
           </Link>
+          {data.generateCount > 0 && (
+            <button
+              className="btn btn-ghost"
+              title="Keep every feature, and rebuild the look from a fresh design direction"
+              onClick={() => generate(true)}
+              disabled={data.generateBusy}
+            >
+              Redesign
+            </button>
+          )}
           <button
             className={`btn ${ready.ready ? "btn-primary" : "border-warn/60 text-warn"}`}
             title={
@@ -110,7 +124,7 @@ export default function Workspace({ data, reload }: { data: UseCaseFull; reload:
                   ? "Build the app now"
                   : `${ready.reason}. You can still generate now; it builds from what BMAD has so far.`
             }
-            onClick={generate}
+            onClick={() => generate()}
             disabled={data.generateBusy}
           >
             <span className={`h-2 w-2 rounded-full ${ready.ready ? "bg-white" : "bg-warn"}`} aria-hidden />

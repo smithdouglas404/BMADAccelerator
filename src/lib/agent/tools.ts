@@ -8,6 +8,7 @@ import { workspacePath } from "@/lib/workspace";
 import { askQuestion } from "@/lib/questions";
 import { formatHits, letta, rememberAnswer, rememberLesson, searchMemory } from "@/lib/memory";
 import { ROLES } from "@/lib/memory/lettaCore";
+import { IMAGE_LIMIT, imagesConfigured, makeImage } from "@/lib/images";
 
 const AGENT_KEYS = Object.keys(AGENTS) as [string, ...string[]];
 const ROLE_KEYS = ROLES.map((r) => r.key) as [string, ...string[]];
@@ -30,10 +31,34 @@ export function baccTools(useCaseId: string, slug: string, tally: RunTally) {
     await prisma.useCase.update({ where: { id: useCaseId }, data: { activeAgent: agent } });
   };
 
+  let imagesMade = 0;
   return createSdkMcpServer({
     name: "bacc",
     version: "1.0.0",
     tools: [
+      tool(
+        "make_image",
+        `Generate only: create one AI image (product shot, hero, illustration) for the app with OpenAI's image model and save it under app/. Costs a few cents, so use it for the images that carry the design, at most ${IMAGE_LIMIT} per run; draw icons and simple shapes as SVG instead. Describe the subject, style, lighting and background in the prompt, consistent with bacc/design/direction.md. Never depict real people or brands.`,
+        {
+          prompt: z.string().min(10).max(4000),
+          size: z.enum(["1024x1024", "1536x1024", "1024x1536"]).default("1024x1024"),
+          file: z.string().min(1).describe("Path inside app/, for example app/public/images/mars-box.webp"),
+        },
+        async ({ prompt, size, file }) => {
+          if (!imagesConfigured()) return ok("Image generation is not set up here. Draw this as SVG instead.");
+          if (imagesMade >= IMAGE_LIMIT) return ok(`The limit of ${IMAGE_LIMIT} images for this run is reached. Reuse an image or draw SVG.`);
+          const appRoot = workspacePath(slug, "app");
+          const target = path.resolve(workspacePath(slug), file);
+          if (!target.startsWith(appRoot + path.sep)) return ok("The file must be inside app/.");
+          try {
+            imagesMade++;
+            const model = await makeImage(prompt, size, target);
+            return ok(`Saved ${path.relative(workspacePath(slug), target)} (${model}). Open it with Read to check it.`);
+          } catch (e) {
+            return ok(`${e instanceof Error ? e.message : String(e)}. Draw this as SVG instead.`);
+          }
+        },
+      ),
       tool(
         "say",
         "Show a message to the person in the conversation, in the name of the agent speaking. The only way the person sees anything you write.",

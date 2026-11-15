@@ -7,7 +7,7 @@ import { prisma } from "@/lib/db";
 import { claudeConfigured } from "@/lib/agent/auth";
 import { onAppGenerated } from "@/lib/memory";
 import { workspacePath } from "@/lib/workspace";
-import { provisionWorkspace, writeIntake } from "@/lib/provision";
+import { installDesignSkills, provisionWorkspace, writeIntake } from "@/lib/provision";
 import { appDir, assignPort, startPreview, stopPreview } from "@/lib/preview";
 import { enqueue, runSdkTurn, agentsEnabled } from "@/lib/agent/runner";
 import type { RunTally } from "@/lib/agent/tools";
@@ -38,33 +38,60 @@ async function changedDocs(uc: UseCase) {
   return out.filter((p) => !p.includes(`${path.sep}generate${path.sep}`));
 }
 
-const GENERATOR_RULES = `You are the Generate step of the BMAD Accelerator: Claude Code building a working pilot app, Replit style, from wherever the BMAD planning stands right now.
+const SHOT = path.join(process.cwd(), "scripts", "shot.mjs");
+
+const GENERATOR_RULES = `You are the Generate step of the BMAD Accelerator: Claude Code building a working pilot app, Replit style, from wherever the BMAD planning stands right now. The client judges the whole accelerator by this app, so it must look like a real, premium product from a top design studio, not a prototype.
 
 Rules:
-- Build the app in the folder \`app/\` at the project root. Nothing else in the project is yours to change, except the notes file named in the task.
-- Read the BMAD documents in \`_bmad-output/\` (brief, PRFAQ, PRD, UX DESIGN.md and EXPERIENCE.md, architecture, the ticket tree) and the client's intake in \`bacc/intake.md\`. Build what they describe as far as they go. Where they are silent, make a sensible, simple choice and write it down in the notes as an assumption.
-- The app must run with no outside services or accounts: \`npm install\` then \`npm start\`, listening on \`process.env.PORT\` and host 0.0.0.0. Use SQLite or files for data. Seed the catalogue and content (products, pages, prices) with realistic sample data, but never invent people: no made-up customers, orders, sign-ups, reviews or contact details. Lists of those start empty, with a friendly empty state. A plain \`index.html\` with no package.json is also fine for a static app. Keep the dependency list small.
-- Verify it: start it on a spare port (for example 4999), fetch its main page with curl, then stop it. Fix anything that fails.
-- Make it look finished and polished: clear layout, real copy, responsive.
+- Build the app in the folder \`app/\` at the project root. Nothing else in the project is yours to change, except the notes file and the files under \`bacc/design/\` named in the task.
+- Read the BMAD documents in \`_bmad-output/\` (brief, PRFAQ, PRD, UX DESIGN.md and EXPERIENCE.md, architecture, the ticket tree) and the client's intake in \`bacc/intake.md\`. Build what they describe as far as they go. Where they are silent, make a sensible choice and write it down in the notes as an assumption.
 - Use names, prices, formats, years and wording exactly as the documents give them (for example a serial-number format with a year). Where a document marks content as a placeholder, label it as sample content in the app.
-- Use the \`bacc\` tools to talk to the client: \`mcp__bacc__say\` with agent \`generator\`, two or three short sentences, plain words. Plain text you write is not shown.`;
+- Data: seed the catalogue and content (products, pages, prices) with realistic sample data, but never invent people: no made-up customers, orders, sign-ups, reviews or contact details, and no seed script that creates them. Lists of those start empty, with a friendly empty state.
 
-function generatePrompt(uc: UseCase, notesPath: string, docs: string[], feedback: { comment: string; imagePath: string; pageUrl: string }[]) {
+Design (as much a part of the job as the features):
+- Read and follow the skills \`.claude/skills/frontend-design/SKILL.md\` and \`.claude/skills/frontend-design-direction/SKILL.md\` before you write any UI.
+- Before coding the UI, write \`bacc/design/direction.md\`: the product, its audience and its primary job; the tone; the palette as 4 to 6 named hex values; the typefaces and their roles; the layout concept with a small ASCII wireframe of the home page; and the one memorable signature detail. Ground every choice in the subject's own world (its materials, vernacular and customers). Then review it against the frontend-design skill's list of generic defaults and revise anything that would fit any similar app.
+- Follow Sally's UX documents where they make a real design choice. If they only keep a look from an earlier version, or the app has since become a different kind of product, design afresh for what it is now, and say so in the UI and UX notes for Sally.
+- Imagery carries the subject. Draw icons, illustrations and decorative elements as SVG in code. Use \`mcp__bacc__make_image\` (AI images saved under app/, a limited number per run) only where real-looking pictures make the product: products and their hero in a shop or e-commerce app, food, places, rooms, physical goods. For tools, dashboards and most other apps, draw instead. If image generation is not available, draw everything. No empty boxes, no text-only product cards, no images fetched from outside, no real people or brands.
+- The base for every app is shadcn/ui (https://ui.shadcn.com) on React, Vite and Tailwind CSS, with Google web fonts. Set it up with the shadcn CLI (\`npx shadcn@latest init\`, then \`npx shadcn@latest add\` for each component you use) and build the UI from its components (Button, Card, Dialog, Sheet, Tabs, Form and so on) and its blocks where they fit. Theme it through shadcn's CSS variables (background, foreground, primary, secondary, accent, muted, border, radius) set from the palette, fonts and corners in your design direction, so it looks like this product and never like the stock shadcn demo. Only if the client gave their own design system, UI kit or brand guide (check \`bacc/uploads/\`, \`bacc/intake.md\` and Sally's UX documents) use theirs instead.
+
+The app must run with no accounts or paid services: \`npm install\` then \`npm start\` (do any build in \`npm run build\`, which runs before start), listening on \`process.env.PORT\` and host 0.0.0.0. Use SQLite or files for data. A plain \`index.html\` with no package.json is also fine for a simple static app.
+
+Check it with your own eyes before you finish:
+1. Start it on a spare port (for example 4999).
+2. Screenshot every main page at desktop and phone size: \`node ${SHOT} http://127.0.0.1:4999 bacc/design/shots / /other-page ...\`. It prints each file and warns about page errors or content wider than the screen.
+3. Open each screenshot with Read and critique it as the design lead would: does it look like a premium, distinctive product for this subject? Is the hierarchy clear, the type well set, the spacing even, the imagery present, nothing broken or overflowing on the phone?
+4. Fix what you find and repeat until you'd be proud to show it. Do at least two rounds. Then stop the app.
+
+Use the \`bacc\` tools to talk to the client: \`mcp__bacc__say\` with agent \`generator\`, two or three short sentences, plain words. Plain text you write is not shown.`;
+
+function generatePrompt(
+  uc: UseCase,
+  notesPath: string,
+  docs: string[],
+  feedback: { comment: string; imagePath: string; pageUrl: string }[],
+  redesign: boolean,
+) {
   const first = uc.generateCount === 0;
   const fb = feedback
     .map((f, i) => `${i + 1}. "${f.comment}" — marked-up screenshot: ${f.imagePath}${f.pageUrl ? ` (page ${f.pageUrl})` : ""}`)
     .join("\n");
-  return `${first ? "Generate the first version of the app." : `Regenerate the app (version ${uc.generateCount + 1}). Work from the deltas: change what the new inputs below ask for and keep everything else as it is.`}
+  const opening = first
+    ? "Generate the first version of the app."
+    : redesign
+      ? `Redesign the app (version ${uc.generateCount + 1}). Keep every feature, page, rule and piece of data that works, but treat the look as not good enough: write a fresh \`bacc/design/direction.md\` from scratch, without reusing the current palette, fonts or layout, and rebuild the whole UI to it. Also bring in any change from the inputs below.`
+      : `Regenerate the app (version ${uc.generateCount + 1}). Work from the deltas: change what the new inputs below ask for and keep everything else as it is. If \`bacc/design/direction.md\` is missing, write it and bring the whole UI up to it.`;
+  return `${opening}
 
-${docs.length ? `BMAD documents ${first ? "available now" : "changed since the last generation"}:\n${docs.map((d) => `- ${d}`).join("\n")}` : first ? "BMAD has no documents yet: build from bacc/intake.md." : "No BMAD document changed since the last generation."}
+${docs.length ? `BMAD documents ${first || redesign ? "available now" : "changed since the last generation"}:\n${docs.map((d) => `- ${d}`).join("\n")}` : first ? "BMAD has no documents yet: build from bacc/intake.md." : "No BMAD document changed since the last generation."}
 ${fb ? `\nScreen feedback from the client since the last generation (open each screenshot with Read: the drawings show the spot they mean):\n${fb}\n` : ""}
-When the app works, write \`${notesPath}\` for BMAD, with these sections:
+When the app works and you have checked the screenshots, write \`${notesPath}\` for BMAD, with these sections:
 ## What was built
 ## UI and UX notes (for Sally, the UX designer)
 ## New or changed requirements (for John, the product manager)
 ## Technical decisions and changes (for Winston, the architect)
 ## Assumptions made
-Each item one line, in plain words. Then tell the client with \`mcp__bacc__say\` (agent \`generator\`) what they can now see in the preview.`;
+Each item one line, in plain words. Put the design direction in the UI and UX notes so Sally can bring it into DESIGN.md. Then tell the client with \`mcp__bacc__say\` (agent \`generator\`) what they can now see in the preview.`;
 }
 
 async function fakeGenerate(uc: UseCase, notesPath: string, tally: RunTally) {
@@ -103,7 +130,7 @@ async function commitApp(dir: string, n: number) {
   );
 }
 
-export async function runGenerate(useCaseId: string) {
+export async function runGenerate(useCaseId: string, opts: { redesign?: boolean } = {}) {
   if (busy.has(useCaseId)) return;
   busy.add(useCaseId);
   try {
@@ -118,7 +145,9 @@ export async function runGenerate(useCaseId: string) {
     await assignPort(uc);
     const n = uc.generateCount + 1;
     const notesPath = path.join("_bmad-output", uc.initiative || "generate", "generate", `generate-notes-${n}.md`);
-    const docs = await changedDocs(uc);
+    await installDesignSkills(uc.slug);
+    const redesign = !!opts.redesign && uc.generateCount > 0;
+    const docs = await changedDocs(redesign ? { ...uc, lastGeneratedAt: null } : uc);
     const feedback = await prisma.feedback.findMany({ where: { useCaseId, status: { in: ["new", "sent"] } } });
     const tally: RunTally = { spoke: 0 };
 
@@ -128,11 +157,14 @@ export async function runGenerate(useCaseId: string) {
       await runSdkTurn({
         useCaseId,
         slug: uc.slug,
-        prompt: generatePrompt(uc, notesPath, docs, feedback.map((f) => ({ ...f, imagePath: path.relative(workspacePath(uc.slug), f.imagePath) }))),
+        prompt: generatePrompt(uc, notesPath, docs, feedback.map((f) => ({ ...f, imagePath: path.relative(workspacePath(uc.slug), f.imagePath) })), redesign),
         resume: uc.generateSessionId,
         appendSystem: GENERATOR_RULES,
         tally,
-        maxTurns: 400,
+        maxTurns: 600,
+        // Generate gets more thinking for the design work; BACC_GENERATE_MODEL can pick another model.
+        model: process.env.BACC_GENERATE_MODEL || undefined,
+        effort: "high",
         onSession: async (id) => {
           await prisma.useCase.update({ where: { id: useCaseId }, data: { generateSessionId: id } });
         },

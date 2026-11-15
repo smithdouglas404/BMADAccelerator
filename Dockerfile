@@ -1,8 +1,8 @@
 FROM node:22-bookworm-slim AS base
 # git: BMAD workspaces and generated apps are git repos. python3 + uv: BMAD's own scripts.
-# chromium: screenshots for screen markup. unzip: skill uploads. markitdown: reads uploads.
+# chromium + fonts: screenshots for screen markup and Generate's design review. unzip: skill uploads. markitdown: reads uploads.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      openssl git ca-certificates curl python3 unzip chromium fonts-dejavu-core \
+      openssl git ca-certificates curl python3 unzip chromium fonts-dejavu-core fonts-liberation fonts-noto-color-emoji \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=ghcr.io/astral-sh/uv:0.9.5 /uv /uvx /usr/local/bin/
 ENV UV_TOOL_BIN_DIR=/usr/local/bin UV_TOOL_DIR=/opt/uv-tools UV_PYTHON_INSTALL_DIR=/opt/uv-python \
