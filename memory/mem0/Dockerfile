@@ -1,7 +1,7 @@
 # Self-hosted Mem0 (open source), the agents' long-term memory.
-# Same recipe as Capability-Economics-Guide/mem0/Dockerfile (upstream server, pinned, with the libpq
-# fix), with two changes: Claude (Anthropic) for fact extraction and a local Ollama embedder, so no
-# OpenAI key is needed and the memories never leave this computer.
+# Same recipe as Capability-Economics-Guide/mem0/Dockerfile: the upstream server, unpatched, pinned,
+# with the libpq fix. Its defaults are OpenAI (OPENAI_API_KEY, MEM0_DEFAULT_LLM_MODEL,
+# MEM0_DEFAULT_EMBEDDER_MODEL), the same configuration as Doug's other Mem0.
 FROM python:3.12-slim
 
 # Pinned so rebuilds are reproducible. The server and the mem0ai library move together.
@@ -11,10 +11,7 @@ RUN python -c "import tarfile; tarfile.open('/tmp/mem0.tar.gz').extractall('/tmp
     && mv /tmp/src/mem0-${MEM0_VERSION}/server /app && rm -rf /tmp/src /tmp/mem0.tar.gz
 WORKDIR /app
 # psycopg[binary] carries its own libpq: the upstream image crashes without one ("no pq wrapper available").
-RUN pip install --no-cache-dir -r requirements.txt "mem0ai==${MEM0_VERSION}" "psycopg[binary]>=3.2.8" "ollama>=0.4,<1"
-
-COPY patch_main.py /tmp/patch_main.py
-RUN python /tmp/patch_main.py /app/main.py && rm /tmp/patch_main.py
+RUN pip install --no-cache-dir -r requirements.txt "mem0ai==${MEM0_VERSION}" "psycopg[binary]>=3.2.8"
 
 # Mem0 keeps a small SQLite history next to pgvector and will not create the folder itself.
 RUN mkdir -p /app/history

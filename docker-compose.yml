@@ -30,21 +30,6 @@ services:
     entrypoint: ["/bin/sh", "/setup.sh"]
     restart: "no"
 
-  # Local embeddings for Mem0 and Letta, so memory needs no OpenAI key.
-  ollama:
-    image: ollama/ollama:0.40.16
-    restart: unless-stopped
-    environment:
-      EMBED_MODEL: nomic-embed-text
-    volumes:
-      - ollama:/root/.ollama
-      - ./memory/ollama/start.sh:/start.sh:ro
-    entrypoint: ["/bin/sh", "/start.sh"]
-    healthcheck:
-      test: ["CMD-SHELL", "ollama list | grep -q nomic-embed-text"]
-      interval: 10s
-      retries: 60
-
   # Long-term memory: self-hosted Mem0 (open source).
   mem0:
     build: ./memory/mem0
@@ -52,8 +37,6 @@ services:
     depends_on:
       db-setup:
         condition: service_completed_successfully
-      ollama:
-        condition: service_healthy
     environment:
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
@@ -64,11 +47,11 @@ services:
       HISTORY_DB_PATH: /app/history/history.db
       ADMIN_API_KEY: ${MEM0_ADMIN_API_KEY:?run scripts/memory-secrets.sh once to create the memory passwords}
       JWT_SECRET: ${MEM0_JWT_SECRET:?run scripts/memory-secrets.sh once to create the memory passwords}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      MEM0_LLM_MODEL: ${MEM0_LLM_MODEL:-claude-haiku-5-5}
-      OLLAMA_BASE_URL: http://ollama:11434
-      MEM0_EMBEDDER_MODEL: nomic-embed-text
-      MEM0_EMBEDDING_DIMS: "768"
+      # Same models as Doug's other Mem0: OpenAI gpt-4.1-nano for fact extraction,
+      # text-embedding-3-small (1536 dims, pgvector's default) for embeddings.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?add OPENAI_API_KEY to .env (Mem0 and Letta use it for embeddings)}
+      MEM0_DEFAULT_LLM_MODEL: ${MEM0_DEFAULT_LLM_MODEL:-gpt-4.1-nano-2025-04-14}
+      MEM0_DEFAULT_EMBEDDER_MODEL: ${MEM0_DEFAULT_EMBEDDER_MODEL:-text-embedding-3-small}
       MEM0_TELEMETRY: "false"
     volumes:
       - mem0-history:/app/history
@@ -80,12 +63,11 @@ services:
     depends_on:
       db-setup:
         condition: service_completed_successfully
-      ollama:
-        condition: service_healthy
     environment:
       LETTA_PG_URI: postgresql://bacc:bacc@db:5432/letta
+      # Claude for each role's thinking, OpenAI text-embedding-3-small for its archive.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      OLLAMA_BASE_URL: http://ollama:11434
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       SECURE: "true"
       LETTA_SERVER_PASSWORD: ${LETTA_SERVER_PASSWORD:?run scripts/memory-secrets.sh once to create the memory passwords}
 
@@ -121,6 +103,7 @@ services:
       LETTA_BASE_URL: http://letta:8283
       LETTA_API_KEY: ${LETTA_SERVER_PASSWORD:-}
       BACC_LETTA_MODEL: ${BACC_LETTA_MODEL:-}
+      BACC_LETTA_EMBEDDING: ${BACC_LETTA_EMBEDDING:-}
     volumes:
       - workspaces:/data/workspaces
       # The agents' session history, so conversations resume after a rebuild.
@@ -131,5 +114,4 @@ volumes:
   db:
   workspaces:
   claude-home:
-  ollama:
   mem0-history:

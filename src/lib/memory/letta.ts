@@ -79,8 +79,8 @@ export async function setupLetta(): Promise<{ ok: boolean; note: string }> {
   const model = pickModel(handles, process.env.BACC_LETTA_MODEL || undefined);
   if (!model) return { ok: false, note: `Letta offers no Claude model yet (is ANTHROPIC_API_KEY set for Letta?). Offered: ${handles.slice(0, 10).join(", ") || "none"}` };
   const embeddings = rows<{ handle?: string | null }>(await letta("GET", "/v1/models/embedding")).map((m) => m.handle ?? "").filter(Boolean);
-  const embedding = pickEmbedding(embeddings);
-  if (!embedding) return { ok: false, note: `Letta offers no local embedding model. Offered: ${embeddings.join(", ") || "none"}` };
+  const embedding = pickEmbedding(embeddings, process.env.BACC_LETTA_EMBEDDING || undefined);
+  if (!embedding) return { ok: false, note: `Letta offers no OpenAI embedding model (is OPENAI_API_KEY set for Letta?). Offered: ${embeddings.join(", ") || "none"}` };
 
   const toolIds: string[] = [];
   for (const source_code of toolSources()) {

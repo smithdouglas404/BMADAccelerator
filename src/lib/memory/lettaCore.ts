@@ -166,9 +166,18 @@ export function pickModel(handles: string[], preferred?: string): string | null 
   return [...claude].sort((a, b) => version(b) - version(a) || tier(b) - tier(a) || b.localeCompare(a))[0];
 }
 
-/** The local embedding model (Ollama) when Letta offers it, so nothing calls Letta's cloud. */
-export function pickEmbedding(handles: string[]): string | null {
-  return handles.find((h) => h.startsWith("ollama/")) ?? handles.find((h) => !h.startsWith("letta/")) ?? null;
+/**
+ * OpenAI text-embedding-3-small, the same embedder as Mem0 and Doug's other systems. An explicit
+ * BACC_LETTA_EMBEDDING wins (like LETTA_EMBEDDING in Capability-Economics-Guide).
+ */
+export function pickEmbedding(handles: string[], preferred?: string): string | null {
+  if (preferred && handles.includes(preferred)) return preferred;
+  return (
+    handles.find((h) => h === "openai/text-embedding-3-small") ??
+    handles.find((h) => h.startsWith("openai/")) ??
+    handles.find((h) => !h.startsWith("letta/")) ??
+    null
+  );
 }
 
 export interface LettaMessage {
