@@ -67,6 +67,7 @@ model UseCase {
   recordings Recording[]
   feedback   Feedback[]
   events     AgentEvent[]
+  questions  Question[]
 }
 
 model UseCaseSkill {
@@ -198,6 +199,7 @@ model AgentEvent {
   kind       String   // user | move | feedback | generate | review | start
   prompt     String
   status     String   @default("queued") // queued | running | done | failed
+  attempts   Int      @default(0)
   createdAt  DateTime @default(now())
   useCase    UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
 }
@@ -212,4 +214,18 @@ model CustomSkill {
   report      String   @default("")
   enabled     Boolean  @default(false)
   createdAt   DateTime @default(now())
+}
+
+// Questions the agents ask the client, shown one at a time in the order asked.
+model Question {
+  id          String    @id @default(cuid())
+  useCaseId   String
+  agent       String
+  question    String
+  explanation String    @default("")
+  status      String    @default("waiting") // waiting | open | answered
+  answer      String    @default("")
+  createdAt   DateTime  @default(now())
+  answeredAt  DateTime?
+  useCase     UseCase   @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
 }

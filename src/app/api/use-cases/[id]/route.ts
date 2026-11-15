@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { enqueue, START_PROMPT, agentsEnabled } from "@/lib/agent/runner";
+import { enqueue, START_PROMPT, agentsEnabled, resume } from "@/lib/agent/runner";
 import { STAGES, AGENTS } from "@/lib/bmad";
 import { syncPreviewState } from "@/lib/preview";
 
@@ -23,7 +23,9 @@ export async function GET(_req: Request, { params }: Ctx) {
   });
   if (!useCase) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const preview = await syncPreviewState(useCase);
-  return NextResponse.json({ ...useCase, preview, agentsEnabled: agentsEnabled() });
+  void resume(id);
+  const questionsWaiting = await prisma.question.count({ where: { useCaseId: id, status: "waiting" } });
+  return NextResponse.json({ ...useCase, preview, agentsEnabled: agentsEnabled(), questionsWaiting });
 }
 
 const PatchBody = z

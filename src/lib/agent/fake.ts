@@ -4,6 +4,7 @@ import type { UseCase } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { workspacePath } from "@/lib/workspace";
 import type { RunTally } from "./tools";
+import { askQuestion } from "@/lib/questions";
 
 // A scripted stand-in for the agents, used only by automated tests
 // (BACC_FAKE_AGENT=1 with no ANTHROPIC_API_KEY). It drives the same UI paths:
@@ -25,6 +26,20 @@ export async function fakeAgentTurn(uc: UseCase, prompt: string, tally: RunTally
   }
   if (prompt.startsWith("Generate finished")) {
     await say("ux", "I've noted the screen layout from the generated app in the UX notes.");
+    return;
+  }
+  if (prompt.includes("approved a new document")) {
+    tally.spoke += 2;
+    await askQuestion(uc.id, "analyst", "Who is the main customer for this?", "Mary needs this for the product brief.");
+    await askQuestion(uc.id, "pm", "Which feature matters most for the first version?", "John needs this to set priorities in the PRD.");
+    return;
+  }
+  if (prompt.includes("answering Mary's question")) {
+    await say("analyst", "Thanks, that goes into the brief.");
+    return;
+  }
+  if (prompt.includes("answering John's question")) {
+    await say("pm", "Thanks, I've set that as the top priority in the PRD.");
     return;
   }
   const fb = prompt.match(/feedback_ref "(F\d+)"/);

@@ -164,6 +164,11 @@ export default function Conversation({ data, reload }: { data: UseCaseFull; relo
         {data.pendingQuestion && (
           <p className="mb-2 truncate text-xs text-muted">
             Answering: <span className="text-ink">{data.pendingQuestion}</span>
+            {data.questionsWaiting ? (
+              <span className="ml-2 chip text-[10px]">
+                {data.questionsWaiting} more {data.questionsWaiting === 1 ? "question" : "questions"} waiting
+              </span>
+            ) : null}
           </p>
         )}
         <div className="flex items-end gap-2">

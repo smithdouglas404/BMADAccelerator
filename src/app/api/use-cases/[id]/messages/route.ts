@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { enqueue, agentsEnabled } from "@/lib/agent/runner";
+import { AGENTS } from "@/lib/bmad";
+import { answerQuestion } from "@/lib/questions";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -14,13 +16,14 @@ export async function POST(req: Request, { params }: Ctx) {
   if (!parsed.success) return NextResponse.json({ error: "Message is empty." }, { status: 400 });
   const msg = await prisma.message.create({ data: { useCaseId: id, role: "user", content: parsed.data.content } });
   const uc = await prisma.useCase.findUniqueOrThrow({ where: { id } });
-  await prisma.useCase.update({ where: { id }, data: { pendingQuestion: "" } });
+  const answered = await answerQuestion(id, parsed.data.content);
+  const about = answered
+    ? ` (answering ${AGENTS[answered.agent as keyof typeof AGENTS]?.name ?? answered.agent}'s question "${answered.question}")`
+    : uc.pendingQuestion
+      ? ` (answering "${uc.pendingQuestion}")`
+      : "";
   if (agentsEnabled()) {
-    await enqueue(
-      id,
-      "user",
-      `The client says${uc.pendingQuestion ? ` (answering "${uc.pendingQuestion}")` : ""}:\n\n${parsed.data.content}`,
-    );
+    await enqueue(id, "user", `The client says${about}:\n\n${parsed.data.content}`);
   } else {
     await prisma.message.create({
       data: {

@@ -18,6 +18,13 @@ export async function enqueue(useCaseId: string, kind: string, prompt: string) {
   void kick(useCaseId);
 }
 
+// Picks up work left in the queue, for example after the server restarted.
+export async function resume(useCaseId: string) {
+  if (running.has(useCaseId) || !agentsEnabled()) return;
+  const waiting = await prisma.agentEvent.count({ where: { useCaseId, status: { in: ["queued", "running"] } } });
+  if (waiting) void kick(useCaseId);
+}
+
 export function agentsEnabled() {
   return Boolean(process.env.ANTHROPIC_API_KEY) || process.env.BACC_FAKE_AGENT === "1";
 }
@@ -28,6 +35,11 @@ export async function kick(useCaseId: string) {
   try {
     // Events left "running" by a restart go back in the queue.
     await prisma.agentEvent.updateMany({ where: { useCaseId, status: "running" }, data: { status: "queued" } });
+    // A turn that failed in the last hour is tried again, up to three times in all.
+    await prisma.agentEvent.updateMany({
+      where: { useCaseId, status: "failed", attempts: { lt: 3 }, createdAt: { gt: new Date(Date.now() - 60 * 60 * 1000) } },
+      data: { status: "queued" },
+    });
     for (;;) {
       const events = await prisma.agentEvent.findMany({
         where: { useCaseId, status: "queued" },
@@ -35,7 +47,7 @@ export async function kick(useCaseId: string) {
       });
       if (!events.length) break;
       const ids = events.map((e) => e.id);
-      await prisma.agentEvent.updateMany({ where: { id: { in: ids } }, data: { status: "running" } });
+      await prisma.agentEvent.updateMany({ where: { id: { in: ids } }, data: { status: "running", attempts: { increment: 1 } } });
       await prisma.useCase.update({
         where: { id: useCaseId },
         data: { agentBusy: true, agentStatus: "Thinking", agentError: "" },

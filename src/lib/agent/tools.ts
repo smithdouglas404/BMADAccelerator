@@ -5,6 +5,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { AGENTS, type StageKey } from "@/lib/bmad";
 import { workspacePath } from "@/lib/workspace";
+import { askQuestion } from "@/lib/questions";
 
 const AGENT_KEYS = Object.keys(AGENTS) as [string, ...string[]];
 const STAGE_KEYS = ["clarify", "plan", "build", "learn"] as [StageKey, ...StageKey[]];
@@ -41,16 +42,20 @@ export function baccTools(useCaseId: string, slug: string, tally: RunTally) {
       ),
       tool(
         "ask",
-        "Ask the person ONE question in plain language, in the name of the agent that needs the answer. End your turn after asking; the answer arrives as the next message.",
+        "Ask the person ONE question in plain language, in the name of the agent that needs the answer. Questions are shown one at a time in the order asked; if another question is already waiting for an answer, this one waits in line and is shown automatically next. The answer arrives as a later message naming the question.",
         {
           agent: z.enum(AGENT_KEYS),
           question: z.string().min(1),
           explanation: z.string().default(""),
         },
         async ({ agent, question, explanation }) => {
-          await speak(agent, explanation ? `${question}\n\n${explanation}` : question);
-          await prisma.useCase.update({ where: { id: useCaseId }, data: { pendingQuestion: question } });
-          return ok("Asked. End your turn now and wait for the answer.");
+          tally.spoke++;
+          const shown = await askQuestion(useCaseId, agent, question, explanation);
+          return ok(
+            shown
+              ? "Asked. Wait for the answer before acting on this question."
+              : "Another question is already waiting for the client, so this one is queued and will be shown next. Carry on with other work or end your turn.",
+          );
         },
       ),
       tool(

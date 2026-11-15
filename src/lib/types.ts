@@ -70,6 +70,7 @@ export type UseCaseFull = {
   stage: "clarify" | "plan" | "build" | "learn";
   activeAgent: string;
   pendingQuestion: string;
+  questionsWaiting?: number;
   skills: { skillId: string }[];
   documents: DocumentT[];
   messages: MessageT[];
