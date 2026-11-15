@@ -1,6 +1,7 @@
 services:
   db:
-    image: postgres:16
+    # Postgres 16 with pgvector, which Mem0 and Letta need. Same data format as postgres:16.
+    image: pgvector/pgvector:0.8.7-pg16
     restart: unless-stopped
     environment:
       POSTGRES_USER: bacc
@@ -13,12 +14,91 @@ services:
       interval: 5s
       retries: 10
 
+  # One-shot: creates the mem0, mem0_app and letta databases in the same Postgres.
+  db-setup:
+    image: pgvector/pgvector:0.8.7-pg16
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: bacc
+      PGPASSWORD: bacc
+      PGDATABASE: bacc
+    volumes:
+      - ./memory/db/setup.sh:/setup.sh:ro
+    entrypoint: ["/bin/sh", "/setup.sh"]
+    restart: "no"
+
+  # Local embeddings for Mem0 and Letta, so memory needs no OpenAI key.
+  ollama:
+    image: ollama/ollama:0.40.16
+    restart: unless-stopped
+    environment:
+      EMBED_MODEL: nomic-embed-text
+    volumes:
+      - ollama:/root/.ollama
+      - ./memory/ollama/start.sh:/start.sh:ro
+    entrypoint: ["/bin/sh", "/start.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list | grep -q nomic-embed-text"]
+      interval: 10s
+      retries: 60
+
+  # Long-term memory: self-hosted Mem0 (open source).
+  mem0:
+    build: ./memory/mem0
+    restart: unless-stopped
+    depends_on:
+      db-setup:
+        condition: service_completed_successfully
+      ollama:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: mem0
+      POSTGRES_USER: bacc
+      POSTGRES_PASSWORD: bacc
+      APP_DB_NAME: mem0_app
+      HISTORY_DB_PATH: /app/history/history.db
+      ADMIN_API_KEY: ${MEM0_ADMIN_API_KEY:?run scripts/memory-secrets.sh once to create the memory passwords}
+      JWT_SECRET: ${MEM0_JWT_SECRET:?run scripts/memory-secrets.sh once to create the memory passwords}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      MEM0_LLM_MODEL: ${MEM0_LLM_MODEL:-claude-haiku-5-5}
+      OLLAMA_BASE_URL: http://ollama:11434
+      MEM0_EMBEDDER_MODEL: nomic-embed-text
+      MEM0_EMBEDDING_DIMS: "768"
+      MEM0_TELEMETRY: "false"
+    volumes:
+      - mem0-history:/app/history
+
+  # Each BMAD role's working mind: self-hosted Letta (open source).
+  letta:
+    image: letta/letta:0.16.8
+    restart: unless-stopped
+    depends_on:
+      db-setup:
+        condition: service_completed_successfully
+      ollama:
+        condition: service_healthy
+    environment:
+      LETTA_PG_URI: postgresql://bacc:bacc@db:5432/letta
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OLLAMA_BASE_URL: http://ollama:11434
+      SECURE: "true"
+      LETTA_SERVER_PASSWORD: ${LETTA_SERVER_PASSWORD:?run scripts/memory-secrets.sh once to create the memory passwords}
+
   app:
     build: .
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
+      mem0:
+        condition: service_started
+      letta:
+        condition: service_started
     ports:
       - "3000:3000"
       # Each use case's generated app gets its own port, so its own link.
@@ -36,6 +116,11 @@ services:
       JIRA_BASE_URL: ${JIRA_BASE_URL:-}
       JIRA_EMAIL: ${JIRA_EMAIL:-}
       JIRA_API_TOKEN: ${JIRA_API_TOKEN:-}
+      MEM0_BASE_URL: http://mem0:8000
+      MEM0_API_KEY: ${MEM0_ADMIN_API_KEY:-}
+      LETTA_BASE_URL: http://letta:8283
+      LETTA_API_KEY: ${LETTA_SERVER_PASSWORD:-}
+      BACC_LETTA_MODEL: ${BACC_LETTA_MODEL:-}
     volumes:
       - workspaces:/data/workspaces
       # The agents' session history, so conversations resume after a rebuild.
@@ -46,3 +131,5 @@ volumes:
   db:
   workspaces:
   claude-home:
+  ollama:
+  mem0-history:

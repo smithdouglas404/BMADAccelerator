@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { AGENTS, BMAD_DOC_TYPES, DOC_STAGES, ROUTABLE_AGENTS, type Routing } from "@/lib/bmad";
 import { writeIntake } from "@/lib/provision";
 import { enqueue, agentsEnabled } from "@/lib/agent/runner";
+import { rememberDecision } from "@/lib/memory";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -40,6 +41,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
       data: { status: "dismissed", answer: data.declineNote || "Declined", resolvedAt: new Date() },
     });
     const uc = await prisma.useCase.findUniqueOrThrow({ where: { id: doc.useCaseId } });
+    rememberDecision(uc, "concierge", `The client declined the document "${doc.fileName}" (${doc.bmadType})${data.declineNote ? `. Reason: ${data.declineNote}` : ""}.`, "accelerator:document");
     if (uc.provisioned && doc.origin === "upload") {
       await writeIntake(uc.id);
       if (agentsEnabled() && before.status === "approved") {
@@ -63,6 +65,10 @@ export async function PATCH(req: Request, { params }: Ctx) {
       data: { status: "approved", resolvedAt: new Date() },
     });
     const uc = await prisma.useCase.findUniqueOrThrow({ where: { id: doc.useCaseId } });
+    if (doc.origin === "upload") {
+      const routed = ((doc.routing as Routing) ?? []).map((r) => AGENTS[r.agent as keyof typeof AGENTS]?.name ?? r.agent).join(", ");
+      rememberDecision(uc, "concierge", `The client approved the document "${doc.fileName}" (${doc.bmadType}${routed ? `, for ${routed}` : ""}).\nWhat it is: ${doc.description}\nSummary: ${doc.summary}`, "accelerator:document");
+    }
     // A document approved after intake goes to BMAD the way BMAD takes inputs.
     if (uc.provisioned && doc.origin === "upload") {
       await writeIntake(uc.id);

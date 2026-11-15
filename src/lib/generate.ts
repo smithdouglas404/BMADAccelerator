@@ -4,6 +4,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import type { UseCase } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { onAppGenerated } from "@/lib/memory";
 import { workspacePath } from "@/lib/workspace";
 import { provisionWorkspace, writeIntake } from "@/lib/provision";
 import { appDir, assignPort, startPreview, stopPreview } from "@/lib/preview";
@@ -151,6 +152,9 @@ export async function runGenerate(useCaseId: string) {
         data: { status: "done" },
       });
     }
+    // Long-term memory: what was built, and the developer (and Sofia, for feedback) learn from it.
+    const notes = await fs.readFile(path.join(workspacePath(uc.slug), notesPath), "utf8").catch(() => "");
+    onAppGenerated(uc, notes.slice(0, 4000) || `Version ${n} of the app.`, feedback.map((f) => `${f.ticketRef}: ${f.comment}`).join("\n"));
     // Write what Generate learned back into BMAD, through BMAD's own agents.
     if (agentsEnabled()) {
       await enqueue(

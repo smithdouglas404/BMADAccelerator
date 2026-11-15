@@ -24,7 +24,7 @@ export async function fakeAgentTurn(uc: UseCase, prompt: string, tally: RunTally
     await say("analyst", "Who will use this first, and what should they be able to do on day one?\n\nFor example: \"Visitors open the page and see a greeting.\"");
     return;
   }
-  if (prompt.startsWith("Generate finished")) {
+  if (prompt.includes("Generate finished version")) {
     await say("ux", "I've noted the screen layout from the generated app in the UX notes.");
     return;
   }

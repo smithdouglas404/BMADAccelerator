@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AGENTS } from "@/lib/bmad";
 import { ECC_SKILLS, SKILL_TARGETS } from "@/lib/skills";
+import { MemoryTab } from "@/components/MemoryTab";
 
 type Prefs = {
   targetCodex: boolean;
@@ -12,7 +13,7 @@ type Prefs = {
   trackerProjectKey: string;
 };
 
-const TABS = ["Tracker", "Skills", "Modules", "Team rules and templates", "Agents"] as const;
+const TABS = ["Tracker", "Skills", "Modules", "Team rules and templates", "Agents", "Memory"] as const;
 
 const TRACKERS = [
   { key: "builtin", label: "Built-in board", note: "No account needed. Markdown files in each use case." },
@@ -355,6 +356,7 @@ export default function Settings() {
               ))}
             </ul>
           )}
+          {tab === "Memory" && <MemoryTab />}
         </section>
       )}
     </main>

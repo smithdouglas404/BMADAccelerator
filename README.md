@@ -7,6 +7,7 @@ Takes a use case from a spoken or typed idea to a production-ready pilot, using 
 
 ```bash
 cp .env.example .env   # add ELEVENLABS_API_KEY and ANTHROPIC_API_KEY
+./scripts/memory-secrets.sh   # once: creates the Mem0 and Letta passwords in .env
 docker compose up -d --build
 ```
 
@@ -50,6 +51,29 @@ Open http://localhost:3000. Each use case's generated app runs on its own port
   becomes a backlog card for Sofia.
 - **Trackers:** optional Linear sync and Export to Jira.
 - **Skills:** upload your own skills (checked with BMAD's validator) and turn them on.
+- **Memory across use cases:** self-hosted Mem0 and Letta (open source), in the same Docker
+  setup. See below.
+
+## Agent memory (Mem0 + Letta)
+
+The same pattern as the owner's other agent systems: **Mem0 is the long-term memory**, and
+**Letta is each BMAD role's working mind**. Both run in Docker next to the app; embeddings come
+from a local Ollama (`nomic-embed-text`), so no OpenAI key is needed. Mem0 uses Claude
+(`MEM0_LLM_MODEL`) to distill lessons; Letta's role agents use the newest Claude model it offers.
+
+- **Remember:** every answer to an agent's question, document approval, sign-off, piece of screen
+  feedback and build is saved to Mem0 with the same labels (`src/lib/memory/contract.ts`:
+  app `bmad-accelerator`, an agent id per role, a kind, the use case).
+- **Recall:** before each agent turn the app searches Mem0 across the other use cases and reads
+  each role's top lessons from Letta, and hands both to the agents in `<retrieved_context>`.
+- **Ask:** the agents can search memory, ask a role's Letta agent what it remembers, and save a lesson.
+- **Learn:** after a sign-off or a build, the role's Letta agent saves general lessons to Mem0;
+  the app copies each role's best lessons into its `top_lessons` block (also daily).
+- **See it:** Settings > Memory shows both services, a search over what earlier use cases taught,
+  and each role's lessons.
+
+BMAD's own files stay the source of truth inside a use case; memory carries lessons between them.
+If Mem0 or Letta is down, the app works as before.
 
 ## Testing without keys
 

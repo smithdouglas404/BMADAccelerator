@@ -8,6 +8,8 @@ import { syncBoard } from "@/lib/bmadTickets";
 import { MODEL } from "@/lib/docAgent";
 import { baccTools, type RunTally } from "./tools";
 import { fakeAgentTurn } from "./fake";
+import { recallForTurn, startMemoryJobs } from "@/lib/memory";
+import { withContext } from "@/lib/memory/lettaCore";
 
 // One agent turn at a time per use case. Queued events (messages, card moves,
 // feedback, Generate notes) are combined into the next turn, in order.
@@ -31,6 +33,7 @@ export function agentsEnabled() {
 
 export async function kick(useCaseId: string) {
   if (running.has(useCaseId)) return;
+  startMemoryJobs();
   running.add(useCaseId);
   try {
     // Events left "running" by a restart go back in the queue.
@@ -179,6 +182,12 @@ async function runTurn(useCaseId: string, prompt: string) {
   }
   const fresh = await prisma.useCase.findUniqueOrThrow({ where: { id: useCaseId } });
   const tally: RunTally = { spoke: 0 };
+
+  // Recall once per turn: what earlier use cases taught (Mem0) and each role's top lessons (Letta).
+  await prisma.useCase.update({ where: { id: useCaseId }, data: { agentStatus: "Remembering earlier use cases" } });
+  const recalled = await recallForTurn(fresh, prompt).catch(() => "");
+  prompt = withContext(prompt, recalled);
+  await prisma.useCase.update({ where: { id: useCaseId }, data: { agentStatus: "Thinking" } });
 
   if (process.env.BACC_FAKE_AGENT === "1" && !process.env.ANTHROPIC_API_KEY) {
     await fakeAgentTurn(fresh, prompt, tally);

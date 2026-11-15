@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { enqueue, agentsEnabled } from "@/lib/agent/runner";
 import { AGENTS } from "@/lib/bmad";
 import { answerQuestion } from "@/lib/questions";
+import { rememberAnswer } from "@/lib/memory";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -17,6 +18,7 @@ export async function POST(req: Request, { params }: Ctx) {
   const msg = await prisma.message.create({ data: { useCaseId: id, role: "user", content: parsed.data.content } });
   const uc = await prisma.useCase.findUniqueOrThrow({ where: { id } });
   const answered = await answerQuestion(id, parsed.data.content);
+  if (answered) rememberAnswer(uc, answered.agent, answered.question, parsed.data.content);
   const about = answered
     ? ` (answering ${AGENTS[answered.agent as keyof typeof AGENTS]?.name ?? answered.agent}'s question "${answered.question}")`
     : uc.pendingQuestion

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { workspacePath } from "@/lib/workspace";
 import { enqueue, agentsEnabled } from "@/lib/agent/runner";
+import { rememberFeedback } from "@/lib/memory";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -36,6 +37,7 @@ export async function POST(req: Request, { params }: Ctx) {
   const fb = await prisma.feedback.create({
     data: { useCaseId: id, comment: parsed.data.comment, imagePath, pageUrl: parsed.data.pageUrl, ticketRef: ref },
   });
+  rememberFeedback(uc, ref, `On page ${parsed.data.pageUrl} the client said: "${parsed.data.comment}"`);
   await prisma.ticket.create({
     data: {
       useCaseId: id,

@@ -6,8 +6,11 @@ import { prisma } from "@/lib/db";
 import { AGENTS, type StageKey } from "@/lib/bmad";
 import { workspacePath } from "@/lib/workspace";
 import { askQuestion } from "@/lib/questions";
+import { formatHits, letta, rememberAnswer, rememberLesson, searchMemory } from "@/lib/memory";
+import { ROLES } from "@/lib/memory/lettaCore";
 
 const AGENT_KEYS = Object.keys(AGENTS) as [string, ...string[]];
+const ROLE_KEYS = ROLES.map((r) => r.key) as [string, ...string[]];
 const STAGE_KEYS = ["clarify", "plan", "build", "learn"] as [StageKey, ...StageKey[]];
 
 function ok(text = "ok") {
@@ -121,6 +124,46 @@ export function baccTools(useCaseId: string, slug: string, tally: RunTally) {
           });
           if (!r.count) return ok(`No feedback ${feedback_ref}.`);
           return ok();
+        },
+      ),
+      tool(
+        "search_memory",
+        "Search the accelerator's long-term memory (Mem0) across every earlier use case: decisions, answered questions, lessons, screen feedback and builds. This use case's own memories are left out (its BMAD files hold them).",
+        {
+          query: z.string().min(1),
+          role: z.enum(ROLE_KEYS).optional(),
+          kind: z.enum(["decision", "qa", "lesson", "requirement", "run_summary"]).optional(),
+        },
+        async ({ query, role, kind }) => {
+          const hits = await searchMemory(query, { role, kinds: kind ? [kind] : undefined, excludeUseCase: useCaseId, limit: 8 });
+          return ok(hits.length ? formatHits(hits) : "Nothing in memory from earlier use cases matches.");
+        },
+      ),
+      tool(
+        "ask_role_memory",
+        "Ask a BMAD role's Letta agent what it remembers across earlier use cases (for example how similar pilots were scoped). It answers from its lessons and Mem0. Slow (it thinks); use it for real questions, not routine steps.",
+        { role: z.enum(ROLE_KEYS), question: z.string().min(1), agent: z.enum(AGENT_KEYS) },
+        async ({ role, question, agent }) => {
+          const uc = await prisma.useCase.findUniqueOrThrow({ where: { id: useCaseId } });
+          const asker = AGENTS[agent as keyof typeof AGENTS];
+          const context = formatHits(await searchMemory(question, { role, excludeUseCase: useCaseId, limit: 5 }));
+          const answer = await letta.askRole(role, `${question}\n\n(Asked from the use case "${uc.name}".)`, `${asker?.name ?? agent} (${asker?.role ?? ""})`, context).catch((e) => {
+            console.warn("ask_role_memory failed", e);
+            return null;
+          });
+          if (!answer) return ok("That role's memory is not available right now. Carry on without it.");
+          rememberAnswer(uc, role, `[asked by ${asker?.name ?? agent}] ${question}`, answer);
+          return ok(answer);
+        },
+      ),
+      tool(
+        "save_lesson",
+        "Save a general lesson from this use case that would help a future, similar one, in the owning BMAD agent's name. No client names, prices or private details.",
+        { agent: z.enum(ROLE_KEYS), lesson: z.string().min(10), confidence: z.number().min(0).max(1).default(0.7) },
+        async ({ agent, lesson, confidence }) => {
+          const uc = await prisma.useCase.findUniqueOrThrow({ where: { id: useCaseId } });
+          rememberLesson(uc, agent, lesson, confidence);
+          return ok("Saved.");
         },
       ),
       tool(
