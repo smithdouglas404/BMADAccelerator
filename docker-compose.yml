@@ -94,6 +94,9 @@ services:
       ELEVENLABS_STT_MODEL: ${ELEVENLABS_STT_MODEL:-scribe_v1}
       ELEVENLABS_VOICE_ID: ${ELEVENLABS_VOICE_ID:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # Your Claude subscription for the agents, Generate and the document agent (claude setup-token).
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
+      BACC_CLAUDE_AUTH: ${BACC_CLAUDE_AUTH:-}
       LINEAR_API_KEY: ${LINEAR_API_KEY:-}
       JIRA_BASE_URL: ${JIRA_BASE_URL:-}
       JIRA_EMAIL: ${JIRA_EMAIL:-}

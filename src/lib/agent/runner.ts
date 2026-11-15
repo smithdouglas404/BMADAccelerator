@@ -6,6 +6,7 @@ import { workspacePath } from "@/lib/workspace";
 import { provisionWorkspace, writeIntake } from "@/lib/provision";
 import { syncBoard } from "@/lib/bmadTickets";
 import { MODEL } from "@/lib/docAgent";
+import { LimitError, authEnv, authOrder, claudeConfigured, limitMessage, type Auth } from "@/lib/agent/auth";
 import { baccTools, type RunTally } from "./tools";
 import { fakeAgentTurn } from "./fake";
 import { recallForTurn, startMemoryJobs } from "@/lib/memory";
@@ -28,7 +29,7 @@ export async function resume(useCaseId: string) {
 }
 
 export function agentsEnabled() {
-  return Boolean(process.env.ANTHROPIC_API_KEY) || process.env.BACC_FAKE_AGENT === "1";
+  return claudeConfigured() || process.env.BACC_FAKE_AGENT === "1";
 }
 
 export async function kick(useCaseId: string) {
@@ -108,13 +109,37 @@ type TurnOpts = Parameters<typeof runSdkTurnOnce>[0];
 // Runs a turn, resuming the use case's Claude session. If that session can't be
 // resumed (for example its history was lost when the container was rebuilt), the
 // turn starts a fresh session instead: BMAD's files hold the real state.
-export async function runSdkTurn(opts: TurnOpts) {
+async function runSdkTurnResuming(opts: TurnOpts) {
   try {
     return await runSdkTurnOnce(opts);
   } catch (e) {
-    if (!opts.resume || opts.tally.spoke > 0) throw e;
+    if (e instanceof LimitError || !opts.resume || opts.tally.spoke > 0) throw e;
     console.error("resume failed, starting a fresh session", e);
     return runSdkTurnOnce({ ...opts, resume: "" });
+  }
+}
+
+// Signs in with the owner's plan first when one is set up. When the plan's usage limit stops the
+// turn, the same session carries on with the API key (unless BACC_CLAUDE_AUTH says plan only).
+export async function runSdkTurn(opts: TurnOpts) {
+  const order = authOrder();
+  for (let i = 0; ; i++) {
+    const auth = order[i] ?? "key";
+    try {
+      if (i === 0) return await runSdkTurnResuming({ ...opts, auth });
+      // A session started under another sign-in may not resume; BMAD's files hold the state anyway.
+      return await runSdkTurnOnce({ ...opts, auth }).catch((err) =>
+        err instanceof LimitError ? Promise.reject(err) : runSdkTurnOnce({ ...opts, auth, resume: "" }),
+      );
+    } catch (e) {
+      if (!(e instanceof LimitError) || i + 1 >= order.length) throw e;
+      console.warn(`claude ${auth} limit reached, continuing with ${order[i + 1]}`);
+      await opts.onStatus("Plan limit reached, continuing with the API key");
+      if (e.sessionId) {
+        opts = { ...opts, resume: e.sessionId };
+        await opts.onSession(e.sessionId);
+      }
+    }
   }
 }
 
@@ -128,7 +153,9 @@ async function runSdkTurnOnce(opts: {
   onStatus: (s: string) => Promise<void>;
   tally: RunTally;
   maxTurns?: number;
+  auth?: Auth;
 }) {
+  const auth = opts.auth ?? authOrder()[0] ?? "key";
   const ws = workspacePath(opts.slug);
   const texts: string[] = [];
   const q = query({
@@ -144,13 +171,19 @@ async function runSdkTurnOnce(opts: {
       disallowedTools: ["AskUserQuestion"],
       resume: opts.resume || undefined,
       maxTurns: opts.maxTurns ?? 200,
-      env: { ...process.env, IS_SANDBOX: "1" } as Record<string, string>,
+      env: authEnv(auth),
       stderr: (d) => console.error("[claude]", d.trimEnd()),
     },
   });
   let sessionId = "";
   let lastStatus = "";
+  const limited = (resetsAt?: number) => {
+    q.interrupt().catch(() => undefined);
+    return new LimitError(limitMessage(auth, resetsAt), sessionId, resetsAt);
+  };
   for await (const m of q as AsyncIterable<SDKMessage>) {
+    if (m.type === "rate_limit_event" && m.rate_limit_info.status === "rejected") throw limited(m.rate_limit_info.resetsAt);
+    if (m.type === "assistant" && (m.error === "rate_limit" || m.error === "billing_error")) throw limited();
     if ("session_id" in m && m.session_id && m.session_id !== sessionId) {
       sessionId = m.session_id;
       await opts.onSession(sessionId);
@@ -189,7 +222,7 @@ async function runTurn(useCaseId: string, prompt: string) {
   prompt = withContext(prompt, recalled);
   await prisma.useCase.update({ where: { id: useCaseId }, data: { agentStatus: "Thinking" } });
 
-  if (process.env.BACC_FAKE_AGENT === "1" && !process.env.ANTHROPIC_API_KEY) {
+  if (process.env.BACC_FAKE_AGENT === "1" && !claudeConfigured()) {
     await fakeAgentTurn(fresh, prompt, tally);
   } else {
     const { texts } = await runSdkTurn({

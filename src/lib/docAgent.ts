@@ -5,6 +5,8 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { AGENTS, BMAD_DOC_TYPES, DOC_STAGES, ROUTABLE_AGENTS } from "@/lib/bmad";
 import { convertToText } from "@/lib/provision";
+import { query, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+import { authEnv, authOrder, claudeConfigured, type Auth } from "@/lib/agent/auth";
 
 /** The BMAD role agents and Generate. Sonnet: about half Opus's price, strong enough for planning and building. */
 export const MODEL = process.env.BACC_MODEL || "claude-sonnet-5-5";
@@ -29,23 +31,14 @@ export async function describeDocument(documentId: string) {
   if (textPath && !doc.textPath) await prisma.document.update({ where: { id: doc.id }, data: { textPath } });
   const noSummary = (why: string) => prisma.document.update({ where: { id: doc.id }, data: { summary: `No summary yet: ${why}` } });
   if (!textPath) return noSummary("this file type couldn't be read as text. Add a one-line description yourself.");
-  if (!process.env.ANTHROPIC_API_KEY) return noSummary("the Anthropic key isn't set, so the document agent can't run.");
+  if (!claudeConfigured()) return noSummary("Claude isn't signed in (no plan token or API key), so the document agent can't run.");
 
   let text = await fs.readFile(textPath, "utf8");
   const truncated = text.length > MAX_CHARS;
   if (truncated) text = text.slice(0, MAX_CHARS);
   const types = BMAD_DOC_TYPES.map((t) => `- ${t.key}: ${t.label}`).join("\n");
 
-  const client = new Anthropic();
-  const response = await client.messages
-    .parse({
-    model: DOC_MODEL,
-    max_tokens: 6000,
-    output_config: { effort: "low", format: zodOutputFormat(Suggestion) },
-    messages: [
-      {
-        role: "user",
-        content: `A business user uploaded "${doc.fileName}" to plan a software pilot with the BMAD Method. Read it and suggest:
+  const prompt = `A business user uploaded "${doc.fileName}" to plan a software pilot with the BMAD Method. Read it and suggest:
 - bmadType: which kind of BMAD input it is, one of:
 ${types}
 - description: one plain sentence saying what kind of file this is and what it covers (for example "A 12-slide sales deck describing the new onboarding offer").
@@ -61,18 +54,18 @@ ${types}
 ${truncated ? "\nThe document is long; you are seeing the first part only.\n" : ""}
 <document>
 ${text}
-</document>`,
-      },
-    ],
-  })
-    .catch(async (e) => {
-      console.error("document agent", e);
-      await noSummary("the document agent hit an error. Upload it again to retry.");
+</document>`;
+
+  let parsed: z.infer<typeof Suggestion> | null = null;
+  for (const auth of authOrder()) {
+    parsed = await (auth === "plan" ? suggestWithPlan(prompt) : suggestWithKey(prompt)).catch((e) => {
+      console.error(`document agent (${auth})`, e);
       return null;
     });
-  if (!response) return;
-  if (response.stop_reason === "refusal" || !response.parsed_output) return noSummary("the document agent couldn't summarize this file.");
-  const s = response.parsed_output;
+    if (parsed) break;
+  }
+  if (!parsed) return noSummary("the document agent couldn't summarize this file. Upload it again to retry.");
+  const s = parsed;
   await prisma.document.update({
     where: { id: doc.id },
     data: {
@@ -90,4 +83,41 @@ ${text}
       detail: `For: ${DOC_STAGES.find((x) => x.key === doc.stage)?.label ?? "General (any stage)"}. Suggested type: ${label}. ${s.description} Goes to ${s.agents.map((a) => AGENTS[a.agent].name).join(", ") || "the concierge"}. Read the summary, then approve it so BMAD uses it, or decline it.`,
     },
   });
+}
+
+/** The API key path: one Messages API call with a structured answer. */
+async function suggestWithKey(prompt: string) {
+  const response = await new Anthropic().messages.parse({
+    model: DOC_MODEL,
+    max_tokens: 6000,
+    output_config: { effort: "low", format: zodOutputFormat(Suggestion) },
+    messages: [{ role: "user", content: prompt }],
+  });
+  if (response.stop_reason === "refusal") return null;
+  return response.parsed_output ?? null;
+}
+
+/** The plan path: the same request through Claude Code signed in with the owner's subscription, no tools. */
+async function suggestWithPlan(prompt: string, auth: Auth = "plan") {
+  const q = query({
+    prompt,
+    options: {
+      model: DOC_MODEL,
+      tools: [],
+      maxTurns: 3,
+      effort: "low",
+      persistSession: false,
+      settingSources: [],
+      outputFormat: { type: "json_schema", schema: z.toJSONSchema(Suggestion) as Record<string, unknown> },
+      env: authEnv(auth),
+    },
+  });
+  for await (const m of q as AsyncIterable<SDKMessage>) {
+    if (m.type === "result") {
+      if (m.subtype !== "success") throw new Error(`document agent stopped: ${m.subtype}`);
+      const r = Suggestion.safeParse(m.structured_output);
+      return r.success ? r.data : null;
+    }
+  }
+  return null;
 }

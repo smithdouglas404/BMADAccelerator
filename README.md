@@ -54,6 +54,16 @@ Open http://localhost:3000. Each use case's generated app runs on its own port
 - **Memory across use cases:** self-hosted Mem0 and Letta (open source), in the same Docker
   setup. See below.
 
+## Running on your Claude subscription
+
+If you're the only person using the accelerator, the BMAD agents, the concierge, Generate and
+the document agent can run on your own Claude plan instead of API credit. Run `claude setup-token`
+and put the token in `.env` as `CLAUDE_CODE_OAUTH_TOKEN`. By default the plan is used first, and
+when its usage limit is reached the same turn continues on `ANTHROPIC_API_KEY`
+(`BACC_CLAUDE_AUTH=plan` waits for the reset instead). Letta still uses the API key (Haiku), and
+Mem0 uses OpenAI. When other people use the accelerator, use an API key: a personal plan isn't
+for powering other people's use.
+
 ## Agent memory (Mem0 + Letta)
 
 The same pattern as the owner's other agent systems: **Mem0 is the long-term memory**, and

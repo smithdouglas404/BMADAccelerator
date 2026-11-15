@@ -85,6 +85,7 @@ export async function startPreview(useCaseId: string) {
     delete (env as Record<string, string | undefined>).NODE_ENV;
     delete env.DATABASE_URL;
     delete env.ANTHROPIC_API_KEY;
+    delete env.CLAUDE_CODE_OAUTH_TOKEN;
     delete env.ELEVENLABS_API_KEY;
     let child: ChildProcess;
     if (await exists(path.join(dir, "package.json"))) {

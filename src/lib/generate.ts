@@ -4,6 +4,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import type { UseCase } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { claudeConfigured } from "@/lib/agent/auth";
 import { onAppGenerated } from "@/lib/memory";
 import { workspacePath } from "@/lib/workspace";
 import { provisionWorkspace, writeIntake } from "@/lib/provision";
@@ -120,7 +121,7 @@ export async function runGenerate(useCaseId: string) {
     const feedback = await prisma.feedback.findMany({ where: { useCaseId, status: { in: ["new", "sent"] } } });
     const tally: RunTally = { spoke: 0 };
 
-    if (process.env.BACC_FAKE_AGENT === "1" && !process.env.ANTHROPIC_API_KEY) {
+    if (process.env.BACC_FAKE_AGENT === "1" && !claudeConfigured()) {
       await fakeGenerate(uc, notesPath, tally);
     } else {
       await runSdkTurn({
