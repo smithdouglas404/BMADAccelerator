@@ -8,6 +8,9 @@ export type DocumentT = {
   description: string;
   summary: string;
   approved: boolean;
+  status: string;
+  stage: string;
+  declineNote: string;
   origin?: string;
 };
 

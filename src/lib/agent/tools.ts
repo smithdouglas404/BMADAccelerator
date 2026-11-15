@@ -129,6 +129,7 @@ export function baccTools(useCaseId: string, slug: string, tally: RunTally) {
             origin: "bmad",
             textPath: abs,
             approved: true,
+            status: "approved",
           };
           if (existing) await prisma.document.update({ where: { id: existing.id }, data });
           else await prisma.document.create({ data: { useCaseId, storagePath: abs, ...data } });

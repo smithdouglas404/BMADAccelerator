@@ -90,6 +90,9 @@ model Document {
   description String   @default("")
   summary     String   @default("")
   approved    Boolean  @default(false)
+  status      String   @default("in_review") // in_review | approved | declined
+  stage       String   @default("general") // general | clarify | plan | build | learn
+  declineNote String   @default("")
   origin      String   @default("upload") // upload | bmad
   textPath    String   @default("")
   createdAt   DateTime @default(now())

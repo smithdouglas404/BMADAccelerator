@@ -4,7 +4,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { prisma } from "@/lib/db";
 import { workspacePath, WORKSPACES_DIR } from "@/lib/workspace";
-import { BMAD_DOC_TYPES } from "@/lib/bmad";
+import { BMAD_DOC_TYPES, DOC_STAGES } from "@/lib/bmad";
 
 const run = promisify(execFile);
 
@@ -177,11 +177,14 @@ export async function writeIntake(useCaseId: string) {
     include: { documents: true, skills: true },
   });
   const ws = workspacePath(uc.slug);
+  const statusText: Record<string, string> = { approved: "approved", in_review: "in review, not approved yet" };
   const docs = uc.documents
+    .filter((d) => d.status !== "declined")
     .map((d) => {
+      const stage = DOC_STAGES.find((s) => s.key === d.stage)?.label ?? "General (any stage)";
       const type = BMAD_DOC_TYPES.find((t) => t.key === d.bmadType)?.label ?? d.bmadType;
       const text = d.textPath ? path.relative(ws, d.textPath) : "(no text version)";
-      return `- **${d.fileName}** (${type}${d.approved ? ", approved" : ", not approved yet"}): ${d.description || d.summary}\n  - File: \`${path.relative(ws, d.storagePath)}\`, text: \`${text}\`${d.tags.length ? `\n  - Tags: ${d.tags.join(", ")}` : ""}`;
+      return `- **${d.fileName}** (${type}; ${stage}; ${statusText[d.status] ?? d.status}): ${d.description || d.summary}\n  - File: \`${path.relative(ws, d.storagePath)}\`, text: \`${text}\`${d.tags.length ? `\n  - Tags: ${d.tags.join(", ")}` : ""}`;
     })
     .join("\n");
   const md = `# ${uc.name}

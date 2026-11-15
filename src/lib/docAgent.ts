@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { BMAD_DOC_TYPES } from "@/lib/bmad";
+import { BMAD_DOC_TYPES, DOC_STAGES } from "@/lib/bmad";
 import { convertToText } from "@/lib/provision";
 
 export const MODEL = process.env.BACC_MODEL || "claude-opus-5-5";
@@ -23,7 +23,9 @@ export async function describeDocument(documentId: string) {
   const doc = await prisma.document.findUniqueOrThrow({ where: { id: documentId } });
   const textPath = doc.textPath || (await convertToText(doc.storagePath));
   if (textPath && !doc.textPath) await prisma.document.update({ where: { id: doc.id }, data: { textPath } });
-  if (!process.env.ANTHROPIC_API_KEY || !textPath) return;
+  const noSummary = (why: string) => prisma.document.update({ where: { id: doc.id }, data: { summary: `No summary yet: ${why}` } });
+  if (!textPath) return noSummary("this file type couldn't be read as text. Add a one-line description yourself.");
+  if (!process.env.ANTHROPIC_API_KEY) return noSummary("the Anthropic key isn't set, so the document agent can't run.");
 
   let text = await fs.readFile(textPath, "utf8");
   const truncated = text.length > MAX_CHARS;
@@ -31,7 +33,8 @@ export async function describeDocument(documentId: string) {
   const types = BMAD_DOC_TYPES.map((t) => `- ${t.key}: ${t.label}`).join("\n");
 
   const client = new Anthropic();
-  const response = await client.messages.parse({
+  const response = await client.messages
+    .parse({
     model: MODEL,
     max_tokens: 4000,
     output_config: { effort: "low", format: zodOutputFormat(Suggestion) },
@@ -50,8 +53,14 @@ ${text}
 </document>`,
       },
     ],
-  });
-  if (response.stop_reason === "refusal" || !response.parsed_output) return;
+  })
+    .catch(async (e) => {
+      console.error("document agent", e);
+      await noSummary("the document agent hit an error. Upload it again to retry.");
+      return null;
+    });
+  if (!response) return;
+  if (response.stop_reason === "refusal" || !response.parsed_output) return noSummary("the document agent couldn't summarize this file.");
   const s = response.parsed_output;
   await prisma.document.update({
     where: { id: doc.id },
@@ -65,6 +74,8 @@ ${text}
   const label = BMAD_DOC_TYPES.find((t) => t.key === s.bmadType)?.label ?? s.bmadType;
   await prisma.reviewItem.updateMany({
     where: { targetId: doc.id, kind: "document", status: "open" },
-    data: { detail: `Suggested type: ${label}. ${s.description} Check the summary and tags, then approve.` },
+    data: {
+      detail: `For: ${DOC_STAGES.find((x) => x.key === doc.stage)?.label ?? "General (any stage)"}. Suggested type: ${label}. ${s.description} Read the summary, then approve it so BMAD uses it, or decline it.`,
+    },
   });
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { BMAD_DOC_TYPES } from "@/lib/bmad";
+import { BMAD_DOC_TYPES, DOC_STAGES } from "@/lib/bmad";
 import { writeIntake } from "@/lib/provision";
 import { enqueue, agentsEnabled } from "@/lib/agent/runner";
 
@@ -14,6 +14,9 @@ const Body = z
     description: z.string().max(1000),
     summary: z.string().max(10000),
     approved: z.boolean(),
+    status: z.enum(["in_review", "approved", "declined"]),
+    stage: z.enum(DOC_STAGES.map((s) => s.key) as [string, ...string[]]),
+    declineNote: z.string().max(2000),
   })
   .partial();
 
@@ -21,8 +24,39 @@ export async function PATCH(req: Request, { params }: Ctx) {
   const { id } = await params;
   const parsed = Body.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  const doc = await prisma.document.update({ where: { id }, data: parsed.data });
-  if (parsed.data.approved) {
+  // `status` is the source of truth; `approved` stays in step with it.
+  const data = { ...parsed.data };
+  if (data.approved === true && !data.status) data.status = "approved";
+  if (data.status) data.approved = data.status === "approved";
+  if (data.status && data.status !== "declined") data.declineNote = data.declineNote ?? "";
+  const before = await prisma.document.findUnique({ where: { id } });
+  if (!before) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const doc = await prisma.document.update({ where: { id }, data });
+  const decided = data.status && data.status !== before.status ? data.status : "";
+  if (decided === "declined") {
+    await prisma.reviewItem.updateMany({
+      where: { targetId: id, kind: "document", status: "open" },
+      data: { status: "dismissed", answer: data.declineNote || "Declined", resolvedAt: new Date() },
+    });
+    const uc = await prisma.useCase.findUniqueOrThrow({ where: { id: doc.useCaseId } });
+    if (uc.provisioned && doc.origin === "upload") {
+      await writeIntake(uc.id);
+      if (agentsEnabled() && before.status === "approved") {
+        await enqueue(
+          uc.id,
+          "document",
+          `The client declined "${doc.fileName}", which was approved before${data.declineNote ? ` (reason: ${data.declineNote})` : ""}. Stop using it as input and tell the client in one line if anything already built on it needs a second look.`,
+        );
+      }
+    }
+  }
+  if (decided === "in_review") {
+    await prisma.reviewItem.updateMany({
+      where: { targetId: id, kind: "document", status: { not: "open" } },
+      data: { status: "open", resolvedAt: null },
+    });
+  }
+  if (decided === "approved") {
     await prisma.reviewItem.updateMany({
       where: { targetId: id, kind: "document", status: "open" },
       data: { status: "approved", resolvedAt: new Date() },
@@ -36,7 +70,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
         await enqueue(
           uc.id,
           "document",
-          `The client approved a new document: "${doc.fileName}" (${type?.label ?? doc.bmadType}; usually goes to ${type?.routesTo ?? "the concierge"}). Its text version is ${doc.textPath || "not available"}; it is listed in bacc/intake.md. Bring it into the BMAD work where it belongs, using that agent's own workflow, and tell the client in one line.`,
+          `The client approved a new document: "${doc.fileName}" (${type?.label ?? doc.bmadType}; usually goes to ${type?.routesTo ?? "the concierge"}; for ${DOC_STAGES.find((x) => x.key === doc.stage)?.label ?? "any stage"}). Its text version is ${doc.textPath || "not available"}; it is listed in bacc/intake.md. Bring it into the BMAD work where it belongs, using that agent's own workflow, and tell the client in one line.`,
         );
       }
     }

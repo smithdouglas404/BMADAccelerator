@@ -61,6 +61,15 @@ export type AgentKey =
   | "bmad"
   | "generator";
 
+// Where an upload belongs: anywhere (general) or one BMAD stage.
+export const DOC_STAGES: { key: string; label: string }[] = [
+  { key: "general", label: "General (any stage)" },
+  { key: "clarify", label: "Stage 1: Clarify" },
+  { key: "plan", label: "Stage 2: Plan" },
+  { key: "build", label: "Stage 3: Build and verify" },
+  { key: "learn", label: "Stage 4: Learn and adjust" },
+];
+
 export const AGENTS: Record<
   AgentKey,
   { name: string; role: string; skill: string; stage: StageKey; color: string }
