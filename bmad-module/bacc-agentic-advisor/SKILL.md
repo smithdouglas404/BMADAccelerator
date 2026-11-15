@@ -62,7 +62,7 @@ Once the PRD exists (and Sally's documents if they do), read everything and writ
 
 If nothing in the use case is agent-shaped, the map says so in a few lines, with the one place an agent could help later, and no questions.
 
-Register it with `mcp__bacc__register_document` (type `architecture`, title "Agentic map", review true). Then ask the questions with `mcp__bacc__ask`, one at a time, in plain words with your suggestion ("I'd suggest ... because ... Agree?"). Hand Winston the map and the client's answers as their input; ask him to carry the agents into the architecture in AgentKit's terms.
+Register it with `mcp__bacc__register_document` (type `architecture`, title "Agentic map", review true). Then ask every question in section 5 with `mcp__bacc__ask`, one call per question (writing them in the map is not asking them; the client may never open the file), in plain words with your suggestion ("I'd suggest ... because ... Agree?"). Wait for each answer before the next question, and add the answers to the map. Only then hand Winston the map and the client's answers as their input; ask him to carry the agents into the architecture in AgentKit's terms.
 
 ## After a build
 
