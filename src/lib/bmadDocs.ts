@@ -61,6 +61,7 @@ export function classifyDoc(rel: string): Omit<DocFile, "updatedAt" | "status"> 
   const review = /(^|\/)reviews?\//.test(lower) || /^review[-_]/i.test(name);
 
   if (lower === "bacc/intake.md") return { key: "intake", path: p, title: "Use-case brief", role: "main" };
+  if (lower === "bacc/floor.md") return { key: "intake", path: p, title: "Product floor (everything this kind of product has)", role: "supporting" };
   if (lower.startsWith("bacc/design/")) {
     const base = name.toLowerCase();
     const title =

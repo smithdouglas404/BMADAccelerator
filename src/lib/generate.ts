@@ -86,14 +86,14 @@ function generatePrompt(
     .map((f, i) => `${i + 1}. "${f.comment}" — marked-up screenshot: ${f.imagePath}${f.pageUrl ? ` (page ${f.pageUrl})` : ""}`)
     .join("\n");
   const fullProduct =
-    "First read `bacc/intake.md` and picture what you would build if the client had typed only that idea into Claude Code: the complete product a leading company in this category ships. Build that. Then read the BMAD documents and decisions below and layer them on as additions and changes.";
+    "First read `bacc/intake.md` and `bacc/floor.md` (the product floor: the category, its leading products and everything this kind of product has; build every [confirmed] and [assumed] item and never an [out] one) and picture what you would build if the client had typed only their idea into Claude Code: the complete product a leading company in this category ships. Build that. Then read the BMAD documents and decisions below and layer them on as additions and changes.";
   const opening = fresh
     ? `Build the app from scratch (version ${uc.generateCount + 1}). The client set the earlier app aside: \`app/\` is empty and there is no design direction yet. Never open \`bacc/archive/\`: it holds the old app and must not shape this one. ${fullProduct}`
     : first
       ? `Generate the first version of the app. ${fullProduct}`
     : redesign
       ? `Redesign the app (version ${uc.generateCount + 1}). Keep every feature, page, rule and piece of data that works, but treat the look as not good enough: write a fresh \`bacc/design/direction.md\` from scratch, without reusing the current palette, fonts or layout, and rebuild the whole UI to it. Also bring in any change from the inputs below.`
-      : `Regenerate the app (version ${uc.generateCount + 1}). Carry on as you would in Claude Code when the client tells you more: build in what the new inputs below ask for and keep everything else. If the app is still missing something the leading products in its category all have (and the client never removed), add it too. If \`bacc/design/direction.md\` is missing or doesn't name the category and its three leading products, write it and bring the whole UI up to it.`;
+      : `Regenerate the app (version ${uc.generateCount + 1}). Carry on as you would in Claude Code when the client tells you more: build in what the new inputs below ask for and keep everything else. If the app is still missing something the leading products in its category all have, or a [confirmed] or [assumed] item in \`bacc/floor.md\`, add it too; never build an [out] item. If \`bacc/design/direction.md\` is missing or doesn't name the category and its three leading products, write it and bring the whole UI up to it.`;
   const components = first
     ? "\n\nComponent list: if `bacc/design/components.md` doesn't exist yet and the PRD does, write it first. For each screen and requirement in the PRD, look up shadcn/ui items with the shadcn MCP tools (one short word per search) and list the exact registry names with one line on why each fits, plus a \"Gaps\" section; only list items the tools returned. Register it with `mcp__bacc__register_document` (type `ux`, title \"Component list\", review true) and build from it without waiting."
     : "";

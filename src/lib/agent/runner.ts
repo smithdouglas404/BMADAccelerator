@@ -294,7 +294,8 @@ async function runTurn(useCaseId: string, prompt: string) {
 // The first turn after intake: the concierge greets the person and starts BMAD.
 export const START_PROMPT = `The client just finished intake for this use case. Their own words, their documents and their choices are in bacc/intake.md; their uploads, with text versions, are in bacc/uploads/.
 
-BMAD is installed and set up in this project, and this use case is the active initiative. Start the work now:
-1. Read bacc/intake.md.
-2. Use the \`bmad\` skill to decide where this work starts (it reads the installed modules and the intake), then load the agent it recommends and follow that agent's workflow as written.
-3. Greet the client in one short message, tell them who they will work with first and why, and ask the first question BMAD needs, one question only.`;
+You lead this work; BMAD is installed in this project as a tool for structured documents, reviews and the ticket tree. The client's intake is only part of the floor. Start now:
+1. Read bacc/intake.md and the uploads.
+2. Load the bacc-floor skill and write bacc/floor.md: the category and industry, the leading products, the full scaffold of everything this kind of product has, the gap questions and the ideas. Register it; that starts the first build of the app from the floor.
+3. Greet the client in one short message: say what kind of product you understood this to be, that a first full version is being built from what leading products in that category have, and that you'll fill in what's theirs together. Then ask the most important gap question, one question only.
+4. After that, use the \`bmad\` skill to decide which BMAD agent starts, and hand it the floor as the client's input: the full product, where BMAD draws out how this client differs.`;

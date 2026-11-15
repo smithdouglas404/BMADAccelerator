@@ -21,6 +21,9 @@ import {
   resolvePicks,
   signoffReviewProblem,
   stageGateBlock,
+  FLOOR_FILE,
+  FLOOR_SKILL,
+  floorProblems,
   conceptProblems,
   DESIGN_CONCEPT,
   gapsProblem,
@@ -118,7 +121,7 @@ export function baccTools(useCaseId: string, slug: string, tally: RunTally) {
       ),
       tool(
         "set_stage",
-        "Show which BMAD stage the work is in and which agent is working now. Handing over to a BMAD agent needs your expert advice for it first (mcp__bacc__advise), Sally also needs bacc/design/concept.md, Sally also needs the options catalogue bacc/design/options.md, and Winston (architect) needs bacc/advisor/agentic-map.md (bacc-agentic-advisor skill); otherwise this refuses and says what to do.",
+        "Show which BMAD stage the work is in and which agent is working now. Handing over to a BMAD agent needs your expert advice for it first (mcp__bacc__advise), Sally also needs bacc/design/concept.md, Sally also needs the options catalogue bacc/design/options.md, every BMAD agent needs the product floor bacc/floor.md (bacc-floor skill), and Winston (architect) needs bacc/advisor/agentic-map.md (bacc-agentic-advisor skill); otherwise this refuses and says what to do.",
         { stage: z.enum(STAGE_KEYS), agent: z.enum(AGENT_KEYS) },
         async ({ stage, agent }) => {
           const block = stageGateBlock({
@@ -127,6 +130,7 @@ export function baccTools(useCaseId: string, slug: string, tally: RunTally) {
             conceptExists: await fileExists(workspacePath(slug, "bacc", "design", "concept.md")),
             agenticMapExists: await fileExists(workspacePath(slug, AGENTIC_MAP)),
             optionsExists: await fileExists(workspacePath(slug, OPTIONS_CATALOGUE)),
+            floorExists: (await fileExists(workspacePath(slug, FLOOR_FILE))) || (await prisma.useCase.count({ where: { id: useCaseId, generateCount: { gt: 0 } } })) > 0,
           });
           if (block) return ok(block);
           await prisma.useCase.update({ where: { id: useCaseId }, data: { stage, activeAgent: agent } });
@@ -308,6 +312,10 @@ export function baccTools(useCaseId: string, slug: string, tally: RunTally) {
             const problem = conceptProblems(await fs.readFile(abs, "utf8"));
             if (problem) return ok(`${problem} Fix the file, then register it again.`);
           }
+          if (rel === FLOOR_FILE) {
+            const problem = floorProblems(await fs.readFile(abs, "utf8"));
+            if (problem) return ok(`${problem} Fix the file (${FLOOR_SKILL} skill), then register it again.`);
+          }
           if (rel === OPTIONS_CATALOGUE) {
             const problem = catalogueProblems(await fs.readFile(abs, "utf8"), await fs.readFile(lastCatalogue, "utf8").catch(() => ""));
             if (problem) return ok(`${problem} Fix the file, then register it again.`);
@@ -329,6 +337,16 @@ export function baccTools(useCaseId: string, slug: string, tally: RunTally) {
           const doc = existing
             ? await prisma.document.update({ where: { id: existing.id }, data })
             : await prisma.document.create({ data: { useCaseId, storagePath: abs, ...data } });
+          // The floor is what the first build is made from: start it now, so the client reacts to a working product.
+          let built = "";
+          if (rel === FLOOR_FILE) {
+            const uc = await prisma.useCase.findUnique({ where: { id: useCaseId }, select: { generateCount: true, generateBusy: true } });
+            if (uc && uc.generateCount === 0 && !uc.generateBusy) {
+              const { runGenerate } = await import("@/lib/generate");
+              void runGenerate(useCaseId).catch((e) => console.error("floor build", e));
+              built = " The first build of the app from this floor has started; tell the client in one line that a first version is on its way to the Preview.";
+            }
+          }
           if (args.review) {
             await prisma.reviewItem.updateMany({
               where: { useCaseId, targetId: doc.id, kind: "document", status: "open" },
@@ -345,9 +363,9 @@ export function baccTools(useCaseId: string, slug: string, tally: RunTally) {
                 targetId: doc.id,
               },
             });
-            return ok("Shown for approval. The decision arrives as a message.");
+            return ok(`Shown for approval. The decision arrives as a message.${built}`);
           }
-          return ok();
+          return ok(built.trim() || undefined);
         },
       ),
     ],
