@@ -5,6 +5,15 @@ import { REVIEW_KINDS } from "@/lib/bmad";
 import type { ReviewT, UseCaseFull } from "@/lib/types";
 import VoiceRecorder from "@/components/VoiceRecorder";
 import DocumentCard from "@/components/DocumentCard";
+import { ChevronRight, CircleCheck } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { Card } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import { cn } from "@/lib/utils";
 
 // One human-in-the-loop inbox, modeled on BMAD's project context flow:
 // you bring what you have, BMAD verifies the rest, you approve.
@@ -30,62 +39,54 @@ export default function ReviewDrawer({
   const [closing, setClosing] = useState(false);
   const done = data.reviews.filter((r) => r.status !== "open");
   return (
-    <>
-      <div
-        className={`fixed inset-0 z-40 bg-black/30 transition-opacity ${open ? "opacity-100" : "pointer-events-none opacity-0"}`}
-        onClick={onClose}
-        aria-hidden
-      />
-      <aside
-        className={`glass fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col !bg-[var(--bg-elev)] shadow-2xl transition-transform duration-300 ${
-          open ? "translate-x-0" : "translate-x-full"
-        }`}
-        aria-label="Review queue"
-        aria-hidden={!open}
-      >
-        <div className="flex items-center justify-between border-b border-line p-4">
-          <div>
-            <h2 className="text-lg font-semibold">Review queue</h2>
-            <p className="text-xs text-muted">One tap to approve, edit, or answer.</p>
-          </div>
-          <button className="btn btn-ghost" onClick={onClose} aria-label="Close review queue">
-            Close
-          </button>
-        </div>
-        <div className="flex border-b border-line text-sm" role="tablist">
-          {(
-            [
-              ["todo", `To do (${open_.length})`],
-              ["history", `History (${done.length})`],
-            ] as const
-          ).map(([k, label]) => (
-            <button
-              key={k}
-              role="tab"
-              aria-selected={tab === k}
-              onClick={() => setTab(k)}
-              className={`flex-1 px-3 py-2 font-medium ${tab === k ? "border-b-2 border-accent text-ink" : "text-muted"}`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-md" aria-label="Review queue">
+        <SheetHeader className="border-b">
+          <SheetTitle className="text-lg">Review queue</SheetTitle>
+          <SheetDescription>One tap to approve, edit, or answer.</SheetDescription>
+          <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="mt-2">
+            <TabsList className="w-full">
+              <TabsTrigger value="todo">
+                To do <Badge variant="secondary" className="h-4 px-1.5 tabular-nums">{open_.length}</Badge>
+              </TabsTrigger>
+              <TabsTrigger value="history">
+                History <Badge variant="secondary" className="h-4 px-1.5 tabular-nums">{done.length}</Badge>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </SheetHeader>
         <div className="flex-1 space-y-3 overflow-y-auto p-4">
           {tab === "todo" ? (
             <>
-              {open_.length === 0 && <p className="text-center text-sm text-muted">All caught up.</p>}
+              {open_.length === 0 && (
+                <Empty>
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon">
+                      <CircleCheck />
+                    </EmptyMedia>
+                    <EmptyTitle>All caught up</EmptyTitle>
+                  </EmptyHeader>
+                </Empty>
+              )}
               {items.map((r) => (
                 <ReviewCard key={r.id} item={r} data={data} reload={reload} />
               ))}
               {older.length > 0 && (
-                <div className="rounded-xl border border-line p-3">
+                <div className="rounded-lg border p-3">
                   <div className="flex items-center justify-between gap-2">
-                    <button type="button" className="text-left text-sm font-medium" onClick={() => setShowOld((v) => !v)} aria-expanded={showOld}>
-                      From before version {data.generateCount} ({older.length})
-                    </button>
                     <button
                       type="button"
-                      className="btn btn-ghost shrink-0 px-3 py-1 text-xs"
+                      className="flex items-center gap-1 text-left text-sm font-medium"
+                      onClick={() => setShowOld((v) => !v)}
+                      aria-expanded={showOld}
+                    >
+                      <ChevronRight className={cn("size-4 transition-transform", showOld && "rotate-90")} />
+                      From before version {data.generateCount} ({older.length})
+                    </button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="xs"
                       disabled={closing}
                       onClick={async () => {
                         setClosing(true);
@@ -98,9 +99,9 @@ export default function ReviewDrawer({
                       }}
                     >
                       {closing ? "Closing" : "Close these"}
-                    </button>
+                    </Button>
                   </div>
-                  <p className="mt-1 text-xs text-muted">Raised before the latest build, so they may no longer apply.</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Raised before the latest build, so they may no longer apply.</p>
                   {showOld && (
                     <div className="mt-3 space-y-3">
                       {older.map((r) => (
@@ -113,7 +114,7 @@ export default function ReviewDrawer({
             </>
           ) : (
             <>
-              {done.length === 0 && <p className="text-center text-sm text-muted">Nothing decided yet.</p>}
+              {done.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">Nothing decided yet.</p>}
               {[...done]
                 .sort((a, b) => (b.resolvedAt ?? b.createdAt).localeCompare(a.resolvedAt ?? a.createdAt))
                 .map((r) => (
@@ -122,8 +123,8 @@ export default function ReviewDrawer({
             </>
           )}
         </div>
-      </aside>
-    </>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -149,17 +150,17 @@ function ReviewCard({ item, data, reload }: { item: ReviewT; data: UseCaseFull; 
 
   const isMove = item.kind === "move";
   return (
-    <div className="glass pop-in rounded-xl p-4">
-      <div className="flex items-center justify-between gap-2 text-xs text-muted">
-        <span className="chip">{REVIEW_KINDS[item.kind] ?? item.kind}</span>
+    <Card className="pop-in gap-0 p-4">
+      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+        <Badge variant="outline">{REVIEW_KINDS[item.kind] ?? item.kind}</Badge>
         <span>{item.source}</span>
       </div>
       <h3 className="mt-2 font-semibold leading-snug">{item.title}</h3>
-      {item.detail && <p className="mt-1 text-sm text-muted">{item.detail}</p>}
-      {item.reason && <p className="mt-1 text-xs text-muted">Why you&apos;re seeing this: {item.reason}</p>}
+      {item.detail && <p className="mt-1 text-sm text-muted-foreground">{item.detail}</p>}
+      {item.reason && <p className="mt-1 text-xs text-muted-foreground">Why you&apos;re seeing this: {item.reason}</p>}
       <div className="mt-3 flex items-start gap-2">
-        <textarea
-          className="field min-h-14 flex-1 text-sm"
+        <Textarea
+          className="min-h-14 flex-1 text-sm"
           placeholder={isMove ? "Optional: why did you move it?" : "Your answer (optional)"}
           value={answer}
           onChange={(e) => setAnswer(e.target.value)}
@@ -167,43 +168,43 @@ function ReviewCard({ item, data, reload }: { item: ReviewT; data: UseCaseFull; 
         <VoiceRecorder label="" onTranscript={(t) => setAnswer((a) => (a ? `${a} ${t}` : t))} />
       </div>
       <div className="mt-3 flex flex-wrap justify-end gap-2">
-        <button className="btn btn-ghost" disabled={busy} onClick={() => resolve("dismissed")}>
+        <Button variant="ghost" disabled={busy} onClick={() => resolve("dismissed")}>
           {isMove ? "Skip" : "Later"}
-        </button>
+        </Button>
         {answer.trim() ? (
-          <button className="btn btn-primary" disabled={busy} onClick={() => resolve("answered")}>
+          <Button disabled={busy} onClick={() => resolve("answered")}>
             Send answer
-          </button>
+          </Button>
         ) : (
-          <button className="btn btn-primary" disabled={busy} onClick={() => resolve("approved")}>
+          <Button disabled={busy} onClick={() => resolve("approved")}>
             {isMove ? "No update" : "Approve"}
-          </button>
+          </Button>
         )}
       </div>
-    </div>
+    </Card>
   );
 }
 
 const OUTCOME: Record<string, { label: string; cls: string }> = {
   approved: { label: "Approved", cls: "bg-good/15 text-good" },
   edited: { label: "Edited", cls: "bg-good/15 text-good" },
-  answered: { label: "Answered", cls: "bg-accent/15 text-ink" },
+  answered: { label: "Answered", cls: "bg-primary/15 text-foreground" },
   dismissed: { label: "Skipped", cls: "bg-warn/15 text-warn" },
 };
 
 // A decision already made: what it was, who asked, what the person said and when.
 function HistoryRow({ item }: { item: ReviewT }) {
-  const o = item.kind === "document" && item.status === "dismissed" ? { label: "Declined", cls: "bg-bad/15 text-bad" } : (OUTCOME[item.status] ?? OUTCOME.approved);
+  const o = item.kind === "document" && item.status === "dismissed" ? { label: "Declined", cls: "bg-destructive/15 text-destructive" } : (OUTCOME[item.status] ?? OUTCOME.approved);
   const when = item.resolvedAt ? new Date(item.resolvedAt) : null;
   return (
-    <div className="rounded-xl border border-line p-3 text-sm">
-      <div className="flex items-center justify-between gap-2 text-xs text-muted">
-        <span className="chip">{REVIEW_KINDS[item.kind] ?? item.kind}</span>
-        <span className={`chip border-transparent ${o.cls}`}>{o.label}</span>
+    <div className="rounded-lg border bg-card p-3 text-sm">
+      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+        <Badge variant="outline">{REVIEW_KINDS[item.kind] ?? item.kind}</Badge>
+        <Badge className={cn("border-transparent", o.cls)}>{o.label}</Badge>
       </div>
       <p className="mt-1.5 font-medium leading-snug">{item.title}</p>
-      {item.answer && <p className="mt-1 text-muted">You said: &ldquo;{item.answer}&rdquo;</p>}
-      <p className="mt-1 text-xs text-muted">
+      {item.answer && <p className="mt-1 text-muted-foreground">You said: &ldquo;{item.answer}&rdquo;</p>}
+      <p className="mt-1 text-xs text-muted-foreground">
         Asked by {item.source}
         {when ? `, decided ${when.toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}` : ""}
       </p>

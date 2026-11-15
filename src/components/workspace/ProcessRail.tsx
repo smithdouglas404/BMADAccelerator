@@ -2,6 +2,10 @@
 
 import { STAGES, type StageKey } from "@/lib/bmad";
 import type { UseCaseFull } from "@/lib/types";
+import { Check, Lock } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { BorderBeam } from "@/components/magicui/border-beam";
+import { cn } from "@/lib/utils";
 
 // BMAD's loop as clickable navigation. Each stage lists its documents with a
 // readiness note (not a single percentage) and shows sign-off gates as locks.
@@ -27,21 +31,27 @@ export default function ProcessRail({
             type="button"
             onClick={() => onSelect(s.key)}
             aria-current={state === "now" ? "step" : undefined}
-            className={`glass rounded-xl p-3 text-left transition hover:border-accent/60 ${
-              state === "now" ? "ring-2 ring-accent/60" : ""
-            }`}
+            className={cn(
+              "relative flex flex-col justify-start overflow-hidden rounded-xl border bg-card p-3 text-left shadow-xs transition-all hover:border-primary/40 hover:shadow-sm focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
+              state === "now" && "border-primary/50 bg-accent/40",
+            )}
           >
+            {state === "now" && <BorderBeam size={80} duration={8} colorFrom="var(--primary)" colorTo="var(--brand-2)" />}
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted">Stage {i + 1}</span>
-              {state === "done" && <span className="text-xs text-good">Visited</span>}
-              {state === "now" && <span className="text-xs text-accent">You are here</span>}
+              <span className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">Stage {i + 1}</span>
+              {state === "done" && (
+                <span className="inline-flex items-center gap-1 text-xs text-good">
+                  <Check className="size-3" /> Visited
+                </span>
+              )}
+              {state === "now" && <span className="text-xs font-medium text-primary">You are here</span>}
             </div>
             <div className="mt-0.5 font-semibold">{s.label}</div>
-            <ul className="mt-2 space-y-0.5 text-xs text-muted">
+            <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
               {s.docs.map((d) => (
                 <li key={d.key} className="flex items-center justify-between gap-2">
                   <span>{d.label}</span>
-                  <span>
+                  <span className="tabular-nums">
                     {d.key === "prd" && openQuestions > 0
                       ? `${openQuestions} open`
                       : d.key === "tickets" && data.tickets.length
@@ -58,13 +68,14 @@ export default function ProcessRail({
                     (r) => r.kind === "signoff" && (r.status === "approved" || r.status === "answered") && r.title.toLowerCase().includes(g.toLowerCase()),
                   );
                   return (
-                    <span
+                    <Badge
                       key={g}
-                      className={`chip text-[10px] ${ok ? "border-good/40 bg-good/10 text-good" : "text-muted"}`}
+                      variant="outline"
+                      className={cn("text-[10px]", ok ? "border-good/40 bg-good/10 text-good" : "text-muted-foreground")}
                       title={ok ? "Signed off (see Review, History)" : "Sign-off gate: waiting for your approval"}
                     >
-                      {ok ? "✓" : <LockIcon />} {g}
-                    </span>
+                      {ok ? <Check /> : <Lock />} {g}
+                    </Badge>
                   );
                 })}
               </div>
@@ -73,14 +84,5 @@ export default function ProcessRail({
         );
       })}
     </nav>
-  );
-}
-
-function LockIcon() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
-      <rect x="4" y="11" width="16" height="10" rx="2" />
-      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-    </svg>
   );
 }

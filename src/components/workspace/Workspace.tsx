@@ -11,6 +11,25 @@ import ReviewDrawer from "./ReviewDrawer";
 import UploadDropzone from "@/components/UploadDropzone";
 import DocumentCard from "@/components/DocumentCard";
 import PreviewPanel from "./PreviewPanel";
+import { Focus, Hammer, Inbox, LogOut, Maximize2, Minimize2, Paintbrush, RotateCcw, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { BorderBeam } from "@/components/magicui/border-beam";
+import { cn } from "@/lib/utils";
 
 function readiness(data: UseCaseFull) {
   const gaps: string[] = [];
@@ -79,113 +98,142 @@ export default function Workspace({ data, reload }: { data: UseCaseFull; reload:
     setBoardHeight(Math.min(Math.max(next, 140), window.innerHeight * 0.7));
   }
 
+  const generateTip = changesSince
+    ? `${changesSince} decision${changesSince === 1 ? "" : "s"} since version ${data.generateCount} aren't in the app yet. Regenerate to build them in.`
+    : ready.ready
+      ? "Build the app now"
+      : `${ready.reason}. You can still generate now; it builds from what BMAD has so far.`;
+
   return (
     <main className="mx-auto flex h-[calc(100vh-3.5rem)] max-w-[1600px] flex-col gap-3 px-4 py-3">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h1 className="truncate text-xl font-semibold tracking-tight">{data.name}</h1>
-          <div className="mt-0.5 flex items-center gap-2 text-sm text-muted">
-            <span className="inline-block h-2 w-2 rounded-full" style={{ background: agent.color }} />
-            <span>
-              Talking with <span className="font-medium text-ink">{agent.name}</span>, {agent.role}
-              {data.bmadVersion && <span className="ml-2 text-xs">BMAD {data.bmadVersion}</span>}
+          <div className="mt-0.5 flex items-center gap-2 text-sm text-muted-foreground">
+            <span className="relative flex size-2">
+              {data.agentBusy && <span className="absolute inline-flex size-full animate-ping rounded-full opacity-60" style={{ background: agent.color }} />}
+              <span className="relative inline-flex size-2 rounded-full" style={{ background: agent.color }} />
             </span>
+            <span>
+              Talking with <span className="font-medium text-foreground">{agent.name}</span>, {agent.role}
+            </span>
+            {data.bmadVersion && (
+              <Badge variant="outline" className="font-mono text-[10px]">
+                BMAD {data.bmadVersion}
+              </Badge>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button className="btn" onClick={() => setReviewOpen(true)} aria-label={`Review queue, ${openCount} open`}>
-            Review
-            {openCount > 0 && (
-              <span className="rounded-full bg-accent px-2 py-0.5 text-xs text-white">{openCount}</span>
-            )}
-          </button>
-          <button className="btn btn-ghost" onClick={() => setFocus((f) => !f)} aria-pressed={focus}>
-            {focus ? "Show board" : "Focus"}
-          </button>
-          <Link href="/" className="btn btn-ghost">
-            Save and exit
-          </Link>
+          <Button variant="outline" onClick={() => setReviewOpen(true)} aria-label={`Review queue, ${openCount} open`}>
+            <Inbox /> Review
+            {openCount > 0 && <Badge className="h-5 min-w-5 rounded-full px-1.5 tabular-nums">{openCount}</Badge>}
+          </Button>
+          <Button variant="ghost" onClick={() => setFocus((f) => !f)} aria-pressed={focus}>
+            <Focus /> {focus ? "Show board" : "Focus"}
+          </Button>
+          <Button variant="ghost" asChild>
+            <Link href="/">
+              <LogOut /> Save and exit
+            </Link>
+          </Button>
           {data.generateCount > 0 && (
-            <button
-              className="btn btn-ghost"
-              title="Keep every feature, and rebuild the look from a fresh design direction"
-              onClick={() => generate("redesign")}
-              disabled={data.generateBusy}
-            >
-              Redesign
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" onClick={() => generate("redesign")} disabled={data.generateBusy}>
+                  <Paintbrush /> Redesign
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Keep every feature, and rebuild the look from a fresh design direction</TooltipContent>
+            </Tooltip>
           )}
           {data.generateCount > 0 && (
-            <button
-              className="btn btn-ghost"
-              title="Set the current app aside and build a new one from BMAD's documents, as if it were the first time"
-              onClick={() => {
-                if (window.confirm("Start fresh? The current app is set aside (kept in the project's archive) and a new one is built from the documents.")) generate("fresh");
-              }}
-              disabled={data.generateBusy}
-            >
-              Start fresh
-            </button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="ghost" disabled={data.generateBusy}>
+                  <RotateCcw /> Start fresh
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Start fresh?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    The current app is set aside (kept in the project&apos;s archive) and a new one is built from BMAD&apos;s documents, as if
+                    it were the first time.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => generate("fresh")}>Start fresh</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           )}
-          <button
-            className={`btn ${ready.ready ? "btn-primary" : "border-warn/60 text-warn"}`}
-            title={
-              changesSince
-                ? `${changesSince} decision${changesSince === 1 ? "" : "s"} since version ${data.generateCount} aren't in the app yet. Regenerate to build them in.`
-                : ready.ready
-                  ? "Build the app now"
-                  : `${ready.reason}. You can still generate now; it builds from what BMAD has so far.`
-            }
-            onClick={() => generate()}
-            disabled={data.generateBusy}
-          >
-            <span className={`h-2 w-2 rounded-full ${ready.ready ? "bg-white" : "bg-warn"}`} aria-hidden />
-            {data.generateBusy ? "Generating..." : data.generateCount ? "Regenerate" : "Generate"}
-            {!data.generateBusy && changesSince > 0 && (
-              <span className="rounded-full bg-warn px-2 py-0.5 text-xs text-white" aria-label={`${changesSince} new decisions not built yet`}>
-                {changesSince} new
-              </span>
-            )}
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={ready.ready || data.generateBusy ? "default" : "outline"}
+                className={cn("relative overflow-hidden", !ready.ready && !data.generateBusy && "border-warn/60 text-warn hover:text-warn")}
+                onClick={() => generate()}
+                disabled={data.generateBusy}
+              >
+                <Hammer />
+                {data.generateBusy ? "Generating..." : data.generateCount ? "Regenerate" : "Generate"}
+                {!data.generateBusy && changesSince > 0 && (
+                  <Badge className="bg-warn text-white" aria-label={`${changesSince} new decisions not built yet`}>
+                    {changesSince} new
+                  </Badge>
+                )}
+                {data.generateBusy && <BorderBeam size={60} duration={3} colorFrom="#ffffff" colorTo="#c4b5fd" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs">{generateTip}</TooltipContent>
+          </Tooltip>
         </div>
       </header>
 
       {notice && (
-        <div className="glass pop-in flex items-center justify-between gap-3 rounded-xl px-4 py-2 text-sm" role="status">
+        <div className="pop-in flex items-center justify-between gap-3 rounded-lg border bg-card px-4 py-2 text-sm shadow-xs" role="status">
           {notice}
-          <button className="text-muted hover:text-ink" onClick={() => setNotice("")} aria-label="Dismiss">
-            ✕
-          </button>
+          <Button variant="ghost" size="icon-sm" onClick={() => setNotice("")} aria-label="Dismiss">
+            <X />
+          </Button>
         </div>
       )}
 
       <ProcessRail data={data} onSelect={selectStage} />
 
-      <div className={`grid min-h-0 flex-1 gap-3 ${side === "preview" && wide ? "lg:grid-cols-[minmax(320px,1fr)_minmax(0,1.6fr)]" : "lg:grid-cols-[1fr_420px]"}`}>
-        <section className="glass min-h-0 overflow-hidden rounded-2xl">
+      <div className={cn("grid min-h-0 flex-1 gap-3", side === "preview" && wide ? "lg:grid-cols-[minmax(320px,1fr)_minmax(0,1.6fr)]" : "lg:grid-cols-[1fr_420px]")}>
+        <Card className="min-h-0 gap-0 overflow-hidden py-0">
           <Conversation data={data} reload={reload} />
-        </section>
-        <section className="glass flex min-h-0 flex-col overflow-hidden rounded-2xl">
-          <div className="flex items-center border-b border-line text-sm" role="tablist">
-            {(["documents", "preview"] as const).map((k) => (
-              <button
-                key={k}
-                role="tab"
-                aria-selected={side === k}
-                onClick={() => setSide(k)}
-                className={`flex-1 px-3 py-2 font-medium capitalize ${side === k ? "border-b-2 border-accent text-ink" : "text-muted"}`}
-              >
-                {k}
-                {k === "preview" && data.generateCount > 0 ? ` v${data.generateCount}` : ""}
-              </button>
-            ))}
-            {side === "preview" && (
-              <button className="px-2 text-xs text-muted hover:text-ink" onClick={() => setWide((w) => !w)} aria-pressed={wide}>
-                {wide ? "Narrow" : "Wide"}
-              </button>
-            )}
-          </div>
-          <div className={`min-h-0 flex-1 overflow-y-auto p-3 ${side === "documents" ? "space-y-3" : "flex flex-col"}`}>
+        </Card>
+        <Card className="flex min-h-0 flex-col gap-0 overflow-hidden py-0">
+          <Tabs value={side} onValueChange={(v) => setSide(v as typeof side)} className="gap-0">
+            <div className="flex items-center gap-2 border-b px-3 py-2">
+              <TabsList className="flex-1">
+                <TabsTrigger value="documents">Documents</TabsTrigger>
+                <TabsTrigger value="preview">
+                  Preview
+                  {data.generateCount > 0 && (
+                    <Badge variant="secondary" className="h-4 px-1 font-mono text-[10px]">
+                      v{data.generateCount}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              </TabsList>
+              {side === "preview" && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon-sm" onClick={() => setWide((w) => !w)} aria-pressed={wide} aria-label={wide ? "Narrow preview" : "Wide preview"}>
+                      {wide ? <Minimize2 /> : <Maximize2 />}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{wide ? "Narrow" : "Wide"}</TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+          </Tabs>
+          <div className={cn("min-h-0 flex-1 overflow-y-auto p-3", side === "documents" ? "space-y-3" : "flex flex-col")}>
             {side === "documents" ? (
               <>
                 <UploadDropzone useCaseId={data.id} onUploaded={reload} />
@@ -197,11 +245,11 @@ export default function Workspace({ data, reload }: { data: UseCaseFull; reload:
               <PreviewPanel data={data} reload={reload} />
             )}
           </div>
-        </section>
+        </Card>
       </div>
 
       {!focus && (
-        <section className="glass flex flex-col overflow-hidden rounded-2xl" style={{ height: boardHeight }}>
+        <Card className="flex flex-col gap-0 overflow-hidden py-0" style={{ height: boardHeight }}>
           <div
             role="separator"
             aria-orientation="horizontal"
@@ -209,14 +257,14 @@ export default function Workspace({ data, reload }: { data: UseCaseFull; reload:
             onPointerDown={onHandleDown}
             onPointerMove={onHandleMove}
             onPointerUp={() => (dragStart.current = null)}
-            className="flex h-3 cursor-row-resize items-center justify-center"
+            className="group flex h-3 shrink-0 cursor-row-resize items-center justify-center"
           >
-            <span className="h-1 w-12 rounded-full bg-line" />
+            <span className="h-1 w-12 rounded-full bg-border transition-colors group-hover:bg-primary/50" />
           </div>
           <div className="min-h-0 flex-1">
             <KanbanBoard data={data} reload={reload} />
           </div>
-        </section>
+        </Card>
       )}
 
       <ReviewDrawer data={data} open={reviewOpen} onClose={() => setReviewOpen(false)} reload={reload} />

@@ -4,6 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import VoiceRecorder from "@/components/VoiceRecorder";
 import { AGENTS, type AgentKey } from "@/lib/bmad";
 import type { MessageT, UseCaseFull } from "@/lib/types";
+import { AlertCircle, Pause, SendHorizontal, Volume2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AnimatedShinyText } from "@/components/magicui/animated-shiny-text";
+import { cn } from "@/lib/utils";
 
 function agentOf(m: MessageT) {
   if (m.role === "user") return null;
@@ -92,44 +101,54 @@ export default function Conversation({ data, reload }: { data: UseCaseFull; relo
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center justify-between border-b border-line px-4 py-2 text-xs text-muted">
-        <span>Conversation</span>
-        <button
-          className={`chip ${readAloud ? "border-accent bg-accent/15 text-ink" : ""}`}
-          onClick={toggleReadAloud}
-          aria-pressed={readAloud}
-          title="Read the agents' messages aloud with ElevenLabs"
-        >
-          {readAloud ? "Reading aloud" : "Read aloud"}
-        </button>
+      <div className="flex items-center justify-between border-b px-4 py-2.5">
+        <span className="text-sm font-semibold">Conversation</span>
+        <div className="flex items-center gap-2" title="Read the agents' messages aloud with ElevenLabs">
+          <Switch id="read-aloud" checked={readAloud} onCheckedChange={toggleReadAloud} />
+          <Label htmlFor="read-aloud" className="text-xs font-normal text-muted-foreground">
+            Read aloud
+          </Label>
+        </div>
       </div>
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4" aria-live="polite">
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4" aria-live="polite">
         {data.messages.map((m) => {
           const agent = agentOf(m);
           const mine = !agent;
           return (
-            <div key={m.id} className={`pop-in flex ${mine ? "justify-end" : "justify-start"}`}>
+            <div key={m.id} className={cn("pop-in flex gap-2.5", mine ? "justify-end" : "justify-start")}>
+              {agent && (
+                <span
+                  className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full text-[11px] font-semibold text-white shadow-xs"
+                  style={{ background: agent.color }}
+                  aria-hidden
+                >
+                  {agent.name.slice(0, 1)}
+                </span>
+              )}
               <div
-                className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-                  mine ? "bg-gradient-to-br from-accent to-accent2 text-white" : "glass"
-                }`}
+                className={cn(
+                  "max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
+                  mine ? "rounded-br-md bg-primary text-primary-foreground" : "rounded-tl-md border bg-muted/50",
+                )}
               >
                 {agent && (
-                  <div className="mb-1 flex items-center justify-between gap-3 text-xs font-semibold">
-                    <span className="flex items-center gap-1.5" style={{ color: agent.color }}>
-                      <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: agent.color }} />
-                      <span>
-                        {agent.name}, {agent.role}
+                  <div className="mb-1 flex items-center justify-between gap-3 text-xs">
+                    <span>
+                      <span className="font-semibold" style={{ color: agent.color }}>
+                        {agent.name}
                       </span>
+                      <span className="text-muted-foreground">, {agent.role}</span>
                     </span>
-                    <button
-                      className="text-muted hover:text-ink"
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="text-muted-foreground"
                       onClick={() => speak(m)}
                       aria-label="Read this message aloud"
                       title="Read aloud"
                     >
-                      {playing === m.id ? "Playing" : "Play"}
-                    </button>
+                      {playing === m.id ? <Pause /> : <Volume2 />}
+                    </Button>
                   </div>
                 )}
                 <p className="whitespace-pre-wrap">{m.content}</p>
@@ -138,59 +157,65 @@ export default function Conversation({ data, reload }: { data: UseCaseFull; relo
           );
         })}
         {working && (
-          <div className="flex justify-start" role="status">
-            <div className="glass flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm text-muted">
-              <span className="typing" aria-hidden>
+          <div className="flex items-center gap-2.5" role="status">
+            <span className="grid size-7 shrink-0 place-items-center rounded-full text-[11px] font-semibold text-white" style={{ background: working.color }} aria-hidden>
+              {working.name.slice(0, 1)}
+            </span>
+            <div className="flex items-center gap-2 rounded-2xl rounded-tl-md border bg-muted/50 px-4 py-2.5 text-sm">
+              <span className="typing text-muted-foreground" aria-hidden>
                 <i />
                 <i />
                 <i />
               </span>
-              <span>
-                <span className="font-medium" style={{ color: working.color }}>
-                  {working.name}
-                </span>{" "}
-                is working{data.agentStatus ? `: ${data.agentStatus.toLowerCase()}` : ""}
-              </span>
+              <AnimatedShinyText className="mx-0 max-w-none">
+                {working.name} is working{data.agentStatus ? `: ${data.agentStatus.toLowerCase()}` : ""}
+              </AnimatedShinyText>
             </div>
           </div>
         )}
         {data.agentError && !data.agentBusy && (
-          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-bad/40 bg-bad/10 px-4 py-2 text-sm" role="alert">
-            <span className="min-w-0 flex-1">The last step didn&rsquo;t finish: {data.agentError.replace(/\.$/, "")}.</span>
-            <button
-              type="button"
-              className="btn btn-ghost shrink-0 px-3 py-1 text-xs"
-              disabled={retrying}
-              onClick={async () => {
-                setRetrying(true);
-                try {
-                  await fetch(`/api/use-cases/${data.id}/retry`, { method: "POST" });
-                } finally {
-                  setRetrying(false);
-                  reload();
-                }
-              }}
-            >
-              {retrying ? "Retrying" : "Try again"}
-            </button>
-          </div>
+          <Alert variant="destructive" className="items-center">
+            <AlertCircle />
+            <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+              <span className="min-w-0 flex-1">The last step didn&rsquo;t finish: {data.agentError.replace(/\.$/, "")}.</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={retrying}
+                onClick={async () => {
+                  setRetrying(true);
+                  try {
+                    await fetch(`/api/use-cases/${data.id}/retry`, { method: "POST" });
+                  } finally {
+                    setRetrying(false);
+                    reload();
+                  }
+                }}
+              >
+                {retrying ? "Retrying" : "Try again"}
+              </Button>
+            </AlertDescription>
+          </Alert>
         )}
         <div ref={end} />
       </div>
-      <div className="border-t border-line p-3">
+      <div className="border-t bg-muted/20 p-3">
         {data.pendingQuestion && (
-          <p className="mb-2 truncate text-xs text-muted">
-            Answering: <span className="text-ink">{data.pendingQuestion}</span>
+          <p className="mb-2 flex items-center gap-2 truncate text-xs text-muted-foreground">
+            <span className="truncate">
+              Answering: <span className="text-foreground">{data.pendingQuestion}</span>
+            </span>
             {data.questionsWaiting ? (
-              <span className="ml-2 chip text-[10px]">
+              <Badge variant="secondary" className="shrink-0 text-[10px]">
                 {data.questionsWaiting} more {data.questionsWaiting === 1 ? "question" : "questions"} waiting
-              </span>
+              </Badge>
             ) : null}
           </p>
         )}
         <div className="flex items-end gap-2">
-          <textarea
-            className="field min-h-11 flex-1 resize-none text-sm"
+          <Textarea
+            className="min-h-11 flex-1 resize-none bg-background text-sm"
             rows={2}
             placeholder="Type, or tap the mic and talk as long as you like"
             value={text}
@@ -204,9 +229,9 @@ export default function Conversation({ data, reload }: { data: UseCaseFull; relo
             aria-label="Message"
           />
           <VoiceRecorder label="" onTranscript={(t) => setText((v) => (v ? `${v} ${t}` : t))} />
-          <button className="btn btn-primary" disabled={busy || !text.trim()} onClick={send}>
-            Send
-          </button>
+          <Button disabled={busy || !text.trim()} onClick={send}>
+            <SendHorizontal /> Send
+          </Button>
         </div>
       </div>
     </div>

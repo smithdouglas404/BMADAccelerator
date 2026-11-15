@@ -22,8 +22,8 @@ export default function UseCasePage({ params }: { params: Promise<{ id: string }
     load();
   }, [load]);
 
-  if (error) return <p className="p-10 text-center text-muted">{error}</p>;
-  if (!data) return <p className="p-10 text-center text-muted">Loading...</p>;
+  if (error) return <p className="p-10 text-center text-muted-foreground">{error}</p>;
+  if (!data) return <p className="p-10 text-center text-muted-foreground">Loading...</p>;
 
   if (data.onboardingStep <= 1) return <DocumentsStep data={data} reload={load} />;
   if (data.onboardingStep === 2 && !data.inspiration?.picks) return <PictureStep data={data} reload={load} />;

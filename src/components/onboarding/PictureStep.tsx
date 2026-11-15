@@ -6,6 +6,8 @@ import WizardSteps from "@/components/WizardSteps";
 import VoiceRecorder from "@/components/VoiceRecorder";
 import type { UseCaseFull } from "@/lib/types";
 import type { InspirationOptionsT } from "@/lib/inspire";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 
 type Direction = InspirationOptionsT["directions"][number];
 
@@ -30,7 +32,7 @@ function StylePreview({ d, nav, action }: { d: Direction; nav: string[]; action:
   const display = `"${d.displayFont}", serif`;
   const body = `"${d.bodyFont}", system-ui, sans-serif`;
   return (
-    <div className="overflow-hidden rounded-lg border border-line text-left" style={{ background: p.background, color: p.text, fontFamily: body }} aria-hidden>
+    <div className="overflow-hidden rounded-lg border border-border text-left" style={{ background: p.background, color: p.text, fontFamily: body }} aria-hidden>
       <div className="flex items-center justify-between px-3 py-2" style={{ borderBottom: `1px solid ${p.muted}33` }}>
         <span style={{ fontFamily: display, fontWeight: 700, fontSize: 12 }}>{d.name}</span>
         <span className="flex gap-2" style={{ fontSize: 9, color: p.muted }}>
@@ -111,13 +113,13 @@ export default function PictureStep({ data, reload }: { data: UseCaseFull; reloa
       <WizardSteps current={2} />
       <section className="pop-in mt-6">
         <h1 className="text-2xl font-semibold tracking-tight">What are you picturing?</h1>
-        <p className="mt-1 text-muted">
+        <p className="mt-1 text-muted-foreground">
           Claude looked at products like yours. Tick the features you want and pick the look you like best. It&apos;s
           a starting point: Sally, the UX designer, refines it with you.
         </p>
 
         {(!ins || ins.status === "working") && (
-          <div className="glass mt-6 flex items-center gap-3 rounded-2xl p-6 text-muted" role="status">
+          <div className="glass mt-6 flex items-center gap-3 rounded-2xl p-6 text-muted-foreground" role="status">
             <span className="typing" aria-hidden>
               <i />
               <i />
@@ -128,11 +130,11 @@ export default function PictureStep({ data, reload }: { data: UseCaseFull; reloa
         )}
 
         {ins?.status === "failed" && (
-          <div className="mt-6 flex flex-wrap items-center gap-3 rounded-xl border border-bad/40 bg-bad/10 px-4 py-3 text-sm" role="alert">
+          <div className="mt-6 flex flex-wrap items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm" role="alert">
             <span className="min-w-0 flex-1">The research didn&rsquo;t finish{ins.error ? `: ${ins.error}` : ""}.</span>
-            <button className="btn btn-ghost px-3 py-1 text-xs" onClick={retry}>
+            <Button variant="ghost" size="sm" onClick={retry}>
               Try again
-            </button>
+            </Button>
           </div>
         )}
 
@@ -140,11 +142,11 @@ export default function PictureStep({ data, reload }: { data: UseCaseFull; reloa
           <>
             <p className="mt-6 text-sm">
               <span className="font-medium">{options.kind}</span>
-              {options.similar.length > 0 && <span className="text-muted"> Looked at: {options.similar.map((s) => s.name).join(", ")}.</span>}
+              {options.similar.length > 0 && <span className="text-muted-foreground"> Looked at: {options.similar.map((s) => s.name).join(", ")}.</span>}
             </p>
 
             <h2 className="mt-6 text-lg font-semibold">Features</h2>
-            <p className="text-sm text-muted">The ones that fit what you described are already ticked.</p>
+            <p className="text-sm text-muted-foreground">The ones that fit what you described are already ticked.</p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               {options.features.map((f) => {
                 const on = picked.includes(f.id);
@@ -155,16 +157,16 @@ export default function PictureStep({ data, reload }: { data: UseCaseFull; reloa
                     role="checkbox"
                     aria-checked={on}
                     onClick={() => toggle(f.id)}
-                    className={`rounded-xl border p-3 text-left transition-colors ${on ? "border-accent bg-accent/10" : "border-line hover:border-accent/50"}`}
+                    className={`rounded-xl border p-3 text-left transition-colors ${on ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"}`}
                   >
                     <div className="flex items-start gap-2">
-                      <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${on ? "border-accent bg-accent text-white" : "border-line"}`} aria-hidden>
+                      <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${on ? "border-primary bg-primary text-white" : "border-border"}`} aria-hidden>
                         {on ? "✓" : ""}
                       </span>
                       <span>
                         <span className="block text-sm font-medium">{f.name}</span>
-                        <span className="block text-xs text-muted">{f.description}</span>
-                        {f.seenIn && <span className="mt-0.5 block text-[11px] text-muted">Seen in: {f.seenIn}</span>}
+                        <span className="block text-xs text-muted-foreground">{f.description}</span>
+                        {f.seenIn && <span className="mt-0.5 block text-[11px] text-muted-foreground">Seen in: {f.seenIn}</span>}
                       </span>
                     </div>
                   </button>
@@ -173,7 +175,7 @@ export default function PictureStep({ data, reload }: { data: UseCaseFull; reloa
             </div>
 
             <h2 className="mt-8 text-lg font-semibold">The look</h2>
-            <p className="text-sm text-muted">Pick one. Colors and fonts can still change later.</p>
+            <p className="text-sm text-muted-foreground">Pick one. Colors and fonts can still change later.</p>
             <div className="mt-3 grid gap-3 md:grid-cols-3" role="radiogroup" aria-label="Visual direction">
               {options.directions.map((d) => {
                 const on = direction === d.id;
@@ -184,17 +186,17 @@ export default function PictureStep({ data, reload }: { data: UseCaseFull; reloa
                     role="radio"
                     aria-checked={on}
                     onClick={() => setDirection(on ? "" : d.id)}
-                    className={`rounded-2xl border p-3 text-left transition-colors ${on ? "border-accent bg-accent/10 ring-2 ring-accent/40" : "border-line hover:border-accent/50"}`}
+                    className={`rounded-2xl border p-3 text-left transition-colors ${on ? "border-primary bg-primary/10 ring-2 ring-primary/40" : "border-border hover:border-primary/50"}`}
                   >
                     <StylePreview d={d} nav={options.nav?.length ? options.nav : ["Home", "About", "Contact"]} action={options.primaryAction || "Get started"} />
                     <div className="mt-3 text-sm font-semibold">{d.name}</div>
-                    <div className="text-xs text-muted">{d.mood}</div>
+                    <div className="text-xs text-muted-foreground">{d.mood}</div>
                     <div className="mt-2 flex gap-1" aria-hidden>
                       {Object.values(d.palette).map((c) => (
-                        <span key={c} className="h-4 w-4 rounded-full border border-line" style={{ background: c }} />
+                        <span key={c} className="h-4 w-4 rounded-full border border-border" style={{ background: c }} />
                       ))}
                     </div>
-                    <div className="mt-1 text-[11px] text-muted">
+                    <div className="mt-1 text-[11px] text-muted-foreground">
                       {d.displayFont} and {d.bodyFont}. {d.signature}
                     </div>
                   </button>
@@ -206,26 +208,28 @@ export default function PictureStep({ data, reload }: { data: UseCaseFull; reloa
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <h3 className="font-semibold">Anything else you&apos;re picturing?</h3>
-                  <p className="text-xs text-muted">A site you like, a feature that&apos;s missing, a feel you want.</p>
+                  <p className="text-xs text-muted-foreground">A site you like, a feature that&apos;s missing, a feel you want.</p>
                 </div>
                 <VoiceRecorder label="Say it" onTranscript={(t) => setNotes((n) => (n ? `${n} ${t}` : t))} />
               </div>
-              <textarea className="field mt-3 min-h-20 text-sm" value={notes} onChange={(e) => setNotes(e.target.value)} />
+              <Textarea className="mt-3 min-h-20 text-sm" value={notes} onChange={(e) => setNotes(e.target.value)} />
             </div>
           </>
         )}
       </section>
 
       <div className="mt-6 flex flex-wrap justify-end gap-3">
-        <Link href="/" className="btn btn-ghost">
+        <Button variant="ghost" asChild>
+<Link href="/">
           Save and exit
         </Link>
-        <button className="btn btn-ghost" disabled={busy} onClick={() => savePicks(true)}>
+</Button>
+        <Button variant="ghost" disabled={busy} onClick={() => savePicks(true)}>
           Skip this step
-        </button>
-        <button className="btn btn-primary" disabled={busy || !options} onClick={() => savePicks(false)}>
+        </Button>
+        <Button disabled={busy || !options} onClick={() => savePicks(false)}>
           Next: confirm
-        </button>
+        </Button>
       </div>
     </main>
   );

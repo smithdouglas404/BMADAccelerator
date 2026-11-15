@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect, NativeSelectOptGroup, NativeSelectOption } from "@/components/ui/native-select";
 
 type KeyRow = { env: string; name: string; source: "saved" | "env" | "missing"; last4: string };
 type ProviderRow = KeyRow & { id: string; models: string[]; console: string };
@@ -17,20 +20,20 @@ function KeyEditor({ k, onSave, onRemove, link }: { k: KeyRow; onSave: (v: strin
   const [value, setValue] = useState("");
   const [open, setOpen] = useState(false);
   return (
-    <div className="rounded-xl border border-line p-3">
+    <div className="rounded-lg border bg-card p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="font-semibold">{k.name}</div>
           <KeyState k={k} />
         </div>
         <div className="flex gap-2">
-          <button className="btn btn-ghost text-sm" onClick={() => setOpen((o) => !o)}>
+          <Button variant="outline" size="sm" onClick={() => setOpen((o) => !o)}>
             {k.source === "missing" ? "Add key" : "Change key"}
-          </button>
+          </Button>
           {k.source === "saved" && (
-            <button className="btn btn-ghost text-sm text-muted" onClick={onRemove} title="Use the key from .env again">
+            <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={onRemove} title="Use the key from .env again">
               Remove
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -45,21 +48,21 @@ function KeyEditor({ k, onSave, onRemove, link }: { k: KeyRow; onSave: (v: strin
             setOpen(false);
           }}
         >
-          <input
+          <Input
             type="password"
             autoComplete="off"
             spellCheck={false}
-            className="input min-w-0 flex-1 rounded-lg border border-line bg-transparent px-3 py-2 text-sm"
+            className="min-w-0 flex-1"
             placeholder="Paste the key"
             aria-label={`${k.name} key`}
             value={value}
             onChange={(e) => setValue(e.target.value)}
           />
-          <button className="btn btn-primary text-sm" type="submit">
+          <Button type="submit">
             Save
-          </button>
+          </Button>
           {link && (
-            <a className="self-center text-xs text-accent underline" href={link} target="_blank" rel="noreferrer">
+            <a className="self-center text-xs text-primary underline" href={link} target="_blank" rel="noreferrer">
               Get a key
             </a>
           )}
@@ -87,13 +90,13 @@ export function ModelsTab() {
     setMsg({ text: done, ok: true });
   }
 
-  if (!status) return <p className="text-muted">Loading...</p>;
+  if (!status) return <p className="text-muted-foreground">Loading...</p>;
   const keyFor = (p: string) => status.providers.find((x) => x.id === p)!;
   const usable = (p: string) => keyFor(p).source !== "missing";
 
   return (
     <div className="space-y-8">
-      <p className="text-muted">
+      <p className="text-muted-foreground">
         Add a key for each AI provider you use, then pick the model for each job. A model needs its provider&apos;s key. Keys are stored encrypted on
         this computer and are never shown again; changes apply straight away.
       </p>
@@ -111,7 +114,7 @@ export function ModelsTab() {
             />
           ))}
         </div>
-        {status.claudePlan && <p className="text-xs text-muted">Your Claude plan is signed in, so the Claude jobs run on it first and use the Anthropic key only as a backup.</p>}
+        {status.claudePlan && <p className="text-xs text-muted-foreground">Your Claude plan is signed in, so the Claude jobs run on it first and use the Anthropic key only as a backup.</p>}
       </div>
 
       <div className="space-y-3">
@@ -122,13 +125,13 @@ export function ModelsTab() {
             const bare = r.letta ? r.current.replace(/^[a-z_]+\//, "") : r.current;
             const listed = options.some((o) => o.m === bare) || bare === "off" || bare === "";
             return (
-              <div key={r.env} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line p-3">
+              <div key={r.env} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-3">
                 <div className="min-w-0 flex-1">
                   <div className="font-semibold">{r.label}</div>
-                  <div className="text-xs text-muted">{r.note}</div>
+                  <div className="text-xs text-muted-foreground">{r.note}</div>
                 </div>
-                <select
-                  className="rounded-lg border border-line bg-transparent px-3 py-2 text-sm"
+                <NativeSelect
+                  wrapperClassName="w-full sm:w-64"
                   aria-label={`Model for ${r.label}`}
                   value={bare}
                   onChange={(e) => {
@@ -142,28 +145,28 @@ export function ModelsTab() {
                     put({ action: "model", role: r.env, model: v }, v === "off" ? `${r.label}: off (demo mode)` : `${r.label} now uses ${v}`);
                   }}
                 >
-                  {bare === "" && <option value="">Default</option>}
-                  {!listed && <option value={bare}>{bare}</option>}
+                  {bare === "" && <NativeSelectOption value="">Default</NativeSelectOption>}
+                  {!listed && <NativeSelectOption value={bare}>{bare}</NativeSelectOption>}
                   {r.providers.map((pid) => (
-                    <optgroup key={pid} label={`${keyFor(pid).name}${usable(pid) ? "" : " (add its key first)"}`}>
+                    <NativeSelectOptGroup key={pid} label={`${keyFor(pid).name}${usable(pid) ? "" : " (add its key first)"}`}>
                       {options
                         .filter((o) => o.pid === pid)
                         .map((o) => (
-                          <option key={o.m} value={o.m} disabled={!usable(pid) && !(pid === "anthropic" && status.claudePlan && r.providers.length === 1)}>
+                          <NativeSelectOption key={o.m} value={o.m} disabled={!usable(pid) && !(pid === "anthropic" && status.claudePlan && r.providers.length === 1)}>
                             {o.m}
-                          </option>
+                          </NativeSelectOption>
                         ))}
-                    </optgroup>
+                    </NativeSelectOptGroup>
                   ))}
-                  {r.env === "BACC_APP_MODEL" && <option value="off">Off (demo mode, no key)</option>}
-                  <option value="__other">Another model…</option>
-                  {r.saved && <option value="__default">Back to the default</option>}
-                </select>
+                  {r.env === "BACC_APP_MODEL" && <NativeSelectOption value="off">Off (demo mode, no key)</NativeSelectOption>}
+                  <NativeSelectOption value="__other">Another model…</NativeSelectOption>
+                  {r.saved && <NativeSelectOption value="__default">Back to the default</NativeSelectOption>}
+                </NativeSelect>
               </div>
             );
           })}
         </div>
-        <p className="text-xs text-muted">
+        <p className="text-xs text-muted-foreground">
           Letta and Mem0 run in their own containers and read their keys from .env when they start. A new memory model is applied to the role agents on their next turn.
         </p>
       </div>

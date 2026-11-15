@@ -5,6 +5,17 @@ import { AGENTS } from "@/lib/bmad";
 import { ECC_SKILLS, SKILL_TARGETS } from "@/lib/skills";
 import { MemoryTab } from "@/components/MemoryTab";
 import { ModelsTab } from "@/components/ModelsTab";
+import { Bot, Brain, Check, FileCog, KeyRound, Puzzle, Sparkles, SquareKanban, Upload } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { cn } from "@/lib/utils";
+
+const TAB_ICONS = { "Models and keys": KeyRound, Tracker: SquareKanban, Skills: Sparkles, Modules: Puzzle, "Team rules and templates": FileCog, Agents: Bot, Memory: Brain } as const;
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 type Prefs = {
   targetCodex: boolean;
@@ -116,33 +127,37 @@ export default function Settings() {
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-10">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-semibold tracking-tight">Settings</h1>
-        <span className="text-sm text-good" role="status">
-          {saved}
-        </span>
+      <div className="flex items-end justify-between">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">Settings</h1>
+          <p className="mt-1 text-muted-foreground">Keys and models, trackers, skills and memory for every use case.</p>
+        </div>
+        {saved && (
+          <span className="inline-flex items-center gap-1 text-sm text-good" role="status">
+            <Check className="size-4" /> {saved}
+          </span>
+        )}
       </div>
-      <div className="mt-6 flex flex-wrap gap-2" role="tablist">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            role="tab"
-            aria-selected={tab === t}
-            onClick={() => setTab(t)}
-            className={`chip px-3 py-1.5 text-sm ${tab === t ? "border-accent bg-accent/15" : "text-muted"}`}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="mt-6">
+        <TabsList className="h-auto w-full flex-wrap justify-start">
+          {TABS.map((t) => {
+            const Icon = TAB_ICONS[t];
+            return (
+              <TabsTrigger key={t} value={t} className="flex-none">
+                <Icon /> {t}
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
+      </Tabs>
 
       {!prefs ? (
-        <p className="mt-8 text-muted">Loading...</p>
+        <p className="mt-8 text-muted-foreground">Loading...</p>
       ) : (
-        <section className="glass pop-in mt-6 rounded-2xl p-6">
+        <Card className="pop-in mt-4 block p-6">
           {tab === "Tracker" && (
             <div className="space-y-5">
-              <p className="text-muted">
+              <p className="text-muted-foreground">
                 BMAD&apos;s ticket tree is always the source of truth. Pick where your team sees it. Setup proves the
                 connection with one test ticket.
               </p>
@@ -152,10 +167,13 @@ export default function Settings() {
                     key={t.key}
                     onClick={() => save({ tracker: t.key })}
                     aria-pressed={prefs.tracker === t.key}
-                    className={`rounded-xl border p-3 text-left ${prefs.tracker === t.key ? "border-accent bg-accent/10" : "border-line"}`}
+                    className={cn(
+                      "rounded-lg border p-3 text-left transition-colors hover:border-primary/40",
+                      prefs.tracker === t.key && "border-primary bg-accent ring-1 ring-primary/30",
+                    )}
                   >
                     <div className="font-semibold">{t.label}</div>
-                    <div className="text-xs text-muted">{t.note}</div>
+                    <div className="text-xs text-muted-foreground">{t.note}</div>
                   </button>
                 ))}
               </div>
@@ -170,15 +188,15 @@ export default function Settings() {
                 </p>
               )}
               {["github", "notion", "trello"].includes(prefs.tracker) && (
-                <p className="text-sm text-muted">
+                <p className="text-sm text-muted-foreground">
                   Sofia publishes to this tracker through BMAD&apos;s own store setup. Ask the concierge to set it up in a use case.
                 </p>
               )}
               {prefs.tracker !== "builtin" && (
                 <label className="block text-sm">
                   {prefs.tracker === "linear" ? "Linear team key" : "Project key"}
-                  <input
-                    className="field mt-1"
+                  <Input
+                    className="mt-1"
                     value={prefs.trackerProjectKey}
                     onChange={(e) => setPrefs({ ...prefs, trackerProjectKey: e.target.value })}
                     onBlur={() => save({ trackerProjectKey: prefs.trackerProjectKey })}
@@ -186,20 +204,20 @@ export default function Settings() {
                   />
                 </label>
               )}
-              <div className="rounded-xl border border-line p-4">
+              <div className="rounded-lg border p-4">
                 <h3 className="font-semibold">Export to Jira</h3>
-                <p className="mt-1 text-sm text-muted">
+                <p className="mt-1 text-sm text-muted-foreground">
                   Publishes every epic and story to a Jira project. Other people will see them, so we confirm first.
                 </p>
                 <label className="mt-3 block text-sm">
                   Use case
-                  <select className="field mt-1" value={exportUseCase} onChange={(e) => setExportUseCase(e.target.value)}>
+                  <NativeSelect wrapperClassName="mt-1 w-full" value={exportUseCase} onChange={(e) => setExportUseCase(e.target.value)}>
                     {useCases.map((u) => (
-                      <option key={u.id} value={u.id}>
+                      <NativeSelectOption key={u.id} value={u.id}>
                         {u.name}
-                      </option>
+                      </NativeSelectOption>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </label>
                 {!connected.jira && (
                   <p className="mt-2 text-xs text-warn">
@@ -207,21 +225,21 @@ export default function Settings() {
                   </p>
                 )}
                 {!confirmExport ? (
-                  <button className="btn mt-3" onClick={() => setConfirmExport(true)} disabled={!connected.jira || !exportUseCase}>
+                  <Button variant="outline" className="mt-3" onClick={() => setConfirmExport(true)} disabled={!connected.jira || !exportUseCase}>
                     Export to Jira
-                  </button>
+                  </Button>
                 ) : (
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
                     <span>
                       Publish all epics and stories of <strong>{useCases.find((u) => u.id === exportUseCase)?.name}</strong> to Jira
                       project <strong>{prefs.trackerProjectKey || "(set a project key above)"}</strong>?
                     </span>
-                    <button className="btn btn-ghost" onClick={() => setConfirmExport(false)}>
+                    <Button variant="ghost" onClick={() => setConfirmExport(false)}>
                       Cancel
-                    </button>
-                    <button className="btn btn-primary" disabled={!prefs.trackerProjectKey || exporting} onClick={() => runExport("jira")}>
+                    </Button>
+                    <Button disabled={!prefs.trackerProjectKey || exporting} onClick={() => runExport("jira")}>
                       {exporting ? "Publishing..." : "Confirm export"}
-                    </button>
+                    </Button>
                   </div>
                 )}
                 {exportResult && <p className="mt-2 text-sm" role="status">{exportResult}</p>}
@@ -231,7 +249,7 @@ export default function Settings() {
 
           {tab === "Skills" && (
             <div className="space-y-5">
-              <p className="text-muted">
+              <p className="text-muted-foreground">
                 Skills are installed for the coding tools you choose. Claude Code is always on.
               </p>
               <div className="grid gap-2 sm:grid-cols-2">
@@ -240,29 +258,34 @@ export default function Settings() {
                     t.key === "codex" ? "targetCodex" : t.key === "cursor" ? "targetCursor" : t.key === "antigravity" ? "targetAntigravity" : null;
                   const checked = key ? prefs[key] : true;
                   return (
-                    <label key={t.key} className="flex items-center justify-between gap-3 rounded-xl border border-line p-3">
+                    <label key={t.key} className="flex items-center justify-between gap-3 rounded-lg border p-3">
                       <span>
                         <span className="font-semibold">{t.label}</span>
-                        <span className="block font-mono text-xs text-muted">{t.dir}</span>
+                        <span className="block font-mono text-xs text-muted-foreground">{t.dir}</span>
                       </span>
-                      <input
-                        type="checkbox"
-                        className="h-5 w-5 accent-[var(--accent)]"
+                      <Switch
                         checked={checked}
                         disabled={t.locked}
-                        onChange={(e) => key && save({ [key]: e.target.checked } as Partial<Prefs>)}
+                        onCheckedChange={(on) => key && save({ [key]: on } as Partial<Prefs>)}
+                        aria-label={t.label}
                       />
                     </label>
                   );
                 })}
               </div>
-              <div className="rounded-xl border border-line p-4">
+              <div className="rounded-lg border p-4">
                 <h3 className="font-semibold">ECC library</h3>
-                <p className="mt-1 text-sm text-muted">
+                <p className="mt-1 text-sm text-muted-foreground">
                   {ECC_SKILLS.length} skills available. Uploaded skills are checked with BMAD&apos;s own validate and
                   eval tools before they&apos;re switched on.
                 </p>
-                <label className={`btn mt-3 cursor-pointer ${uploading ? "opacity-60" : ""}`}>
+                <label
+                  className={cn(
+                    "mt-3 inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border bg-background px-4 text-sm font-medium shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/50",
+                    uploading && "opacity-60",
+                  )}
+                >
+                  <Upload className="size-4" />
                   {uploading ? "Checking..." : "Upload a skill (.zip or SKILL.md)"}
                   <input
                     type="file"
@@ -278,26 +301,22 @@ export default function Settings() {
                     {skills.map((k) => {
                       const findings: { rule: string; severity: string; detail: string }[] = JSON.parse(k.report || "[]");
                       return (
-                        <li key={k.id} className="rounded-lg border border-line p-3 text-sm">
+                        <li key={k.id} className="rounded-lg border p-3 text-sm">
                           <div className="flex items-center justify-between gap-3">
                             <span>
                               <span className="font-semibold">{k.name}</span>{" "}
-                              <span className={`chip text-[10px] ${k.valid ? "text-good" : "text-bad"}`}>{k.valid ? "Passed" : "Needs fixes"}</span>
+                              <Badge variant="outline" className={cn("text-[10px]", k.valid ? "border-good/40 text-good" : "border-destructive/40 text-destructive")}>
+                                {k.valid ? "Passed" : "Needs fixes"}
+                              </Badge>
                             </span>
                             <label className="flex items-center gap-2 text-xs">
                               On
-                              <input
-                                type="checkbox"
-                                className="h-4 w-4 accent-[var(--accent)]"
-                                checked={k.enabled}
-                                disabled={!k.valid}
-                                onChange={(e) => toggleSkill(k.id, e.target.checked)}
-                              />
+                              <Switch checked={k.enabled} disabled={!k.valid} onCheckedChange={(on) => toggleSkill(k.id, on)} />
                             </label>
                           </div>
-                          {k.description && <p className="mt-1 text-xs text-muted">{k.description}</p>}
+                          {k.description && <p className="mt-1 text-xs text-muted-foreground">{k.description}</p>}
                           {findings.length > 0 && (
-                            <ul className="mt-1 list-disc pl-5 text-xs text-muted">
+                            <ul className="mt-1 list-disc pl-5 text-xs text-muted-foreground">
                               {findings.map((f, i) => (
                                 <li key={i}>
                                   {f.severity}: {f.detail}
@@ -317,19 +336,19 @@ export default function Settings() {
           {tab === "Modules" && (
             <ul className="space-y-2">
               {MODULES.map((m) => (
-                <li key={m.code} className="flex items-center justify-between gap-3 rounded-xl border border-line p-3">
+                <li key={m.code} className="flex items-center justify-between gap-3 rounded-lg border p-3">
                   <div>
                     <div className="font-semibold">{m.name}</div>
-                    <div className="text-sm text-muted">{m.note}</div>
+                    <div className="text-sm text-muted-foreground">{m.note}</div>
                   </div>
-                  <span className="chip whitespace-nowrap">{m.status}</span>
+                  <Badge variant={m.status === "Installed" ? "default" : "secondary"} className="whitespace-nowrap">{m.status}</Badge>
                 </li>
               ))}
             </ul>
           )}
 
           {tab === "Team rules and templates" && (
-            <div className="space-y-3 text-sm text-muted">
+            <div className="space-y-3 text-sm text-muted-foreground">
               <p>
                 Organization templates (for example a required PRD section), standing rules for the agents, writing
                 standards, and automatic publishing of finished documents to Confluence or Notion.
@@ -345,13 +364,15 @@ export default function Settings() {
           {tab === "Agents" && (
             <ul className="grid gap-2 sm:grid-cols-2">
               {Object.entries(AGENTS).map(([k, a]) => (
-                <li key={k} className="flex items-center gap-3 rounded-xl border border-line p-3">
-                  <span className="h-3 w-3 rounded-full" style={{ background: a.color }} />
+                <li key={k} className="flex items-center gap-3 rounded-lg border p-3">
+                  <span className="grid size-8 shrink-0 place-items-center rounded-full text-xs font-semibold text-white" style={{ background: a.color }}>
+                    {a.name.slice(0, 1)}
+                  </span>
                   <div>
                     <div className="font-semibold">
                       {a.name}, {a.role}
                     </div>
-                    <div className="font-mono text-xs text-muted">{a.skill}</div>
+                    <div className="font-mono text-xs text-muted-foreground">{a.skill}</div>
                   </div>
                 </li>
               ))}
@@ -359,7 +380,7 @@ export default function Settings() {
           )}
           {tab === "Memory" && <MemoryTab />}
           {tab === "Models and keys" && <ModelsTab />}
-        </section>
+        </Card>
       )}
     </main>
   );

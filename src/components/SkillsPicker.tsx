@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Check } from "lucide-react";
 import { ECC_SKILLS, FEATURED_GROUPS, humanize, skillById } from "@/lib/skills";
+import { Input } from "@/components/ui/input";
 
 type Props = { selected: string[]; onChange: (ids: string[]) => void };
 
@@ -25,15 +27,17 @@ export default function SkillsPicker({ selected, onChange }: Props) {
         type="button"
         onClick={() => toggle(id)}
         aria-pressed={on}
-        className={`rounded-xl border p-3 text-left transition ${
-          on ? "border-accent bg-accent/10" : "border-line hover:border-accent/50"
+        className={`rounded-lg border bg-card p-3 text-left shadow-xs transition-colors ${
+          on ? "border-primary bg-accent ring-1 ring-primary/30" : "hover:border-primary/40"
         }`}
       >
         <div className="flex items-center justify-between gap-2 text-sm font-semibold">
           {humanize(id)}
-          <span className={`h-4 w-4 rounded-full border ${on ? "border-accent bg-accent" : "border-line"}`} />
+          <span className={`grid size-4 shrink-0 place-items-center rounded-full border ${on ? "border-primary bg-primary text-primary-foreground" : ""}`}>
+            {on && <Check className="size-2.5" />}
+          </span>
         </div>
-        <p className="mt-1 line-clamp-2 text-xs text-muted">{s.description}</p>
+        <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{s.description}</p>
       </button>
     );
   };
@@ -42,7 +46,7 @@ export default function SkillsPicker({ selected, onChange }: Props) {
     <div className="space-y-5">
       {FEATURED_GROUPS.map((g) => (
         <div key={g.group}>
-          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">{g.group}</h4>
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{g.group}</h4>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             {g.ids.map((id) => (
               <Tile key={id} id={id} />
@@ -51,12 +55,12 @@ export default function SkillsPicker({ selected, onChange }: Props) {
         </div>
       ))}
       <div>
-        <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted" htmlFor="skill-search">
+        <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted-foreground" htmlFor="skill-search">
           Search all {ECC_SKILLS.length} ECC skills
         </label>
-        <input
+        <Input
           id="skill-search"
-          className="field"
+          
           placeholder="e.g. payments, healthcare, accessibility"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -69,7 +73,7 @@ export default function SkillsPicker({ selected, onChange }: Props) {
           </div>
         )}
       </div>
-      <p className="text-xs text-muted">
+      <p className="text-xs text-muted-foreground">
         Optional. You don&apos;t need to pick any to get started. {selected.length} selected.
       </p>
     </div>

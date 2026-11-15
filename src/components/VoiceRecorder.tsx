@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Mic, Square } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 
 type Props = {
   // Called with the text of each finished recording, so the parent can append it.
@@ -71,24 +74,24 @@ export default function VoiceRecorder({ onTranscript, label = "Talk instead" }: 
   return (
     <div className="flex flex-col gap-1">
       {state === "recording" ? (
-        <button type="button" onClick={stop} className="btn recording border-transparent bg-red-500 text-white">
-          <span className="h-2.5 w-2.5 rounded-sm bg-white" aria-hidden /> Stop, {fmt(elapsed)}
-        </button>
+        <Button type="button" variant="destructive" onClick={stop} className="recording">
+          <Square className="fill-current" aria-hidden /> Stop, {fmt(elapsed)}
+        </Button>
       ) : (
-        <button type="button" onClick={start} disabled={state === "transcribing"} className="btn btn-ghost">
-          <MicIcon /> {state === "transcribing" ? "Transcribing..." : label}
-        </button>
+        <Button
+          type="button"
+          variant="outline"
+          size={label ? "default" : "icon"}
+          onClick={start}
+          disabled={state === "transcribing"}
+          aria-label={label || (state === "transcribing" ? "Transcribing" : "Talk instead of typing")}
+          title={label ? undefined : "Talk instead of typing"}
+        >
+          {state === "transcribing" ? <Spinner /> : <Mic />}
+          {label && (state === "transcribing" ? "Transcribing..." : label)}
+        </Button>
       )}
-      {error && <p className="max-w-xs text-xs text-bad">{error}</p>}
+      {error && <p className="max-w-xs text-xs text-destructive">{error}</p>}
     </div>
-  );
-}
-
-function MicIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <rect x="9" y="3" width="6" height="11" rx="3" />
-      <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
-    </svg>
   );
 }

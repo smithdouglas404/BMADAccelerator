@@ -2,6 +2,10 @@
 
 import { useRef, useState } from "react";
 import { DOC_STAGES } from "@/lib/bmad";
+import { Upload } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { cn } from "@/lib/utils";
 
 type Props = { useCaseId: string; onUploaded: () => void };
 
@@ -37,27 +41,28 @@ export default function UploadDropzone({ useCaseId, onUploaded }: Props) {
         setOver(false);
         upload(e.dataTransfer.files);
       }}
-      className={`rounded-2xl border-2 border-dashed p-8 text-center transition ${
-        over ? "border-accent bg-accent/10" : "border-line"
-      }`}
+      className={cn("rounded-xl border-2 border-dashed bg-muted/30 p-6 text-center transition-colors", over ? "border-primary bg-accent" : "border-border")}
     >
+      <span className="mx-auto mb-2 grid size-10 place-items-center rounded-full bg-background shadow-xs">
+        <Upload className="size-4 text-muted-foreground" />
+      </span>
       <p className="font-medium">Drop documents here</p>
-      <p className="mt-1 text-sm text-muted">PowerPoint, Excel, Word, PDF, images, notes. As many as you like.</p>
-      <label className="mx-auto mt-4 flex max-w-xs items-center justify-center gap-2 text-sm text-muted">
+      <p className="mt-1 text-sm text-muted-foreground">PowerPoint, Excel, Word, PDF, images, notes. As many as you like.</p>
+      <label className="mx-auto mt-4 flex max-w-xs items-center justify-center gap-2 text-sm text-muted-foreground">
         For
-        <select className="field py-1 text-sm" value={stage} onChange={(e) => setStage(e.target.value)} aria-label="Which stage these documents are for">
+        <NativeSelect size="sm" value={stage} onChange={(e) => setStage(e.target.value)} aria-label="Which stage these documents are for">
           {DOC_STAGES.map((s) => (
-            <option key={s.key} value={s.key}>
+            <NativeSelectOption key={s.key} value={s.key}>
               {s.label}
-            </option>
+            </NativeSelectOption>
           ))}
-        </select>
+        </NativeSelect>
       </label>
-      <button type="button" className="btn mt-3" onClick={() => input.current?.click()} disabled={busy}>
+      <Button type="button" variant="outline" className="mt-3" onClick={() => input.current?.click()} disabled={busy}>
         {busy ? "Uploading..." : "Choose files"}
-      </button>
+      </Button>
       <input ref={input} type="file" multiple className="hidden" onChange={(e) => upload(e.target.files)} />
-      {error && <p className="mt-2 text-sm text-bad">{error}</p>}
+      {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
     </div>
   );
 }

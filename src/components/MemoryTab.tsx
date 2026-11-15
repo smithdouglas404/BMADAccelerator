@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 type Role = { key: string; name: string; title: string; agent: string | null; lessons: string };
 type Status = {
@@ -53,50 +55,50 @@ export function MemoryTab() {
     load();
   }
 
-  if (!status) return <p className="text-muted">Checking memory...</p>;
+  if (!status) return <p className="text-muted-foreground">Checking memory...</p>;
   const roleName = (k: string) => status.roles.find((r) => r.key === k)?.name ?? k;
 
   return (
     <div className="space-y-5">
-      <p className="text-sm text-muted">
+      <p className="text-sm text-muted-foreground">
         The agents remember across use cases. Every answer, approval, sign-off, piece of screen feedback and build is saved, and each BMAD role keeps
         the lessons that would help the next, similar use case. Before each turn, the agents get what earlier use cases taught. Everything runs on this
         computer.
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
-        <div className="rounded-xl border border-line p-3">
+        <div className="rounded-lg border p-3">
           <div className="flex items-center gap-2 font-semibold">
             <Dot on={status.mem0.up} /> Long-term memory (Mem0)
           </div>
-          <div className="mt-1 text-xs text-muted">{status.mem0.up ? "Running" : status.mem0.configured ? "Not answering" : "Not set up"}</div>
+          <div className="mt-1 text-xs text-muted-foreground">{status.mem0.up ? "Running" : status.mem0.configured ? "Not answering" : "Not set up"}</div>
         </div>
-        <div className="rounded-xl border border-line p-3">
+        <div className="rounded-lg border p-3">
           <div className="flex items-center gap-2 font-semibold">
             <Dot on={status.letta.up && status.roles.every((r) => r.agent)} /> Role agents (Letta)
           </div>
-          <div className="mt-1 text-xs text-muted">
+          <div className="mt-1 text-xs text-muted-foreground">
             {status.letta.up ? (status.roles.every((r) => r.agent) ? "All six roles ready" : status.letta.note ?? "Setting up") : status.letta.note ?? "Not answering"}
           </div>
         </div>
       </div>
 
       <form onSubmit={search} className="flex gap-2">
-        <input
+        <Input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search what earlier use cases taught, for example: payments in retail pilots"
-          className="field flex-1"
+          className="flex-1"
         />
-        <button className="btn" disabled={busy || !status.mem0.up}>
+        <Button variant="outline" disabled={busy || !status.mem0.up}>
           Search
-        </button>
+        </Button>
       </form>
       {hits && (
         <ul className="space-y-2">
-          {hits.length === 0 && <li className="text-sm text-muted">Nothing found.</li>}
+          {hits.length === 0 && <li className="text-sm text-muted-foreground">Nothing found.</li>}
           {hits.map((h) => (
-            <li key={h.id} className="rounded-xl border border-line p-3 text-sm">
-              <div className="mb-1 text-xs text-muted">
+            <li key={h.id} className="rounded-lg border p-3 text-sm">
+              <div className="mb-1 text-xs text-muted-foreground">
                 {KIND[h.kind] ?? h.kind}
                 {h.role ? ` · ${roleName(h.role)}` : ""}
                 {h.useCase ? ` · ${h.useCase}` : ""}
@@ -110,17 +112,17 @@ export function MemoryTab() {
       <div>
         <div className="mb-2 flex items-center justify-between">
           <h3 className="font-semibold">What each role has learned</h3>
-          <button className="chip px-3 py-1 text-xs" onClick={refreshLessons} disabled={busy || !status.letta.up}>
+          <Button variant="outline" size="sm" onClick={refreshLessons} disabled={busy || !status.letta.up}>
             Refresh lessons
-          </button>
+          </Button>
         </div>
         <ul className="grid gap-2 sm:grid-cols-2">
           {status.roles.map((r) => (
-            <li key={r.key} className="rounded-xl border border-line p-3">
+            <li key={r.key} className="rounded-lg border p-3">
               <div className="font-semibold">
                 {r.name}, {r.title}
               </div>
-              <div className="mt-1 whitespace-pre-wrap text-xs text-muted">{r.lessons || "No lessons yet. They come after sign-offs and builds."}</div>
+              <div className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">{r.lessons || "No lessons yet. They come after sign-offs and builds."}</div>
             </li>
           ))}
         </ul>
@@ -133,7 +135,7 @@ export function MemoryTab() {
             {status.portfolio.map((p) => (
               <li key={p.useCaseId}>
                 <span className="font-medium">{p.title}</span>
-                <span className="text-muted"> · gates passed: {p.gatesPassed.length ? p.gatesPassed.join(", ") : "none"}</span>
+                <span className="text-muted-foreground"> · gates passed: {p.gatesPassed.length ? p.gatesPassed.join(", ") : "none"}</span>
               </li>
             ))}
           </ul>

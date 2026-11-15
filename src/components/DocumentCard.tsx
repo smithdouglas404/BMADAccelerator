@@ -4,6 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import VoiceRecorder from "@/components/VoiceRecorder";
 import { AGENTS, BMAD_DOC_TYPES, DOC_STAGES, ROUTABLE_AGENTS } from "@/lib/bmad";
 import type { DocumentT } from "@/lib/types";
+import { FileText, Plus, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { cn } from "@/lib/utils";
 
 function size(bytes: number) {
   if (bytes > 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -12,7 +20,7 @@ function size(bytes: number) {
 
 const BADGE: Record<string, { label: string; cls: string }> = {
   approved: { label: "Approved", cls: "bg-good/15 text-good" },
-  declined: { label: "Declined", cls: "bg-bad/15 text-bad" },
+  declined: { label: "Declined", cls: "bg-destructive/15 text-destructive" },
   in_review: { label: "In review", cls: "bg-warn/15 text-warn" },
 };
 
@@ -72,27 +80,32 @@ export default function DocumentCard({ doc, onSaved }: { doc: DocumentT; onSaved
   }
 
   return (
-    <div
-      className={`glass pop-in rounded-xl p-4 ${status === "declined" ? "opacity-70" : ""}`}
+    <Card
+      className={cn("pop-in gap-0 p-4", status === "declined" && "opacity-70")}
       onInput={() => (edited.current = true)}
       onClickCapture={(e) => {
         if ((e.target as HTMLElement).closest("button")) edited.current = true;
       }}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+        <div className="flex min-w-0 items-start gap-2.5">
+          <span className="grid size-8 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground">
+            <FileText className="size-4" />
+          </span>
+          <div className="min-w-0">
           <p className="truncate font-medium">{doc.fileName}</p>
-          <p className="text-xs text-muted">
+          <p className="text-xs text-muted-foreground">
             {size(doc.sizeBytes)} · {DOC_STAGES.find((s) => s.key === (doc.stage || "general"))?.label}
           </p>
+          </div>
         </div>
-        <span className={`chip shrink-0 border-transparent ${badge.cls}`}>{badge.label}</span>
+        <Badge className={cn("shrink-0 border-transparent", badge.cls)}>{badge.label}</Badge>
       </div>
-      <label className="mt-3 block text-xs font-semibold text-muted">
+      <label className="mt-3 block text-xs font-semibold text-muted-foreground">
         Description <span className="font-normal">(what this file is, in one line)</span>
         <div className="mt-1 flex items-start gap-2">
-          <input
-            className="field flex-1 text-sm font-normal"
+          <Input
+            className="flex-1 text-sm font-normal"
             value={description}
             placeholder={pending ? "Claude fills this in after reading the file" : ""}
             onChange={(e) => setDescription(e.target.value)}
@@ -100,11 +113,11 @@ export default function DocumentCard({ doc, onSaved }: { doc: DocumentT; onSaved
           <VoiceRecorder label="" onTranscript={(t) => setDescription((v) => add(v, t))} />
         </div>
       </label>
-      <label className="mt-3 block text-xs font-semibold text-muted">
+      <label className="mt-3 block text-xs font-semibold text-muted-foreground">
         Summary <span className="font-normal">(what it says, who it&apos;s for, issues and outcomes)</span>
         <div className="mt-1 flex items-start gap-2">
-          <textarea
-            className="field min-h-36 flex-1 text-sm font-normal leading-relaxed"
+          <Textarea
+            className="min-h-36 flex-1 text-sm font-normal leading-relaxed"
             value={pending && !summary ? "" : summary}
             placeholder={doc.summary || "Claude is reading the file. Its summary appears here in a moment, and you can change or add to it."}
             onChange={(e) => setSummary(e.target.value)}
@@ -112,30 +125,30 @@ export default function DocumentCard({ doc, onSaved }: { doc: DocumentT; onSaved
           <VoiceRecorder label="" onTranscript={(t) => setSummary((v) => add(v.startsWith("No summary yet") ? "" : v, t))} />
         </div>
       </label>
-      {status === "declined" && doc.declineNote && <p className="mt-2 text-xs text-muted">Declined because: {doc.declineNote}</p>}
+      {status === "declined" && doc.declineNote && <p className="mt-2 text-xs text-muted-foreground">Declined because: {doc.declineNote}</p>}
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        <label className="text-xs text-muted">
+        <label className="text-xs text-muted-foreground">
           Stage
-          <select className="field mt-1 text-sm" value={stage} onChange={(e) => setStage(e.target.value)}>
+          <NativeSelect wrapperClassName="mt-1 w-full" className="text-sm text-foreground" value={stage} onChange={(e) => setStage(e.target.value)}>
             {DOC_STAGES.map((s) => (
-              <option key={s.key} value={s.key}>
+              <NativeSelectOption key={s.key} value={s.key}>
                 {s.label}
-              </option>
+              </NativeSelectOption>
             ))}
-          </select>
+          </NativeSelect>
         </label>
-        <label className="text-xs text-muted">
+        <label className="text-xs text-muted-foreground">
           What is it?
-          <select className="field mt-1 text-sm" value={type} onChange={(e) => setType(e.target.value)}>
+          <NativeSelect wrapperClassName="mt-1 w-full" className="text-sm text-foreground" value={type} onChange={(e) => setType(e.target.value)}>
             {BMAD_DOC_TYPES.map((t) => (
-              <option key={t.key} value={t.key}>
+              <NativeSelectOption key={t.key} value={t.key}>
                 {t.label}
-              </option>
+              </NativeSelectOption>
             ))}
-          </select>
+          </NativeSelect>
         </label>
       </div>
-      <div className="mt-3 text-xs text-muted">
+      <div className="mt-3 text-xs text-muted-foreground">
         <p className="font-semibold">
           Goes to <span className="font-normal">(the BMAD agents who will use it; tap to add or remove)</span>
         </p>
@@ -145,12 +158,12 @@ export default function DocumentCard({ doc, onSaved }: { doc: DocumentT; onSaved
             return (
               <li key={r.agent} className="flex items-start gap-2">
                 <button
-                  className="chip shrink-0 border-transparent text-ink"
+                  className="chip shrink-0 border-transparent text-foreground"
                   style={{ background: `${a?.color}26` }}
                   onClick={() => setRouting(routing.filter((x) => x.agent !== r.agent))}
                   aria-label={`Remove ${a?.name}`}
                 >
-                  {a?.name}, {a?.role} ×
+                  {a?.name}, {a?.role} <X className="size-3" />
                 </button>
                 {r.why && <span className="pt-0.5">{r.why}</span>}
               </li>
@@ -160,22 +173,22 @@ export default function DocumentCard({ doc, onSaved }: { doc: DocumentT; onSaved
         <div className="mt-1 flex flex-wrap gap-1">
           {ROUTABLE_AGENTS.filter((k) => !routing.some((r) => r.agent === k)).map((k) => (
             <button key={k} className="chip" onClick={() => setRouting([...routing, { agent: k, why: "" }])} aria-label={`Add ${AGENTS[k].name}`}>
-              + {AGENTS[k].name}
+              <Plus className="size-3" /> {AGENTS[k].name}
             </button>
           ))}
         </div>
       </div>
-      <div className="mt-3 text-xs text-muted">
+      <div className="mt-3 text-xs text-muted-foreground">
         <p className="font-semibold">Tags <span className="font-normal">(labels that help the agents find this file; tap to add or remove)</span></p>
         <div className="mt-1 flex flex-wrap gap-1">
           {tags.map((t) => (
-            <button key={t} className="chip border-accent bg-accent/15 text-ink" onClick={() => setTags(tags.filter((x) => x !== t))} aria-label={`Remove tag ${t}`}>
-              {t} ×
+            <button key={t} className="chip border-primary/30 bg-primary/10 text-foreground" onClick={() => setTags(tags.filter((x) => x !== t))} aria-label={`Remove tag ${t}`}>
+              {t} <X className="size-3" />
             </button>
           ))}
           {COMMON_TAGS.filter((t) => !tags.includes(t)).map((t) => (
             <button key={t} className="chip" onClick={() => setTags([...tags, t])} aria-label={`Add tag ${t}`}>
-              + {t}
+              <Plus className="size-3" /> {t}
             </button>
           ))}
         </div>
@@ -188,56 +201,56 @@ export default function DocumentCard({ doc, onSaved }: { doc: DocumentT; onSaved
             setNewTag("");
           }}
         >
-          <input className="field flex-1 py-1 text-sm" value={newTag} placeholder="Your own tag" onChange={(e) => setNewTag(e.target.value)} aria-label="Add your own tag" />
-          <button className="btn btn-ghost py-1 text-xs" type="submit" disabled={!newTag.trim()}>
+          <Input className="h-8 flex-1 text-sm" value={newTag} placeholder="Your own tag" onChange={(e) => setNewTag(e.target.value)} aria-label="Add your own tag" />
+          <Button variant="outline" size="sm" type="submit" disabled={!newTag.trim()}>
             Add
-          </button>
+          </Button>
         </form>
       </div>
       {declining && (
-        <label className="mt-2 block text-xs text-muted">
+        <label className="mt-2 block text-xs text-muted-foreground">
           Why decline it? (optional)
           <div className="mt-1 flex items-start gap-2">
-            <input className="field flex-1 text-sm" value={note} onChange={(e) => setNote(e.target.value)} autoFocus />
+            <Input className="flex-1 text-sm" value={note} onChange={(e) => setNote(e.target.value)} autoFocus />
             <VoiceRecorder label="" onTranscript={(t) => setNote((v) => add(v, t))} />
           </div>
         </label>
       )}
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-xs text-muted">{routing.length ? "" : `Goes to: ${route}. `}Tap a mic button to talk instead of typing.</span>
+        <span className="text-xs text-muted-foreground">{routing.length ? "" : `Goes to: ${route}. `}Tap a mic button to talk instead of typing.</span>
         <div className="flex flex-wrap gap-2">
           {declining ? (
             <>
-              <button className="btn btn-ghost" disabled={busy} onClick={() => setDeclining(false)}>
+              <Button variant="ghost" disabled={busy} onClick={() => setDeclining(false)}>
                 Cancel
-              </button>
-              <button className="btn border-bad/40 text-bad" disabled={busy} onClick={() => save("declined")}>
+              </Button>
+              <Button variant="destructive" disabled={busy} onClick={() => save("declined")}>
                 Decline
-              </button>
+              </Button>
             </>
           ) : (
             <>
-              <button className="btn btn-ghost" disabled={busy} onClick={() => save()}>
+              <Button variant="ghost" disabled={busy} onClick={() => save()}>
                 Save
-              </button>
+              </Button>
               {status === "declined" ? (
-                <button className="btn btn-ghost" disabled={busy} onClick={() => save("in_review")}>
+                <Button variant="ghost" disabled={busy} onClick={() => save("in_review")}>
                   Back to review
-                </button>
+                </Button>
               ) : (
-                <button className="btn btn-ghost text-bad" disabled={busy} onClick={() => setDeclining(true)}>
+                <Button variant="ghost" className="text-destructive hover:text-destructive" disabled={busy} onClick={() => setDeclining(true)}>
                   Decline
-                </button>
+                </Button>
               )}
               {status !== "approved" && (
-                <button className="btn btn-primary" disabled={busy} onClick={() => save("approved")}>
+                <Button disabled={busy} onClick={() => save("approved")}>
                   Approve
-                </button>
+                </Button>
               )}
             </>
           )}
         </div>
       </div>
-    </div>
+    </Card>
   );
 }
