@@ -231,3 +231,18 @@ model Question {
   answeredAt  DateTime?
   useCase     UseCase   @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
 }
+
+// Keys and models set on the Settings page. Keys are stored encrypted (AES-256-GCM, see src/lib/settings.ts)
+// and never sent back to the browser; only the last four characters are shown.
+model StoredKey {
+  name      String   @id // the environment variable, e.g. ANTHROPIC_API_KEY
+  cipher    String
+  last4     String
+  updatedAt DateTime @updatedAt
+}
+
+model ModelChoice {
+  role      String   @id // the environment variable, e.g. BACC_MODEL
+  model     String
+  updatedAt DateTime @updatedAt
+}

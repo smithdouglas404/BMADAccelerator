@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { AGENTS } from "@/lib/bmad";
 import { ECC_SKILLS, SKILL_TARGETS } from "@/lib/skills";
 import { MemoryTab } from "@/components/MemoryTab";
+import { ModelsTab } from "@/components/ModelsTab";
 
 type Prefs = {
   targetCodex: boolean;
@@ -13,7 +14,7 @@ type Prefs = {
   trackerProjectKey: string;
 };
 
-const TABS = ["Tracker", "Skills", "Modules", "Team rules and templates", "Agents", "Memory"] as const;
+const TABS = ["Models and keys", "Tracker", "Skills", "Modules", "Team rules and templates", "Agents", "Memory"] as const;
 
 const TRACKERS = [
   { key: "builtin", label: "Built-in board", note: "No account needed. Markdown files in each use case." },
@@ -36,7 +37,7 @@ const MODULES = [
 type CustomSkill = { id: string; name: string; description: string; valid: boolean; enabled: boolean; report: string };
 
 export default function Settings() {
-  const [tab, setTab] = useState<(typeof TABS)[number]>("Tracker");
+  const [tab, setTab] = useState<(typeof TABS)[number]>("Models and keys");
   const [prefs, setPrefs] = useState<Prefs | null>(null);
   const [saved, setSaved] = useState("");
   const [confirmExport, setConfirmExport] = useState(false);
@@ -163,7 +164,7 @@ export default function Settings() {
                   {connected[prefs.tracker as "linear" | "jira"]
                     ? `${prefs.tracker === "linear" ? "Linear" : "Jira"} is connected on the server.`
                     : prefs.tracker === "linear"
-                      ? "Not connected yet: add LINEAR_API_KEY to the server's .env file, then restart."
+                      ? "Not connected yet: add the Linear key under Models and keys."
                       : "Not connected yet: add JIRA_BASE_URL, JIRA_EMAIL and JIRA_API_TOKEN to the server's .env file, then restart."}
                   {prefs.tracker === "linear" && connected.linear && " Every card syncs to Linear as it changes."}
                 </p>
@@ -357,6 +358,7 @@ export default function Settings() {
             </ul>
           )}
           {tab === "Memory" && <MemoryTab />}
+          {tab === "Models and keys" && <ModelsTab />}
         </section>
       )}
     </main>

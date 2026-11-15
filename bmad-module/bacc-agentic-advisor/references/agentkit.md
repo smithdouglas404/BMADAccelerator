@@ -51,7 +51,7 @@ interface BoxState { answers?: Answers; candidates?: Candy[]; boxId?: string; ap
 const network = createNetwork<BoxState>({
   name: "tailor-my-box",
   agents: [curator, checker],
-  defaultModel: openai({ model: process.env.OPENAI_MODEL || "gpt-4o-mini" }),
+  defaultModel: modelFromEnv(), // see "Model key" below
   router: ({ network, callCount }) => {           // code router: fixed order
     if (!network.state.data.boxId) return curator;
     if (network.state.data.approved === undefined) return checker;
@@ -104,6 +104,15 @@ createServer({ functions: [tailor], networks: [network] }).listen(Number(process
 
 - `npm start` starts the app and the Inngest dev server together: `inngest-cli dev --no-discovery -u http://127.0.0.1:$PORT/api/inngest -p $((PORT+1000))` (pin the `inngest-cli` version in package.json; set `INNGEST_DEV=1` and `INNGEST_BASE_URL=http://127.0.0.1:$((PORT+1000))` for the app). Several pilots run side by side, so derive the dev server port from the app's own `PORT`; never use the default 8288.
 - Data: SQLite for the pilot by default (the preview has no database server). When the architecture names Postgres, run it in-process with PGlite (`@electric-sql/pglite`) behind a small adapter that takes a `DATABASE_URL` in production, so no extra service is needed. History threads live in the same database.
-- Model key: the accelerator gives each pilot one key for its agents, `OPENAI_API_KEY` by default (or `ANTHROPIC_API_KEY`, set by `BACC_APP_LLM`); pick the adapter that matches the key that is set, with a small model.
+- Model key: the accelerator gives each pilot one key for its agents (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY` or `GEMINI_API_KEY`), plus `AGENT_PROVIDER` (`openai`, `anthropic` or `gemini`) and, when the client picked one on the Settings page, `AGENT_MODEL`. Choose the adapter from them, with a small default model per provider, and fall back to demo mode when no key is set:
+
+  ```ts
+  function modelFromEnv() {
+    const p = process.env.AGENT_PROVIDER, m = process.env.AGENT_MODEL;
+    if (p === "anthropic") return anthropic({ model: m || "claude-haiku-5-5", defaultParameters: { max_tokens: 1024 } });
+    if (p === "gemini") return gemini({ model: m || "gemini-2.5-flash" });
+    return openai({ model: m || "gpt-5-mini" });
+  }
+  ```
 - No model key in the environment: a **demo mode** with scripted agent replies, labelled "Demo: no AI model connected" in the UI, so every flow, including approvals, still works end to end.
 - Production adds: Inngest Cloud or self-hosted Inngest (`inngest start` with Postgres and Redis) with `INNGEST_EVENT_KEY` and `INNGEST_SIGNING_KEY`; real auth for the approver; Postgres. Write this in the architecture, don't build it in the pilot.

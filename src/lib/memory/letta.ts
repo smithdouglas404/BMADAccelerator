@@ -144,6 +144,12 @@ export async function setupLetta(): Promise<{ ok: boolean; note: string }> {
 let ready: Promise<boolean> | null = null;
 let readyAt = 0;
 
+/** Makes the next memory use run setup again (after the memory model changes on the Settings page). */
+export function resetLetta() {
+  ready = null;
+  readyAt = 0;
+}
+
 /** Runs setup once per process (again after 5 minutes if it failed). */
 export function ensureLetta(): Promise<boolean> {
   if (!lettaConfigured()) return Promise.resolve(false);

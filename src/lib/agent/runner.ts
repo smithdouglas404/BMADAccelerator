@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db";
 import { workspacePath } from "@/lib/workspace";
 import { provisionWorkspace, shadcnLookupDir, syncAcceleratorSkills, writeIntake } from "@/lib/provision";
 import { syncBoard } from "@/lib/bmadTickets";
-import { MODEL } from "@/lib/docAgent";
+import { agentModel } from "@/lib/docAgent";
 import { LimitError, authEnv, authOrder, claudeConfigured, limitMessage, type Auth } from "@/lib/agent/auth";
 import { baccTools, type RunTally } from "./tools";
 import { fakeAgentTurn } from "./fake";
@@ -167,7 +167,7 @@ async function runSdkTurnOnce(opts: {
     prompt: opts.prompt,
     options: {
       cwd: ws,
-      model: opts.model || MODEL,
+      model: opts.model || agentModel(),
       ...(opts.effort ? { effort: opts.effort } : {}),
       settingSources: ["project"],
       systemPrompt: { type: "preset", preset: "claude_code", append: opts.appendSystem },

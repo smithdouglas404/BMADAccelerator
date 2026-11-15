@@ -7,7 +7,7 @@ import { workspacePath } from "@/lib/workspace";
 
 // Each use case's generated app runs on its own port, so it has its own URL.
 // Generated apps get a minimal environment, never the accelerator's secrets. The one exception is a
-// model key for the app's own AgentKit agents (BACC_APP_LLM: "openai", the default, "anthropic" or "off").
+// model key for the app's own AgentKit agents (BACC_APP_LLM: "openai", the default, "anthropic", "gemini" or "off"; set on the Settings page).
 export function previewEnv(port: number): NodeJS.ProcessEnv {
   const keep = ["PATH", "HOME", "USER", "SHELL", "LANG", "TZ", "TMPDIR", "CHROMIUM_PATH", "UV_CACHE_DIR", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy"];
   const env = { PORT: String(port), HOST: "0.0.0.0", HOSTNAME: "0.0.0.0" } as Record<string, string | undefined>;
@@ -16,6 +16,10 @@ export function previewEnv(port: number): NodeJS.ProcessEnv {
   const llm = (process.env.BACC_APP_LLM || "openai").toLowerCase();
   if (llm === "openai" && process.env.OPENAI_API_KEY) env.OPENAI_API_KEY = process.env.OPENAI_API_KEY;
   if (llm === "anthropic" && process.env.ANTHROPIC_API_KEY) env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+  if (llm === "gemini" && process.env.GEMINI_API_KEY) env.GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+  // The model picked on the Settings page for the app's own agents (AgentKit reads it from AGENT_MODEL).
+  if (llm !== "off" && process.env.BACC_APP_MODEL) env.AGENT_MODEL = process.env.BACC_APP_MODEL;
+  if (llm !== "off") env.AGENT_PROVIDER = llm;
   return env as NodeJS.ProcessEnv;
 }
 

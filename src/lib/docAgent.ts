@@ -9,9 +9,9 @@ import { query, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { authEnv, authOrder, claudeConfigured, type Auth } from "@/lib/agent/auth";
 
 /** The BMAD role agents and Generate. Sonnet: about half Opus's price, strong enough for planning and building. */
-export const MODEL = process.env.BACC_MODEL || "claude-sonnet-5-5";
+export const agentModel = () => process.env.BACC_MODEL || "claude-sonnet-5-5";
 /** The document agent only reads and tags an upload, so the low-cost model is enough. */
-export const DOC_MODEL = process.env.BACC_DOC_MODEL || "claude-haiku-5-5";
+export const docModel = () => process.env.BACC_DOC_MODEL || "claude-haiku-5-5";
 
 const Suggestion = z.object({
   bmadType: z.enum(BMAD_DOC_TYPES.map((t) => t.key) as [string, ...string[]]),
@@ -88,7 +88,7 @@ ${text}
 /** The API key path: one Messages API call with a structured answer. */
 async function suggestWithKey(prompt: string) {
   const response = await new Anthropic().messages.parse({
-    model: DOC_MODEL,
+    model: docModel(),
     max_tokens: 6000,
     output_config: { effort: "low", format: zodOutputFormat(Suggestion) },
     messages: [{ role: "user", content: prompt }],
@@ -102,7 +102,7 @@ async function suggestWithPlan(prompt: string, auth: Auth = "plan") {
   const q = query({
     prompt,
     options: {
-      model: DOC_MODEL,
+      model: docModel(),
       tools: [],
       maxTurns: 3,
       effort: "low",

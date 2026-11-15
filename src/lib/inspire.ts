@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { authEnv, authOrder } from "@/lib/agent/auth";
-import { MODEL } from "@/lib/docAgent";
+import { agentModel } from "@/lib/docAgent";
 
 // "Picture it": before BMAD starts, Claude looks at products like this one and brings back the
 // features they usually have and three visual directions. The client clicks what they want, and
@@ -72,7 +72,7 @@ async function research(text: string): Promise<InspirationOptionsT> {
       const q = query({
         prompt: text,
         options: {
-          model: MODEL,
+          model: agentModel(),
           tools: ["WebSearch", "WebFetch"],
           allowedTools: ["WebSearch", "WebFetch"],
           maxTurns: 14,
