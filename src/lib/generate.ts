@@ -47,6 +47,7 @@ Rules:
 - Read the BMAD documents in \`_bmad-output/\` (brief, PRFAQ, PRD, UX DESIGN.md and EXPERIENCE.md, architecture, the ticket tree) and the client's intake in \`bacc/intake.md\`. Build what they describe as far as they go. Where they are silent, make a sensible choice and write it down in the notes as an assumption.
 - Use names, prices, formats, years and wording exactly as the documents give them (for example a serial-number format with a year). Where a document marks content as a placeholder, label it as sample content in the app.
 - Data: seed the catalogue and content (products, pages, prices) with realistic sample data, but never invent people: no made-up customers, orders, sign-ups, reviews or contact details, and no seed script that creates them. Lists of those start empty, with a friendly empty state.
+- Commands: never kill processes by name or pattern (\`pkill -f\`, \`killall\`, \`ps | grep ... | kill\`). Your own process's command line contains words like "shadcn" and "claude", so a pattern can kill you and end the build. Run anything that could hang with \`timeout\` and no input (\`-y\`, \`</dev/null\`), and stop only the PIDs you started yourself (\`kill $!\`, \`pkill -P $$\`).
 
 Design (as much a part of the job as the features):
 - Read and follow the skills \`.claude/skills/frontend-design/SKILL.md\` and \`.claude/skills/frontend-design-direction/SKILL.md\` before you write any UI.
