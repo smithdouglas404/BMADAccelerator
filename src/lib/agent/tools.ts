@@ -23,6 +23,7 @@ import {
   stageGateBlock,
   conceptProblems,
   DESIGN_CONCEPT,
+  gapsProblem,
 } from "./advisorGates";
 
 const AGENT_KEYS = Object.keys(AGENTS) as [string, ...string[]];
@@ -134,19 +135,31 @@ export function baccTools(useCaseId: string, slug: string, tally: RunTally) {
       ),
       tool(
         "advise",
-        "Record your expert advice (bacc-expert-advisor skill) for a BMAD agent before it starts, or for Generate after a build: two or three specific ideas, each with why and where it comes from (the client's words, intake, a requirement, a similar product, an earlier use case). Saved in bacc/advisor/. Offer the best ones to the client yourself with ask.",
+        "Record your expert advice (bacc-expert-advisor skill) for a BMAD agent before it starts, or for Generate after a build: two or three specific ideas, each with why and where it comes from (the client's words, intake, a requirement, a similar product, an earlier use case), and what's missing: at least three questions about things this kind of product needs that nobody has asked yet. Saved in bacc/advisor/. Offer the best ones to the client yourself with ask.",
         {
           for_agent: z.enum(AGENT_KEYS),
           ideas: z
             .array(z.object({ idea: z.string().min(10), why: z.string().min(10), source: z.string().min(3) }))
             .min(1)
             .max(6),
+          gaps: z
+            .array(z.object({ question: z.string().min(10), why: z.string().min(10) }))
+            .max(12)
+            .default([])
+            .describe("What's missing: questions about things this kind of product needs that the documents and BMAD's own questions haven't covered."),
+          no_gaps_reason: z.string().default("").describe("Only when gaps is empty: what you compared against and why nothing is missing."),
         },
-        async ({ for_agent, ideas }) => {
+        async ({ for_agent, ideas, gaps, no_gaps_reason }) => {
+          const problem = gapsProblem(for_agent, gaps, no_gaps_reason);
+          if (problem) return ok(problem);
           const when = new Date();
           await fs.mkdir(advisorDir, { recursive: true });
-          await fs.writeFile(path.join(advisorDir, adviceFileName(for_agent, when)), adviceMarkdown(for_agent, ideas, when));
-          return ok("Saved. Offer the best one or two to the client with ask, then pass what they accept to the agent as their input.");
+          await fs.writeFile(path.join(advisorDir, adviceFileName(for_agent, when)), adviceMarkdown(for_agent, ideas, when, gaps, no_gaps_reason));
+          return ok(
+            gaps.length
+              ? "Saved. Ask the client the missing-piece questions with ask, one at a time, most important first, then offer your best one or two ideas. Pass their answers and what they accept to the agent as their input."
+              : "Saved. Offer the best one or two to the client with ask, then pass what they accept to the agent as their input.",
+          );
         },
       ),
       tool(

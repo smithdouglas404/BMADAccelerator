@@ -84,7 +84,25 @@ test("a design concept names its category, three leading products and its fonts"
   const good = `# Design concept
 0. **What kind of product this is:** an online shop selling candy.
 Leading shops: https://a.example, https://b.example, https://c.example
-Fonts: Fraunces for display, Inter for body.`;
+Fonts: Fraunces for display, Inter for body.
+## Client references
+Brand guidelines: none given. Sites they like: none given.`;
   assert.equal(conceptProblems(good), "");
   assert.match(conceptProblems(good.replace("https://c.example", "")), /found 2 links/);
+});
+
+import { gapsProblem } from "../src/lib/agent/advisorGates.ts";
+
+test("advice for a BMAD agent must say what is missing", () => {
+  const q = (n) => Array.from({ length: n }, (_, i) => ({ question: `Question number ${i}?`, why: "It matters for a shop." }));
+  assert.match(gapsProblem("pm", q(1), ""), /at least three questions/);
+  assert.equal(gapsProblem("pm", q(3), ""), "");
+  assert.equal(gapsProblem("pm", [], "Compared with the online-shop checklist; every item is answered in the PRD."), "");
+  assert.match(gapsProblem("pm", [], "nothing"), /at least three/);
+  assert.equal(gapsProblem("generator", [], ""), "");
+});
+
+test("a design concept records the client's references", () => {
+  const md = "0. What kind of product: an online shop. https://a.x https://b.x https://c.x Fonts: Inter.";
+  assert.match(conceptProblems(md), /Client references/);
 });

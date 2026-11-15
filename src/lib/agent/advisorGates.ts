@@ -61,8 +61,24 @@ export function adviceFileName(agent: string, when: Date) {
   return `${agent}-${when.toISOString().replace(/[:.]/g, "-")}.md`;
 }
 
-export function adviceMarkdown(agent: string, ideas: { idea: string; why: string; source: string }[], when: Date) {
-  return `# Advice for ${agent}, ${when.toISOString()}\n\n${ideas.map((i, n) => `${n + 1}. **${i.idea}**\n   - Why: ${i.why}\n   - From: ${i.source}`).join("\n")}\n`;
+export type Gap = { question: string; why: string };
+
+export function adviceMarkdown(agent: string, ideas: { idea: string; why: string; source: string }[], when: Date, gaps: Gap[] = [], noGapsReason = "") {
+  const gapText = gaps.length
+    ? `\n## What's missing: questions for the client\n\n${gaps.map((g, n) => `${n + 1}. ${g.question}\n   - Why it matters here: ${g.why}`).join("\n")}\n`
+    : noGapsReason
+      ? `\n## What's missing\n\nNothing found: ${noGapsReason}\n`
+      : "";
+  return `# Advice for ${agent}, ${when.toISOString()}\n\n${ideas.map((i, n) => `${n + 1}. **${i.idea}**\n   - Why: ${i.why}\n   - From: ${i.source}`).join("\n")}\n${gapText}`;
+}
+
+// Doug, Nov 15: "why am I using LLM credits if you're not coming back with a series of questions around what is absent".
+// Advice for a BMAD agent must check what is missing: at least three questions, or a stated reason nothing is.
+export function gapsProblem(agent: string, gaps: Gap[], noGapsReason: string) {
+  if (ADVICE_EXEMPT.includes(agent)) return "";
+  if (gaps.length >= 3) return "";
+  if (gaps.length === 0 && noGapsReason.trim().length >= 40) return "";
+  return 'Check what is missing before this agent starts (bacc-expert-advisor skill, "What\'s missing"): list at least three questions about things this kind of product needs that the documents and BMAD\'s questions have not covered, each with why it matters here. Only if you truly find nothing, leave gaps empty and give no_gaps_reason (what you compared against and why it is complete).';
 }
 
 // ---- Options catalogue: rows are "| <code> | <option> | ... |", codes are whole numbers, unique and permanent.
@@ -127,5 +143,7 @@ export function conceptProblems(md: string) {
   const links = new Set(md.match(/https?:\/\/[^\s)>\]]+/g) ?? []);
   if (links.size < 3) problems.push(`link the three leading products in that category you measured it against (found ${links.size} links)`);
   if (!/font|typeface/i.test(md)) problems.push("name the display and body fonts and why each fits the category and audience");
+  if (!/client'?s? references|references from the client|brand and references/i.test(md))
+    problems.push('add a "Client references" section: what the client gave when asked for brand guidelines or a template, sample screens, and sites they like (with what you took from each), or "none given" for each');
   return problems.length ? `The design concept needs fixing: ${problems.join("; ")}.` : "";
 }

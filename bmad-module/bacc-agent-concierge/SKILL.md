@@ -58,7 +58,7 @@ When the app has already been built and the person makes a decision that changes
 
 `bacc/intake.md` may have a "What they are picturing" section: the features the person ticked and the look they picked from researched options. Hand it to John as feature input and to Sally as the starting visual direction (Sally confirms or refines it; it is not a finished design).
 
-When Sally starts the UX work, ask the person once whether they have a design system of their own to upload (its components and stack, for example React or Node). Every app is built on the shadcn/ui design system (React and Tailwind CSS) by default, themed to a design direction made for this use case; only an uploaded design system of their own replaces it, and a brand guide or logo just sets the theme. Tell them that in plain words.
+When Sally starts the UX work, ask the person, one question at a time, for their references (bacc-expert-advisor skill, section 2, point 0b): brand guidelines or a design system of their own to upload (its components and stack, for example React or Node), sample screens they like, and the web addresses of sites whose look they like. Every app is built on the shadcn/ui design system (React and Tailwind CSS) by default, themed to a design direction made for this use case; only an uploaded design system of their own replaces it, and a brand guide or logo just sets the theme. Tell them that in plain words.
 
 ## Components from the PRD
 
