@@ -1,0 +1,151 @@
+// BMAD Accelerator data model.
+// BMAD's own files (ticket tree, PRD, UX, architecture) stay the source of truth
+// inside each use case's workspace folder. These tables hold what the accelerator
+// adds around BMAD: intake, documents, conversation, review queue, and a mirror of
+// the ticket tree for the live Kanban.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model UseCase {
+  id             String   @id @default(cuid())
+  slug           String   @unique
+  name           String
+  description    String   @default("")
+  // Intent cards (Choose a Planning Path)
+  intentDone     String   @default("")
+  intentKeep     String   @default("")
+  intentOutScope String   @default("")
+  // Who / why (Mary: PRFAQ, brief)
+  customer       String   @default("")
+  problem        String   @default("")
+  // Sizing chips
+  size           String   @default("project") // change | epic | project
+  needsApprovals Boolean  @default(false)
+  clientVendor   Boolean  @default(false)
+  regulated      Boolean  @default(false)
+  ideaStage      String   @default("new") // new | existing | fuzzy
+  repoUrl        String   @default("")
+  // Modes
+  uxMode         String   @default("coaching") // fast | coaching | handoff
+  archMode       String   @default("coaching") // fast | coaching
+  // First-run wizard step: 0 describe, 1 documents, 2 confirm, 3 done
+  onboardingStep Int      @default(0)
+  // Where the user stopped (pause and resume)
+  stage          String   @default("clarify") // clarify | plan | build | learn
+  activeAgent    String   @default("concierge")
+  pendingQuestion String  @default("")
+  claudeSessionId String  @default("")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  skills     UseCaseSkill[]
+  documents  Document[]
+  messages   Message[]
+  tickets    Ticket[]
+  reviews    ReviewItem[]
+  recordings Recording[]
+}
+
+model UseCaseSkill {
+  id        String  @id @default(cuid())
+  useCaseId String
+  skillId   String
+  useCase   UseCase @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+
+  @@unique([useCaseId, skillId])
+}
+
+model Document {
+  id          String   @id @default(cuid())
+  useCaseId   String
+  fileName    String
+  mimeType    String
+  sizeBytes   Int
+  storagePath String
+  bmadType    String   @default("other") // see BMAD_DOC_TYPES
+  tags        String[] @default([])
+  description String   @default("")
+  summary     String   @default("")
+  approved    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  useCase     UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  useCaseId String
+  role      String // user | concierge | bmad-agent | system
+  agent     String   @default("") // BMAD agent key when role = bmad-agent
+  content   String
+  createdAt DateTime @default(now())
+  useCase   UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+}
+
+// Mirror of BMAD's ticket tree (initiative > epic > story | bug | spike).
+model Ticket {
+  id          String   @id @default(cuid())
+  useCaseId   String
+  ref         String // BMAD id, e.g. "1.2"
+  kind        String // epic | story | bug | spike
+  title       String
+  epicRef     String   @default("")
+  status      String   @default("backlog") // backlog | ready | in_progress | built | done
+  blocked     Boolean  @default(false)
+  refined     Boolean  @default(true)
+  after       String[] @default([])
+  unknown     String   @default("")
+  verify      String   @default("")
+  position    Int      @default(0)
+  trackerStatus String @default("")
+  updatedAt   DateTime @updatedAt
+  useCase     UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+
+  @@unique([useCaseId, ref])
+}
+
+// Human-in-the-loop inbox: everything BMAD or the concierge needs a person for.
+model ReviewItem {
+  id         String    @id @default(cuid())
+  useCaseId  String
+  kind       String // see REVIEW_KINDS
+  title      String
+  detail     String    @default("")
+  reason     String    @default("")
+  source     String    @default("concierge")
+  targetId   String    @default("")
+  status     String    @default("open") // open | approved | edited | answered | dismissed
+  answer     String    @default("")
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+  useCase    UseCase   @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+}
+
+// Voice drafts: recordings with no time limit; continue, save or submit.
+model Recording {
+  id         String   @id @default(cuid())
+  useCaseId  String
+  purpose    String   @default("describe")
+  transcript String   @default("")
+  status     String   @default("draft") // draft | submitted
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  useCase    UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+}
+
+model Preferences {
+  id            String  @id @default("global")
+  // Claude Code's .claude/skills is always on; these add more tool targets.
+  targetCodex   Boolean @default(false)
+  targetCursor  Boolean @default(false)
+  targetAntigravity Boolean @default(false)
+  tracker       String  @default("builtin") // builtin | linear | jira | github | notion | trello
+  trackerProjectKey String @default("")
+  bmadVersion   String  @default("")
+}
