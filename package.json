@@ -11,13 +11,17 @@
     "db:migrate": "prisma migrate deploy"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.325",
+    "@anthropic-ai/sdk": "^1.8.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@prisma/client": "^6.16.2",
     "next": "15.5.4",
+    "playwright-core": "^1.65.1",
     "prisma": "^6.16.2",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "smol-toml": "^1.4.2",
-    "zod": "^3.25.76"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

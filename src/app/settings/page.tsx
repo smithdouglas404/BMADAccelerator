@@ -24,22 +24,81 @@ const TRACKERS = [
 ];
 
 const MODULES = [
-  { code: "method", name: "BMad Method", note: "Core planning and build workflows.", status: "Included" },
-  { code: "tea", name: "Test Architect (TEA)", note: "Test design, tracing, release gates. Makes the pilot production ready.", status: "Recommended" },
-  { code: "cis", name: "Creative Intelligence Suite", note: "Brainstorming and design-thinking coaches for fuzzy ideas.", status: "Recommended" },
+  { code: "method", name: "BMad Method", note: "Core planning and build workflows.", status: "Installed" },
+  { code: "tea", name: "Test Architect (TEA)", note: "Test design, tracing, release gates. Makes the pilot production ready.", status: "Installed" },
+  { code: "cis", name: "Creative Intelligence Suite", note: "Brainstorming and design-thinking coaches for fuzzy ideas.", status: "Installed" },
+  { code: "toolsmith", name: "Toolsmith", note: "Smithy and bmad-eval: build, validate and measure skills. Checks uploaded skills.", status: "Installed" },
   { code: "founder", name: "Founder", note: "Startup advisor, from diagnostics to investor materials.", status: "Optional" },
   { code: "gds", name: "Game Dev Studio", note: "Game-specific; not used for business apps.", status: "Not used" },
 ];
+
+type CustomSkill = { id: string; name: string; description: string; valid: boolean; enabled: boolean; report: string };
 
 export default function Settings() {
   const [tab, setTab] = useState<(typeof TABS)[number]>("Tracker");
   const [prefs, setPrefs] = useState<Prefs | null>(null);
   const [saved, setSaved] = useState("");
   const [confirmExport, setConfirmExport] = useState(false);
+  const [connected, setConnected] = useState<{ linear: boolean; jira: boolean }>({ linear: false, jira: false });
+  const [useCases, setUseCases] = useState<{ id: string; name: string }[]>([]);
+  const [exportUseCase, setExportUseCase] = useState("");
+  const [exportResult, setExportResult] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [skills, setSkills] = useState<CustomSkill[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [skillMsg, setSkillMsg] = useState("");
 
   useEffect(() => {
     fetch("/api/preferences").then(async (r) => setPrefs(await r.json()));
+    fetch("/api/trackers").then(async (r) => setConnected(await r.json()));
+    fetch("/api/use-cases").then(async (r) => {
+      const list = await r.json();
+      setUseCases(list);
+      if (list[0]) setExportUseCase(list[0].id);
+    });
+    loadSkills();
   }, []);
+
+  function loadSkills() {
+    fetch("/api/skills").then(async (r) => setSkills(await r.json()));
+  }
+
+  async function uploadSkill(file: File) {
+    setUploading(true);
+    setSkillMsg("");
+    const fd = new FormData();
+    fd.append("file", file);
+    const r = await fetch("/api/skills", { method: "POST", body: fd });
+    const j = await r.json();
+    setUploading(false);
+    setSkillMsg(r.ok ? (j.valid ? `"${j.name}" passed BMAD's checks. Switch it on below.` : `"${j.name}" has problems to fix before it can be switched on.`) : j.error);
+    loadSkills();
+  }
+
+  async function toggleSkill(id: string, enabled: boolean) {
+    const r = await fetch(`/api/skills/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    });
+    if (!r.ok) setSkillMsg((await r.json()).error);
+    loadSkills();
+  }
+
+  async function runExport(target: "jira" | "linear") {
+    if (!prefs || !exportUseCase) return;
+    setExporting(true);
+    setExportResult("");
+    const r = await fetch(`/api/use-cases/${exportUseCase}/export`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target, projectKey: prefs.trackerProjectKey }),
+    });
+    const j = await r.json();
+    setExporting(false);
+    setConfirmExport(false);
+    setExportResult(r.ok ? `Done: ${j.created} item${j.created === 1 ? "" : "s"} published.` : j.error);
+  }
 
   async function save(next: Partial<Prefs>) {
     const merged = { ...(prefs as Prefs), ...next };
@@ -98,9 +157,24 @@ export default function Settings() {
                   </button>
                 ))}
               </div>
+              {(prefs.tracker === "linear" || prefs.tracker === "jira") && (
+                <p className={`text-sm ${connected[prefs.tracker as "linear" | "jira"] ? "text-good" : "text-warn"}`}>
+                  {connected[prefs.tracker as "linear" | "jira"]
+                    ? `${prefs.tracker === "linear" ? "Linear" : "Jira"} is connected on the server.`
+                    : prefs.tracker === "linear"
+                      ? "Not connected yet: add LINEAR_API_KEY to the server's .env file, then restart."
+                      : "Not connected yet: add JIRA_BASE_URL, JIRA_EMAIL and JIRA_API_TOKEN to the server's .env file, then restart."}
+                  {prefs.tracker === "linear" && connected.linear && " Every card syncs to Linear as it changes."}
+                </p>
+              )}
+              {["github", "notion", "trello"].includes(prefs.tracker) && (
+                <p className="text-sm text-muted">
+                  Sofia publishes to this tracker through BMAD&apos;s own store setup. Ask the concierge to set it up in a use case.
+                </p>
+              )}
               {prefs.tracker !== "builtin" && (
                 <label className="block text-sm">
-                  Project key
+                  {prefs.tracker === "linear" ? "Linear team key" : "Project key"}
                   <input
                     className="field mt-1"
                     value={prefs.trackerProjectKey}
@@ -115,28 +189,40 @@ export default function Settings() {
                 <p className="mt-1 text-sm text-muted">
                   Publishes every epic and story to a Jira project. Other people will see them, so we confirm first.
                 </p>
+                <label className="mt-3 block text-sm">
+                  Use case
+                  <select className="field mt-1" value={exportUseCase} onChange={(e) => setExportUseCase(e.target.value)}>
+                    {useCases.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {!connected.jira && (
+                  <p className="mt-2 text-xs text-warn">
+                    Jira isn&apos;t connected: add JIRA_BASE_URL, JIRA_EMAIL and JIRA_API_TOKEN to the server&apos;s .env file.
+                  </p>
+                )}
                 {!confirmExport ? (
-                  <button className="btn mt-3" onClick={() => setConfirmExport(true)}>
+                  <button className="btn mt-3" onClick={() => setConfirmExport(true)} disabled={!connected.jira || !exportUseCase}>
                     Export to Jira
                   </button>
                 ) : (
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
                     <span>
-                      Publish all epics and stories to Jira project{" "}
-                      <strong>{prefs.trackerProjectKey || "(set a project key above)"}</strong>?
+                      Publish all epics and stories of <strong>{useCases.find((u) => u.id === exportUseCase)?.name}</strong> to Jira
+                      project <strong>{prefs.trackerProjectKey || "(set a project key above)"}</strong>?
                     </span>
                     <button className="btn btn-ghost" onClick={() => setConfirmExport(false)}>
                       Cancel
                     </button>
-                    <button
-                      className="btn btn-primary"
-                      disabled
-                      title="Jira publishing runs through Sofia once the Jira connection is set up"
-                    >
-                      Confirm export
+                    <button className="btn btn-primary" disabled={!prefs.trackerProjectKey || exporting} onClick={() => runExport("jira")}>
+                      {exporting ? "Publishing..." : "Confirm export"}
                     </button>
                   </div>
                 )}
+                {exportResult && <p className="mt-2 text-sm" role="status">{exportResult}</p>}
               </div>
             </div>
           )}
@@ -174,9 +260,54 @@ export default function Settings() {
                   {ECC_SKILLS.length} skills available. Uploaded skills are checked with BMAD&apos;s own validate and
                   eval tools before they&apos;re switched on.
                 </p>
-                <button className="btn mt-3" disabled title="Skill upload with validation arrives in a later step">
-                  Upload a skill
-                </button>
+                <label className={`btn mt-3 cursor-pointer ${uploading ? "opacity-60" : ""}`}>
+                  {uploading ? "Checking..." : "Upload a skill (.zip or SKILL.md)"}
+                  <input
+                    type="file"
+                    accept=".zip,.md"
+                    className="sr-only"
+                    disabled={uploading}
+                    onChange={(e) => e.target.files?.[0] && uploadSkill(e.target.files[0])}
+                  />
+                </label>
+                {skillMsg && <p className="mt-2 text-sm" role="status">{skillMsg}</p>}
+                {skills.length > 0 && (
+                  <ul className="mt-3 space-y-2">
+                    {skills.map((k) => {
+                      const findings: { rule: string; severity: string; detail: string }[] = JSON.parse(k.report || "[]");
+                      return (
+                        <li key={k.id} className="rounded-lg border border-line p-3 text-sm">
+                          <div className="flex items-center justify-between gap-3">
+                            <span>
+                              <span className="font-semibold">{k.name}</span>{" "}
+                              <span className={`chip text-[10px] ${k.valid ? "text-good" : "text-bad"}`}>{k.valid ? "Passed" : "Needs fixes"}</span>
+                            </span>
+                            <label className="flex items-center gap-2 text-xs">
+                              On
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 accent-[var(--accent)]"
+                                checked={k.enabled}
+                                disabled={!k.valid}
+                                onChange={(e) => toggleSkill(k.id, e.target.checked)}
+                              />
+                            </label>
+                          </div>
+                          {k.description && <p className="mt-1 text-xs text-muted">{k.description}</p>}
+                          {findings.length > 0 && (
+                            <ul className="mt-1 list-disc pl-5 text-xs text-muted">
+                              {findings.map((f, i) => (
+                                <li key={i}>
+                                  {f.severity}: {f.detail}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
               </div>
             </div>
           )}

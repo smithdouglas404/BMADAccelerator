@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { KANBAN_COLUMNS } from "@/lib/bmad";
+import { markTicket } from "@/lib/bmadTickets";
+import { pushTicketToTracker } from "@/lib/trackers";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -23,6 +25,15 @@ export async function PATCH(req: Request, { params }: Ctx) {
   const before = await prisma.ticket.findUnique({ where: { id } });
   if (!before) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  const uc = await prisma.useCase.findUniqueOrThrow({ where: { id: before.useCaseId } });
+  // Write the move into BMAD's tree with Sofia's own script, so BMAD stays the source of truth.
+  if (uc.provisioned && before.kind !== "epic" && before.kind !== "feedback" && before.status !== parsed.data.status) {
+    try {
+      await markTicket(uc.slug, before.ref, parsed.data.status);
+    } catch (e) {
+      console.error("tickets.py mark", e);
+    }
+  }
   const ticket = await prisma.ticket.update({
     where: { id },
     data: { status: parsed.data.status, position: parsed.data.position ?? before.position },
@@ -46,5 +57,6 @@ export async function PATCH(req: Request, { params }: Ctx) {
       },
     });
   }
+  void pushTicketToTracker(ticket.id).catch((e) => console.error("tracker sync", e));
   return NextResponse.json(ticket);
 }

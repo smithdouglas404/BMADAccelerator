@@ -8,6 +8,7 @@ export type DocumentT = {
   description: string;
   summary: string;
   approved: boolean;
+  origin?: string;
 };
 
 export type MessageT = { id: string; role: string; agent: string; content: string; createdAt: string };
@@ -25,6 +26,8 @@ export type TicketT = {
   unknown: string;
   verify: string;
   position: number;
+  bmadStatus?: string;
+  trackerUrl?: string;
 };
 
 export type ReviewT = {
@@ -66,7 +69,33 @@ export type UseCaseFull = {
   messages: MessageT[];
   tickets: TicketT[];
   reviews: ReviewT[];
+  feedback: FeedbackT[];
+  provisioned: boolean;
+  bmadVersion: string;
+  agentBusy: boolean;
+  agentStatus: string;
+  agentError: string;
+  generateBusy: boolean;
+  generateStatus: string;
+  generateCount: number;
+  previewPort: number;
+  preview: { hasApp: boolean; port: number; running: boolean; starting: boolean };
+  agentsEnabled: boolean;
 };
+
+export type FeedbackT = {
+  id: string;
+  comment: string;
+  pageUrl: string;
+  ticketRef: string;
+  status: string;
+  createdAt: string;
+};
+
+export function previewUrl(port: number) {
+  if (typeof window === "undefined" || !port) return "";
+  return `${window.location.protocol}//${window.location.hostname}:${port}`;
+}
 
 export async function patchUseCase(id: string, body: Record<string, unknown>) {
   const res = await fetch(`/api/use-cases/${id}`, {

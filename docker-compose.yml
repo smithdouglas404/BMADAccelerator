@@ -21,13 +21,21 @@ services:
         condition: service_healthy
     ports:
       - "3000:3000"
+      # Each use case's generated app gets its own port, so its own link.
+      - "4100-4129:4100-4129"
     environment:
       DATABASE_URL: postgresql://bacc:bacc@db:5432/bacc
       ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
       ELEVENLABS_STT_MODEL: ${ELEVENLABS_STT_MODEL:-scribe_v1}
+      ELEVENLABS_VOICE_ID: ${ELEVENLABS_VOICE_ID:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LINEAR_API_KEY: ${LINEAR_API_KEY:-}
+      JIRA_BASE_URL: ${JIRA_BASE_URL:-}
+      JIRA_EMAIL: ${JIRA_EMAIL:-}
+      JIRA_API_TOKEN: ${JIRA_API_TOKEN:-}
     volumes:
       - workspaces:/data/workspaces
+    shm_size: "512m"
 
 volumes:
   db:

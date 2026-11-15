@@ -12,7 +12,7 @@ export function workspacePath(slug: string, ...parts: string[]) {
 }
 
 export async function ensureWorkspace(slug: string) {
-  await fs.mkdir(workspacePath(slug, "uploads"), { recursive: true });
+  await fs.mkdir(workspacePath(slug, "bacc", "uploads"), { recursive: true });
   return workspacePath(slug);
 }
 

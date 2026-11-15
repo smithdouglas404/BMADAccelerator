@@ -10,6 +10,7 @@ import KanbanBoard from "./KanbanBoard";
 import ReviewDrawer from "./ReviewDrawer";
 import UploadDropzone from "@/components/UploadDropzone";
 import DocumentCard from "@/components/DocumentCard";
+import PreviewPanel from "./PreviewPanel";
 
 function readiness(data: UseCaseFull) {
   const gaps: string[] = [];
@@ -32,15 +33,25 @@ export default function Workspace({ data, reload }: { data: UseCaseFull; reload:
   const dragStart = useRef<{ y: number; h: number } | null>(null);
 
   // Live updates while agents work.
+  const fast = data.agentBusy || data.generateBusy || data.preview?.starting;
   useEffect(() => {
-    const t = setInterval(reload, 5000);
+    const t = setInterval(reload, fast ? 2000 : 5000);
     return () => clearInterval(t);
-  }, [reload]);
+  }, [reload, fast]);
 
   const agentKey = (data.activeAgent in AGENTS ? data.activeAgent : "concierge") as AgentKey;
   const agent = AGENTS[agentKey];
   const openCount = data.reviews.filter((r) => r.status === "open").length;
   const ready = readiness(data);
+  const [wide, setWide] = useState(false);
+
+  async function generate() {
+    setNotice("");
+    setSide("preview");
+    const r = await fetch(`/api/use-cases/${data.id}/generate`, { method: "POST" });
+    if (!r.ok) setNotice((await r.json()).error || "Generate could not start.");
+    reload();
+  }
 
   async function selectStage(stage: StageKey) {
     await patchUseCase(data.id, { stage });
@@ -66,6 +77,7 @@ export default function Workspace({ data, reload }: { data: UseCaseFull; reload:
             <span className="inline-block h-2 w-2 rounded-full" style={{ background: agent.color }} />
             <span>
               Talking with <span className="font-medium text-ink">{agent.name}</span>, {agent.role}
+              {data.bmadVersion && <span className="ml-2 text-xs">BMAD {data.bmadVersion}</span>}
             </span>
           </div>
         </div>
@@ -84,15 +96,12 @@ export default function Workspace({ data, reload }: { data: UseCaseFull; reload:
           </Link>
           <button
             className={`btn ${ready.ready ? "btn-primary" : "border-warn/60 text-warn"}`}
-            title={ready.reason}
-            onClick={() =>
-              setNotice(
-                `${ready.reason}. Generate (building with Claude Code and a live preview) arrives in step 3 of the plan.`,
-              )
-            }
+            title={ready.ready ? "Build the app now" : `${ready.reason}. You can still generate now; it builds from what BMAD has so far.`}
+            onClick={generate}
+            disabled={data.generateBusy}
           >
             <span className={`h-2 w-2 rounded-full ${ready.ready ? "bg-white" : "bg-warn"}`} aria-hidden />
-            Generate
+            {data.generateBusy ? "Generating..." : data.generateCount ? "Regenerate" : "Generate"}
           </button>
         </div>
       </header>
@@ -108,12 +117,12 @@ export default function Workspace({ data, reload }: { data: UseCaseFull; reload:
 
       <ProcessRail data={data} onSelect={selectStage} />
 
-      <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[1fr_380px]">
+      <div className={`grid min-h-0 flex-1 gap-3 ${side === "preview" && wide ? "lg:grid-cols-[minmax(320px,1fr)_minmax(0,1.6fr)]" : "lg:grid-cols-[1fr_420px]"}`}>
         <section className="glass min-h-0 overflow-hidden rounded-2xl">
           <Conversation data={data} reload={reload} />
         </section>
         <section className="glass flex min-h-0 flex-col overflow-hidden rounded-2xl">
-          <div className="flex border-b border-line text-sm" role="tablist">
+          <div className="flex items-center border-b border-line text-sm" role="tablist">
             {(["documents", "preview"] as const).map((k) => (
               <button
                 key={k}
@@ -123,10 +132,16 @@ export default function Workspace({ data, reload }: { data: UseCaseFull; reload:
                 className={`flex-1 px-3 py-2 font-medium capitalize ${side === k ? "border-b-2 border-accent text-ink" : "text-muted"}`}
               >
                 {k}
+                {k === "preview" && data.generateCount > 0 ? ` v${data.generateCount}` : ""}
               </button>
             ))}
+            {side === "preview" && (
+              <button className="px-2 text-xs text-muted hover:text-ink" onClick={() => setWide((w) => !w)} aria-pressed={wide}>
+                {wide ? "Narrow" : "Wide"}
+              </button>
+            )}
           </div>
-          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+          <div className={`min-h-0 flex-1 overflow-y-auto p-3 ${side === "documents" ? "space-y-3" : "flex flex-col"}`}>
             {side === "documents" ? (
               <>
                 <UploadDropzone useCaseId={data.id} onUploaded={reload} />
@@ -135,13 +150,7 @@ export default function Workspace({ data, reload }: { data: UseCaseFull; reload:
                 ))}
               </>
             ) : (
-              <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-sm text-muted">
-                <p className="font-medium text-ink">Live preview</p>
-                <p>
-                  After Generate, your app runs here in a split view. You can circle or box any part of a screen and
-                  say what to change.
-                </p>
-              </div>
+              <PreviewPanel data={data} reload={reload} />
             )}
           </div>
         </section>

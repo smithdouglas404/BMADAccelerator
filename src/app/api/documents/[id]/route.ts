@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { BMAD_DOC_TYPES } from "@/lib/bmad";
+import { writeIntake } from "@/lib/provision";
+import { enqueue, agentsEnabled } from "@/lib/agent/runner";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -25,6 +27,19 @@ export async function PATCH(req: Request, { params }: Ctx) {
       where: { targetId: id, kind: "document", status: "open" },
       data: { status: "approved", resolvedAt: new Date() },
     });
+    const uc = await prisma.useCase.findUniqueOrThrow({ where: { id: doc.useCaseId } });
+    // A document approved after intake goes to BMAD the way BMAD takes inputs.
+    if (uc.provisioned && doc.origin === "upload") {
+      await writeIntake(uc.id);
+      if (agentsEnabled()) {
+        const type = BMAD_DOC_TYPES.find((t) => t.key === doc.bmadType);
+        await enqueue(
+          uc.id,
+          "document",
+          `The client approved a new document: "${doc.fileName}" (${type?.label ?? doc.bmadType}; usually goes to ${type?.routesTo ?? "the concierge"}). Its text version is ${doc.textPath || "not available"}; it is listed in bacc/intake.md. Bring it into the BMAD work where it belongs, using that agent's own workflow, and tell the client in one line.`,
+        );
+      }
+    }
   }
   return NextResponse.json(doc);
 }

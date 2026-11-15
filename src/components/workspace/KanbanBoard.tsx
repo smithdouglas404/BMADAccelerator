@@ -8,6 +8,7 @@ const KIND_STYLE: Record<string, string> = {
   story: "bg-accent/15 text-accent",
   bug: "bg-bad/15 text-bad",
   spike: "bg-warn/15 text-warn",
+  feedback: "bg-accent2/20 text-ink",
 };
 
 // Live view of BMAD's ticket tree: epics are swimlanes, stories, bugs and spikes
@@ -17,11 +18,13 @@ export default function KanbanBoard({ data, reload }: { data: UseCaseFull; reloa
   const [syncing, setSyncing] = useState(false);
   const epics = data.tickets.filter((t) => t.kind === "epic");
   const cards = data.tickets.filter((t) => t.kind !== "epic");
-  const lanes: { epic: TicketT | null; cards: TicketT[] }[] = [
+  const lanes: { epic: TicketT | null; cards: TicketT[]; label?: string }[] = [
     ...epics.map((e) => ({ epic: e, cards: cards.filter((c) => c.epicRef === e.ref) })),
   ];
-  const loose = cards.filter((c) => !epics.some((e) => e.ref === c.epicRef));
+  const loose = cards.filter((c) => c.kind !== "feedback" && !epics.some((e) => e.ref === c.epicRef));
   if (loose.length) lanes.push({ epic: null, cards: loose });
+  const feedback = cards.filter((c) => c.kind === "feedback");
+  if (feedback.length) lanes.push({ epic: null, cards: feedback, label: "Screen feedback (Sofia turns these into tickets)" });
 
   async function move(id: string, status: string) {
     await fetch(`/api/tickets/${id}`, {
@@ -49,7 +52,7 @@ export default function KanbanBoard({ data, reload }: { data: UseCaseFull; reloa
           </span>
         </div>
         <button className="btn btn-ghost text-xs" onClick={sync} disabled={syncing}>
-          {syncing ? "Syncing..." : "Sync from BMAD"}
+          {syncing ? "Syncing..." : "Refresh from BMAD"}
         </button>
       </div>
       <div className="min-h-0 flex-1 overflow-auto px-4 pb-4">
@@ -68,7 +71,7 @@ export default function KanbanBoard({ data, reload }: { data: UseCaseFull; reloa
           lanes.map((lane, li) => (
             <section key={lane.epic?.id ?? `loose-${li}`} className="mt-3 min-w-[900px]">
               <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold">
-                {lane.epic ? `Epic ${lane.epic.ref}: ${lane.epic.title}` : "Not in an epic"}
+                {lane.epic ? `Epic ${lane.epic.ref}: ${lane.epic.title}` : (lane.label ?? "Not in an epic")}
                 {lane.epic && !lane.epic.refined && (
                   <span className="chip border-transparent bg-warn/15 text-[10px] text-warn">Needs detail</span>
                 )}
@@ -83,6 +86,7 @@ export default function KanbanBoard({ data, reload }: { data: UseCaseFull; reloa
                   >
                     {lane.cards
                       .filter((t) => t.status === col.key)
+                      .map((t) => t)
                       .sort((a, b) => a.position - b.position)
                       .map((t) => (
                         <article
@@ -108,6 +112,19 @@ export default function KanbanBoard({ data, reload }: { data: UseCaseFull; reloa
                             </span>
                           </div>
                           <p className="mt-1.5 leading-snug">{t.title}</p>
+                          {t.kind === "feedback" && t.verify.includes("/api/feedback/") && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={t.verify.slice(t.verify.indexOf("/api/feedback/"))}
+                              alt="Marked-up screen"
+                              className="mt-1.5 max-h-24 w-full rounded border border-line object-cover object-top"
+                            />
+                          )}
+                          {t.trackerUrl && (
+                            <a href={t.trackerUrl} target="_blank" rel="noreferrer" className="mt-1 block text-[11px] text-accent underline">
+                              Open in tracker
+                            </a>
+                          )}
                           {t.after.length > 0 && (
                             <p className="mt-1 text-[11px] text-muted">Waiting on {t.after.join(", ")}</p>
                           )}

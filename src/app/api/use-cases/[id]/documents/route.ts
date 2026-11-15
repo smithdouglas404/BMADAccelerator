@@ -5,6 +5,8 @@ import { randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
 import { BMAD_DOC_TYPES, guessDocType } from "@/lib/bmad";
 import { ensureWorkspace, workspacePath } from "@/lib/workspace";
+import { describeDocument } from "@/lib/docAgent";
+import { writeIntake } from "@/lib/provision";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -28,7 +30,8 @@ export async function POST(req: Request, { params }: Ctx) {
     if (file.size > MAX_BYTES) continue;
     const safeName = path.basename(file.name).replace(/[^\w.\- ]/g, "_");
     const stored = `${randomUUID()}-${safeName}`;
-    const storagePath = workspacePath(useCase.slug, "uploads", stored);
+    const storagePath = workspacePath(useCase.slug, "bacc", "uploads", stored);
+    await fs.mkdir(path.dirname(storagePath), { recursive: true });
     await fs.writeFile(storagePath, Buffer.from(await file.arrayBuffer()));
     const bmadType = guessDocType(safeName);
     const typeLabel = BMAD_DOC_TYPES.find((t) => t.key === bmadType)?.label ?? "Other";
@@ -57,5 +60,9 @@ export async function POST(req: Request, { params }: Ctx) {
     created.push(doc);
   }
   await prisma.useCase.update({ where: { id }, data: { updatedAt: new Date() } });
+  // The document agent reads each upload in the background; the card updates when it is done.
+  void Promise.all(created.map((d) => describeDocument(d.id).catch((e) => console.error("document agent", e)))).then(
+    () => (useCase.provisioned ? writeIntake(id) : undefined),
+  );
   return NextResponse.json(created, { status: 201 });
 }

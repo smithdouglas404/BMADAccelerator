@@ -1,0 +1,140 @@
+import path from "path";
+import { promises as fs } from "fs";
+import { tool, createSdkMcpServer } from "@anthropic-ai/claude-agent-sdk";
+import { z } from "zod";
+import { prisma } from "@/lib/db";
+import { AGENTS, type StageKey } from "@/lib/bmad";
+import { workspacePath } from "@/lib/workspace";
+
+const AGENT_KEYS = Object.keys(AGENTS) as [string, ...string[]];
+const STAGE_KEYS = ["clarify", "plan", "build", "learn"] as [StageKey, ...StageKey[]];
+
+function ok(text = "ok") {
+  return { content: [{ type: "text" as const, text }] };
+}
+
+export type RunTally = { spoke: number };
+
+// What the agents can do in the accelerator's UI. Everything else they do inside
+// BMAD's own skills and files.
+export function baccTools(useCaseId: string, slug: string, tally: RunTally) {
+  const speak = async (agent: string, content: string) => {
+    tally.spoke++;
+    await prisma.message.create({
+      data: { useCaseId, role: agent === "concierge" ? "concierge" : "bmad-agent", agent, content },
+    });
+    await prisma.useCase.update({ where: { id: useCaseId }, data: { activeAgent: agent } });
+  };
+
+  return createSdkMcpServer({
+    name: "bacc",
+    version: "1.0.0",
+    tools: [
+      tool(
+        "say",
+        "Show a message to the person in the conversation, in the name of the agent speaking. The only way the person sees anything you write.",
+        { agent: z.enum(AGENT_KEYS), text: z.string().min(1) },
+        async ({ agent, text }) => {
+          await speak(agent, text);
+          return ok();
+        },
+      ),
+      tool(
+        "ask",
+        "Ask the person ONE question in plain language, in the name of the agent that needs the answer. End your turn after asking; the answer arrives as the next message.",
+        {
+          agent: z.enum(AGENT_KEYS),
+          question: z.string().min(1),
+          explanation: z.string().default(""),
+        },
+        async ({ agent, question, explanation }) => {
+          await speak(agent, explanation ? `${question}\n\n${explanation}` : question);
+          await prisma.useCase.update({ where: { id: useCaseId }, data: { pendingQuestion: question } });
+          return ok("Asked. End your turn now and wait for the answer.");
+        },
+      ),
+      tool(
+        "set_stage",
+        "Show which BMAD stage the work is in and which agent is working now.",
+        { stage: z.enum(STAGE_KEYS), agent: z.enum(AGENT_KEYS) },
+        async ({ stage, agent }) => {
+          await prisma.useCase.update({ where: { id: useCaseId }, data: { stage, activeAgent: agent } });
+          return ok();
+        },
+      ),
+      tool(
+        "add_review",
+        "Put an item in the person's review queue without blocking the conversation: an assumption you made, an open question, or a ticket's unknown.",
+        {
+          kind: z.enum(["assumption", "question", "unknown"]),
+          title: z.string().min(1),
+          detail: z.string().default(""),
+          reason: z.string().default(""),
+          agent: z.enum(AGENT_KEYS).default("concierge"),
+        },
+        async ({ kind, title, detail, reason, agent }) => {
+          const a = AGENTS[agent as keyof typeof AGENTS];
+          await prisma.reviewItem.create({
+            data: { useCaseId, kind, title, detail, reason, source: `${a.name}, ${a.role}` },
+          });
+          return ok();
+        },
+      ),
+      tool(
+        "request_signoff",
+        "Ask the person to sign off at a BMAD gate (PRFAQ verdict, PRD validation, architecture review, ticket breakdown approval, retrospective verdict). Their decision arrives as a message.",
+        {
+          gate: z.string().min(1),
+          summary: z.string().min(1),
+          document_path: z.string().default(""),
+          agent: z.enum(AGENT_KEYS),
+        },
+        async ({ gate, summary, document_path, agent }) => {
+          const a = AGENTS[agent as keyof typeof AGENTS];
+          await prisma.reviewItem.create({
+            data: {
+              useCaseId,
+              kind: "signoff",
+              title: `Sign off: ${gate}`,
+              detail: summary,
+              reason: "BMAD waits for your decision at this gate.",
+              source: `${a.name}, ${a.role}`,
+              targetId: document_path,
+            },
+          });
+          return ok();
+        },
+      ),
+      tool(
+        "register_document",
+        "Show a document a BMAD skill wrote or updated in the person's Documents panel. Path relative to the project root.",
+        { path: z.string().min(1), title: z.string().min(1), type: z.string().default("other"), summary: z.string().default("") },
+        async (args) => {
+          const abs = path.resolve(workspacePath(slug), args.path);
+          if (!abs.startsWith(workspacePath(slug))) return ok("Path must be inside the project.");
+          let size = 0;
+          try {
+            size = (await fs.stat(abs)).size;
+          } catch {
+            return ok("No file at that path yet.");
+          }
+          const existing = await prisma.document.findFirst({ where: { useCaseId, storagePath: abs } });
+          const data = {
+            fileName: args.title,
+            mimeType: "text/markdown",
+            sizeBytes: size,
+            bmadType: args.type,
+            summary: args.summary,
+            description: args.summary.split(". ")[0] ?? "",
+            origin: "bmad",
+            textPath: abs,
+            approved: true,
+          };
+          if (existing) await prisma.document.update({ where: { id: existing.id }, data });
+          else await prisma.document.create({ data: { useCaseId, storagePath: abs, ...data } });
+          return ok();
+        },
+      ),
+    ],
+  });
+}

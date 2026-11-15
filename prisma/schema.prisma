@@ -42,6 +42,20 @@ model UseCase {
   activeAgent    String   @default("concierge")
   pendingQuestion String  @default("")
   claudeSessionId String  @default("")
+  // BMAD workspace and agent runtime
+  provisioned    Boolean  @default(false)
+  bmadVersion    String   @default("")
+  initiative     String   @default("")
+  agentBusy      Boolean  @default(false)
+  agentStatus    String   @default("")
+  agentError     String   @default("")
+  // Generate loop and live preview
+  generateSessionId String @default("")
+  generateBusy   Boolean  @default(false)
+  generateStatus String   @default("")
+  generateCount  Int      @default(0)
+  lastGeneratedAt DateTime?
+  previewPort    Int      @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -51,6 +65,8 @@ model UseCase {
   tickets    Ticket[]
   reviews    ReviewItem[]
   recordings Recording[]
+  feedback   Feedback[]
+  events     AgentEvent[]
 }
 
 model UseCaseSkill {
@@ -74,6 +90,8 @@ model Document {
   description String   @default("")
   summary     String   @default("")
   approved    Boolean  @default(false)
+  origin      String   @default("upload") // upload | bmad
+  textPath    String   @default("")
   createdAt   DateTime @default(now())
   useCase     UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
 }
@@ -104,6 +122,9 @@ model Ticket {
   verify      String   @default("")
   position    Int      @default(0)
   trackerStatus String @default("")
+  bmadStatus  String   @default("")
+  trackerId   String   @default("")
+  trackerUrl  String   @default("")
   updatedAt   DateTime @updatedAt
   useCase     UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
 
@@ -148,4 +169,41 @@ model Preferences {
   tracker       String  @default("builtin") // builtin | linear | jira | github | notion | trello
   trackerProjectKey String @default("")
   bmadVersion   String  @default("")
+}
+
+// Visual markup on a generated screen: the drawing, the comment, and the card it became.
+model Feedback {
+  id         String   @id @default(cuid())
+  useCaseId  String
+  comment    String
+  imagePath  String
+  pageUrl    String   @default("")
+  ticketRef  String   @default("")
+  status     String   @default("new") // new | sent | built
+  createdAt  DateTime @default(now())
+  useCase    UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+}
+
+// Queue of things the concierge must tell BMAD (card moves, feedback, generate notes),
+// run one at a time per use case.
+model AgentEvent {
+  id         String   @id @default(cuid())
+  useCaseId  String
+  kind       String   // user | move | feedback | generate | review | start
+  prompt     String
+  status     String   @default("queued") // queued | running | done | failed
+  createdAt  DateTime @default(now())
+  useCase    UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+}
+
+// Skills a team uploaded, validated before they are switched on.
+model CustomSkill {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String   @default("")
+  path        String
+  valid       Boolean  @default(false)
+  report      String   @default("")
+  enabled     Boolean  @default(false)
+  createdAt   DateTime @default(now())
 }

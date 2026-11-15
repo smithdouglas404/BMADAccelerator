@@ -7,7 +7,7 @@ export const SKILL_TARGETS = [
   { key: "claude", label: "Claude Code", dir: ".claude/skills/", locked: true },
   { key: "codex", label: "Codex", dir: ".agents/skills/", locked: false },
   { key: "cursor", label: "Cursor", dir: ".agents/skills/", locked: false },
-  { key: "antigravity", label: "Antigravity", dir: ".agent/skills/ (to confirm)", locked: false },
+  { key: "antigravity", label: "Antigravity", dir: ".agent/skills/", locked: false },
 ] as const;
 
 export type Skill = { id: string; description: string };
