@@ -76,3 +76,15 @@ test("picks resolve to options; unknown and retired numbers are refused", () => 
   assert.deepEqual(unknown, [7, 99]);
   assert.match(picksMarkdown(picked, "I like 6 and 5", new Date("2026-11-15T13:00:00Z")), /- 6: Option 6/);
 });
+
+import { conceptProblems } from "../src/lib/agent/advisorGates.ts";
+
+test("a design concept names its category, three leading products and its fonts", () => {
+  assert.match(conceptProblems("# Concept\nPlanets everywhere."), /category/);
+  const good = `# Design concept
+0. **What kind of product this is:** an online shop selling candy.
+Leading shops: https://a.example, https://b.example, https://c.example
+Fonts: Fraunces for display, Inter for body.`;
+  assert.equal(conceptProblems(good), "");
+  assert.match(conceptProblems(good.replace("https://c.example", "")), /found 2 links/);
+});

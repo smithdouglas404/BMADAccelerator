@@ -115,3 +115,17 @@ export function resolvePicks(codes: number[], md: string) {
 export function picksMarkdown(picked: CatalogueItem[], clientWords: string, when: Date) {
   return `\n## Picks, ${when.toISOString()}\n\nClient's words: "${clientWords.replace(/"/g, "'")}"\n\n${picked.map((p) => `- ${p.code}: ${p.name}`).join("\n")}\n`;
 }
+
+export const DESIGN_CONCEPT = "bacc/design/concept.md";
+
+// Why a design concept can't be registered, or "". It must name the product category and the leading
+// products it is measured against (Doug, Nov 15: "you should have assessed if they're selling something").
+export function conceptProblems(md: string) {
+  const problems: string[] = [];
+  if (!/^\s*(#+\s*|\d+\.\s*\**\s*|\**)\s*(product )?(category|what kind of product)/im.test(md))
+    problems.push('add point 0, "What kind of product this is": name its category (online shop, booking site, SaaS app...)');
+  const links = new Set(md.match(/https?:\/\/[^\s)>\]]+/g) ?? []);
+  if (links.size < 3) problems.push(`link the three leading products in that category you measured it against (found ${links.size} links)`);
+  if (!/font|typeface/i.test(md)) problems.push("name the display and body fonts and why each fits the category and audience");
+  return problems.length ? `The design concept needs fixing: ${problems.join("; ")}.` : "";
+}

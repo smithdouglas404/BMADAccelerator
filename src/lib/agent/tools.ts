@@ -21,6 +21,8 @@ import {
   resolvePicks,
   signoffReviewProblem,
   stageGateBlock,
+  conceptProblems,
+  DESIGN_CONCEPT,
 } from "./advisorGates";
 
 const AGENT_KEYS = Object.keys(AGENTS) as [string, ...string[]];
@@ -289,6 +291,10 @@ export function baccTools(useCaseId: string, slug: string, tally: RunTally) {
           if (mustReview(rel)) args.review = true;
           // The options catalogue's code numbers never change meaning once the client has seen them.
           const lastCatalogue = workspacePath(slug, "bacc", "design", ".options-registered.md");
+          if (rel === DESIGN_CONCEPT) {
+            const problem = conceptProblems(await fs.readFile(abs, "utf8"));
+            if (problem) return ok(`${problem} Fix the file, then register it again.`);
+          }
           if (rel === OPTIONS_CATALOGUE) {
             const problem = catalogueProblems(await fs.readFile(abs, "utf8"), await fs.readFile(lastCatalogue, "utf8").catch(() => ""));
             if (problem) return ok(`${problem} Fix the file, then register it again.`);
