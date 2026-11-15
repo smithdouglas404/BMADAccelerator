@@ -205,7 +205,39 @@ async function runSdkTurnOnce(opts: {
   return { texts, sessionId };
 }
 
+const ASK_NUDGE = "[follow-up: the question]";
+
+// A turn that ends by announcing a question, without asking it, would leave the client waiting on
+// nothing. A last message that is itself a question becomes the open question; one that only
+// promises a question gets one follow-up turn to ask it.
+async function settleAnnouncedQuestion(useCaseId: string, since: Date, prompt: string) {
+  if (await prisma.question.count({ where: { useCaseId, status: { in: ["open", "waiting"] } } })) return;
+  const last = await prisma.message.findFirst({
+    where: { useCaseId, createdAt: { gte: since }, role: { in: ["concierge", "bmad-agent"] } },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!last) return;
+  const text = last.content.trim();
+  if (text.endsWith("?")) {
+    const sentence = text.split(/(?<=[.!?])\s+|\n+/).filter(Boolean).pop() ?? text;
+    await prisma.question.create({
+      data: { useCaseId, agent: last.agent || "concierge", question: sentence.slice(0, 500), explanation: "", status: "open" },
+    });
+    await prisma.useCase.update({ where: { id: useCaseId }, data: { pendingQuestion: sentence.slice(0, 500) } });
+    return;
+  }
+  const promises = /\b(one|a|next|few|quick|some)\s+(more\s+)?questions?\b|\b(I|I'll|I will|let me|she'll|he'll|they'll|we'll)\s+(need to\s+)?ask\b/i.test(text);
+  if (promises && !prompt.includes(ASK_NUDGE)) {
+    await enqueue(
+      useCaseId,
+      "followup",
+      `${ASK_NUDGE} Your last message said a question was coming, but it was never asked, so the client is waiting. Ask it now with mcp__bacc__ask (one question), then end your turn.`,
+    );
+  }
+}
+
 async function runTurn(useCaseId: string, prompt: string) {
+  const turnStart = new Date();
   const uc = await prisma.useCase.findUniqueOrThrow({ where: { id: useCaseId } });
   if (!uc.provisioned) {
     await prisma.useCase.update({ where: { id: useCaseId }, data: { agentStatus: "Installing BMAD" } });
@@ -246,6 +278,7 @@ async function runTurn(useCaseId: string, prompt: string) {
       await prisma.message.create({ data: { useCaseId, role: "concierge", content: texts[texts.length - 1] } });
     }
   }
+  await settleAnnouncedQuestion(useCaseId, turnStart, prompt).catch((e) => console.error("question check", e));
   await syncBoard(useCaseId).catch((e) => console.error("board sync", e));
 }
 

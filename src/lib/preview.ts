@@ -58,14 +58,57 @@ function runOnce(cmd: string, args: string[], cwd: string, log: NodeJS.WritableS
   });
 }
 
+// Signals the preview's whole process group: `npm start` runs the real server as a child, and
+// killing npm alone leaves that server holding the port.
+function killGroup(p: ChildProcess, signal: NodeJS.Signals) {
+  try {
+    if (p.pid) process.kill(-p.pid, signal);
+  } catch {
+    p.kill(signal);
+  }
+}
+
 export async function stopPreview(useCaseId: string) {
   const p = procs.get(useCaseId);
   if (p && p.exitCode === null) {
-    p.kill("SIGTERM");
+    killGroup(p, "SIGTERM");
     await new Promise((r) => setTimeout(r, 800));
-    if (p.exitCode === null) p.kill("SIGKILL");
+    if (p.exitCode === null) killGroup(p, "SIGKILL");
   }
   procs.delete(useCaseId);
+}
+
+/** Stops any process still listening on the port (a leftover from an earlier build or app restart). */
+export async function freePort(port: number) {
+  if (process.platform !== "linux") return;
+  const hex = port.toString(16).toUpperCase().padStart(4, "0");
+  const inodes = new Set<string>();
+  for (const f of ["/proc/net/tcp", "/proc/net/tcp6"]) {
+    const text = await fs.readFile(f, "utf8").catch(() => "");
+    for (const line of text.split("\n").slice(1)) {
+      const cols = line.trim().split(/\s+/);
+      // local_address ends in :PORT, state 0A = LISTEN, column 9 = inode
+      if (cols[1]?.endsWith(`:${hex}`) && cols[3] === "0A") inodes.add(cols[9]);
+    }
+  }
+  if (!inodes.size) return;
+  for (const pid of await fs.readdir("/proc").catch(() => [] as string[])) {
+    if (!/^\d+$/.test(pid) || Number(pid) === process.pid) continue;
+    const fds = await fs.readdir(`/proc/${pid}/fd`).catch(() => [] as string[]);
+    for (const fd of fds) {
+      const link = await fs.readlink(`/proc/${pid}/fd/${fd}`).catch(() => "");
+      const m = link.match(/^socket:\[(\d+)\]$/);
+      if (m && inodes.has(m[1])) {
+        try {
+          process.kill(Number(pid), "SIGKILL");
+        } catch {
+          /* already gone */
+        }
+        break;
+      }
+    }
+  }
+  await new Promise((r) => setTimeout(r, 300));
 }
 
 // Starts (or restarts) the generated app: `npm install` + `npm start` with PORT set,
@@ -79,6 +122,7 @@ export async function startPreview(useCaseId: string) {
     if (!(await exists(dir))) return;
     await stopPreview(useCaseId);
     const port = await assignPort(uc);
+    await freePort(port);
     const log = createWriteStream(workspacePath(uc.slug, "bacc", "preview.log"), { flags: "a" });
     log.write(`\n--- starting preview on ${port} at ${new Date().toISOString()}\n`);
     const env: NodeJS.ProcessEnv = { ...process.env, PORT: String(port), HOST: "0.0.0.0", HOSTNAME: "0.0.0.0" };
@@ -92,12 +136,13 @@ export async function startPreview(useCaseId: string) {
       const pkg = JSON.parse(await fs.readFile(path.join(dir, "package.json"), "utf8"));
       await runOnce("npm", ["install", "--no-audit", "--no-fund"], dir, log, env);
       if (pkg.scripts?.build && pkg.bacc?.build !== false) await runOnce("npm", ["run", "build"], dir, log, env);
-      child = spawn("npm", ["start"], { cwd: dir, env, stdio: ["ignore", "pipe", "pipe"], detached: false });
+      child = spawn("npm", ["start"], { cwd: dir, env, stdio: ["ignore", "pipe", "pipe"], detached: true });
     } else {
       child = spawn(process.execPath, [path.join(process.cwd(), "scripts/static-server.mjs"), dir, String(port)], {
         cwd: dir,
         env,
         stdio: ["ignore", "pipe", "pipe"],
+        detached: true,
       });
     }
     child.stdout?.pipe(log, { end: false });

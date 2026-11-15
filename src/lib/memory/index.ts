@@ -189,6 +189,22 @@ export function onGatePassed(uc: UseCaseRef & { stage?: string }, gate: string, 
 export function onAppGenerated(uc: UseCaseRef & { stage?: string }, built: string, feedbackBuilt: string) {
   rememberBuild(uc, `${built}${feedbackBuilt ? `\nFeedback this build answered: ${feedbackBuilt}` : ""}`);
   void (async () => {
+    // Keep the shared portfolio row current: the latest name, and at least the build stage.
+    try {
+      const rows = await letta.portfolio();
+      const prev = rows.find((r) => r.useCaseId === uc.id);
+      const stage = uc.stage === "learn" ? "learn" : "build";
+      await letta.updatePortfolio({
+        useCaseId: uc.id,
+        title: uc.name,
+        stage,
+        activeRole: roleFor("dev")?.title ?? prev?.activeRole ?? "",
+        gatesPassed: prev?.gatesPassed ?? [],
+        lastHandoff: clip(built.split("\n").find((l) => l.trim()) ?? "New version built", 300),
+      });
+    } catch (e) {
+      console.warn("letta portfolio update failed", e instanceof Error ? e.message : e);
+    }
     await reflect("dev", generatedMessage(uc.name, built, feedbackBuilt));
     if (feedbackBuilt) await reflect("po", generatedMessage(uc.name, built, feedbackBuilt));
   })();

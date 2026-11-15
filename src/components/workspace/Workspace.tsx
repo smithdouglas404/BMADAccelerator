@@ -43,6 +43,13 @@ export default function Workspace({ data, reload }: { data: UseCaseFull; reload:
   const agent = AGENTS[agentKey];
   const openCount = data.reviews.filter((r) => r.status === "open").length;
   const ready = readiness(data);
+  // Decisions the client made after the latest build, which the running app doesn't have yet.
+  const builtAt = data.lastGeneratedAt ?? "";
+  const changesSince = builtAt
+    ? data.reviews.filter(
+        (r) => r.kind !== "move" && r.kind !== "document" && ["approved", "answered", "edited"].includes(r.status) && (r.resolvedAt ?? "") > builtAt,
+      ).length + data.feedback.filter((f) => f.status !== "built" && f.createdAt > builtAt).length
+    : 0;
   const [wide, setWide] = useState(false);
 
   async function generate() {
@@ -96,12 +103,23 @@ export default function Workspace({ data, reload }: { data: UseCaseFull; reload:
           </Link>
           <button
             className={`btn ${ready.ready ? "btn-primary" : "border-warn/60 text-warn"}`}
-            title={ready.ready ? "Build the app now" : `${ready.reason}. You can still generate now; it builds from what BMAD has so far.`}
+            title={
+              changesSince
+                ? `${changesSince} decision${changesSince === 1 ? "" : "s"} since version ${data.generateCount} aren't in the app yet. Regenerate to build them in.`
+                : ready.ready
+                  ? "Build the app now"
+                  : `${ready.reason}. You can still generate now; it builds from what BMAD has so far.`
+            }
             onClick={generate}
             disabled={data.generateBusy}
           >
             <span className={`h-2 w-2 rounded-full ${ready.ready ? "bg-white" : "bg-warn"}`} aria-hidden />
             {data.generateBusy ? "Generating..." : data.generateCount ? "Regenerate" : "Generate"}
+            {!data.generateBusy && changesSince > 0 && (
+              <span className="rounded-full bg-warn px-2 py-0.5 text-xs text-white" aria-label={`${changesSince} new decisions not built yet`}>
+                {changesSince} new
+              </span>
+            )}
           </button>
         </div>
       </header>

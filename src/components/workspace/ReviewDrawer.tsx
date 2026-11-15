@@ -20,7 +20,14 @@ export default function ReviewDrawer({
   reload: () => void;
 }) {
   const [tab, setTab] = useState<"todo" | "history">("todo");
-  const items = data.reviews.filter((r) => r.status === "open");
+  const open_ = data.reviews.filter((r) => r.status === "open");
+  // Items raised before the latest build may belong to an earlier version; they sit in their own group.
+  const cut = data.lastGeneratedAt ?? "";
+  const isOld = (r: ReviewT) => !!cut && r.kind !== "document" && r.createdAt < cut;
+  const items = open_.filter((r) => !isOld(r));
+  const older = open_.filter(isOld);
+  const [showOld, setShowOld] = useState(false);
+  const [closing, setClosing] = useState(false);
   const done = data.reviews.filter((r) => r.status !== "open");
   return (
     <>
@@ -48,7 +55,7 @@ export default function ReviewDrawer({
         <div className="flex border-b border-line text-sm" role="tablist">
           {(
             [
-              ["todo", `To do (${items.length})`],
+              ["todo", `To do (${open_.length})`],
               ["history", `History (${done.length})`],
             ] as const
           ).map(([k, label]) => (
@@ -66,10 +73,43 @@ export default function ReviewDrawer({
         <div className="flex-1 space-y-3 overflow-y-auto p-4">
           {tab === "todo" ? (
             <>
-              {items.length === 0 && <p className="text-center text-sm text-muted">All caught up.</p>}
+              {open_.length === 0 && <p className="text-center text-sm text-muted">All caught up.</p>}
               {items.map((r) => (
                 <ReviewCard key={r.id} item={r} data={data} reload={reload} />
               ))}
+              {older.length > 0 && (
+                <div className="rounded-xl border border-line p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <button type="button" className="text-left text-sm font-medium" onClick={() => setShowOld((v) => !v)} aria-expanded={showOld}>
+                      From before version {data.generateCount} ({older.length})
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost shrink-0 px-3 py-1 text-xs"
+                      disabled={closing}
+                      onClick={async () => {
+                        setClosing(true);
+                        try {
+                          await fetch(`/api/use-cases/${data.id}/reviews/close-old`, { method: "POST" });
+                        } finally {
+                          setClosing(false);
+                          reload();
+                        }
+                      }}
+                    >
+                      {closing ? "Closing" : "Close these"}
+                    </button>
+                  </div>
+                  <p className="mt-1 text-xs text-muted">Raised before the latest build, so they may no longer apply.</p>
+                  {showOld && (
+                    <div className="mt-3 space-y-3">
+                      {older.map((r) => (
+                        <ReviewCard key={r.id} item={r} data={data} reload={reload} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           ) : (
             <>

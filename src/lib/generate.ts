@@ -43,9 +43,10 @@ const GENERATOR_RULES = `You are the Generate step of the BMAD Accelerator: Clau
 Rules:
 - Build the app in the folder \`app/\` at the project root. Nothing else in the project is yours to change, except the notes file named in the task.
 - Read the BMAD documents in \`_bmad-output/\` (brief, PRFAQ, PRD, UX DESIGN.md and EXPERIENCE.md, architecture, the ticket tree) and the client's intake in \`bacc/intake.md\`. Build what they describe as far as they go. Where they are silent, make a sensible, simple choice and write it down in the notes as an assumption.
-- The app must run with no outside services or accounts: \`npm install\` then \`npm start\`, listening on \`process.env.PORT\` and host 0.0.0.0. Use SQLite or files for data, seeded with realistic sample data. A plain \`index.html\` with no package.json is also fine for a static app. Keep the dependency list small.
+- The app must run with no outside services or accounts: \`npm install\` then \`npm start\`, listening on \`process.env.PORT\` and host 0.0.0.0. Use SQLite or files for data. Seed the catalogue and content (products, pages, prices) with realistic sample data, but never invent people: no made-up customers, orders, sign-ups, reviews or contact details. Lists of those start empty, with a friendly empty state. A plain \`index.html\` with no package.json is also fine for a static app. Keep the dependency list small.
 - Verify it: start it on a spare port (for example 4999), fetch its main page with curl, then stop it. Fix anything that fails.
 - Make it look finished and polished: clear layout, real copy, responsive.
+- Use names, prices, formats, years and wording exactly as the documents give them (for example a serial-number format with a year). Where a document marks content as a placeholder, label it as sample content in the app.
 - Use the \`bacc\` tools to talk to the client: \`mcp__bacc__say\` with agent \`generator\`, two or three short sentences, plain words. Plain text you write is not shown.`;
 
 function generatePrompt(uc: UseCase, notesPath: string, docs: string[], feedback: { comment: string; imagePath: string; pageUrl: string }[]) {
@@ -142,7 +143,7 @@ export async function runGenerate(useCaseId: string) {
     }
     await prisma.useCase.update({ where: { id: useCaseId }, data: { generateStatus: "Starting the preview" } });
     await commitApp(appDir(uc.slug), n);
-    await prisma.useCase.update({ where: { id: useCaseId }, data: { generateCount: n, lastGeneratedAt: new Date() } });
+    await prisma.useCase.update({ where: { id: useCaseId }, data: { generateCount: n, lastGeneratedAt: new Date(), ...(uc.stage === "clarify" || uc.stage === "plan" ? { stage: "build" } : {}) } });
     await stopPreview(useCaseId);
     await startPreview(useCaseId);
     if (feedback.length) {
@@ -155,7 +156,7 @@ export async function runGenerate(useCaseId: string) {
     }
     // Long-term memory: what was built, and the developer (and Sofia, for feedback) learn from it.
     const notes = await fs.readFile(path.join(workspacePath(uc.slug), notesPath), "utf8").catch(() => "");
-    onAppGenerated(uc, notes.slice(0, 4000) || `Version ${n} of the app.`, feedback.map((f) => `${f.ticketRef}: ${f.comment}`).join("\n"));
+    onAppGenerated({ ...uc, stage: uc.stage === "learn" ? "learn" : "build" }, notes.slice(0, 4000) || `Version ${n} of the app.`, feedback.map((f) => `${f.ticketRef}: ${f.comment}`).join("\n"));
     // Write what Generate learned back into BMAD, through BMAD's own agents.
     if (agentsEnabled()) {
       await enqueue(

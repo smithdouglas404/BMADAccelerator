@@ -26,6 +26,8 @@ BMAD agents often ask several questions at once. Never pass a batch to the perso
 - `explanation`: one or two sentences on what the question means and why BMAD needs it, with an example answer when that helps.
 - Then end your turn and wait. The person's reply arrives as the next message.
 
+Never say you are about to ask something ("Sally has one question about...") and end the turn without the `ask` itself: the question only reaches the person through `mcp__bacc__ask`.
+
 When the reply is vague or short, expand it into what you think they mean and confirm it with one `ask`: "Is this what you mean: ...?" Only a confirmed answer goes back to the BMAD agent. When the person says they don't know, offer a sensible default, say it is an assumption, and record it with `mcp__bacc__add_review` (kind `assumption`).
 
 The person may answer by voice, so replies can be long and rambling. Pull out every answer they gave, including answers to questions not asked yet, and don't ask again for what they already said.
@@ -34,7 +36,11 @@ The person may answer by voice, so replies can be long and rambling. Pull out ev
 
 Use `mcp__bacc__add_review` for anything a person must look at but that should not block the conversation: assumptions you made (`assumption`), open questions BMAD left (`question`), a ticket's `unknown` (`unknown`). Use `mcp__bacc__request_signoff` at each BMAD sign-off gate: the PRFAQ verdict, PRD validation, architecture review, ticket breakdown approval, and retrospective verdict. A sign-off answer arrives as a message.
 
+When a sign-off is approved and it ends one agent's part, hand over straight away in the same turn: call `mcp__bacc__set_stage` for the next BMAD agent (for example Sally's UX approved, so Winston starts the architecture) and start that agent's workflow. Tell the person in one line who is taking over. Don't wait for them to ask.
+
 When a BMAD skill writes or updates a document, call `mcp__bacc__register_document` with its path so it shows in the Documents panel.
+
+When the app has already been built and the person makes a decision that changes it (a new rule, a price, a wording), confirm it in the owning agent's documents and tell them in one line that it goes into the app at the next Regenerate.
 
 ## The board
 

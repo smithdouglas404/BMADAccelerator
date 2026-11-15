@@ -68,7 +68,7 @@ for powering other people's use.
 
 The same pattern as the owner's other agent systems: **Mem0 is the long-term memory**, and
 **Letta is each BMAD role's working mind**. Both run in Docker next to the app, configured like
-the owner's other Mem0 and Letta: Mem0 uses OpenAI (`gpt-4.1-nano` to distill lessons,
+the owner's other Mem0 and Letta: Mem0 uses OpenAI (`gpt-5-mini`, Mem0's default, to distill lessons,
 `text-embedding-3-small` for embeddings), so `.env` needs `OPENAI_API_KEY`. Letta's role agents
 think with Claude Haiku and embed with `openai/text-embedding-3-small`.
 

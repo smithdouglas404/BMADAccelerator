@@ -85,6 +85,7 @@ export type UseCaseFull = {
   generateBusy: boolean;
   generateStatus: string;
   generateCount: number;
+  lastGeneratedAt: string | null;
   previewPort: number;
   preview: { hasApp: boolean; port: number; running: boolean; starting: boolean };
   agentsEnabled: boolean;

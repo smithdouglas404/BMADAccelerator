@@ -13,6 +13,7 @@ function agentOf(m: MessageT) {
 export default function Conversation({ data, reload }: { data: UseCaseFull; reload: () => void }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const [readAloud, setReadAloud] = useState(false);
   const [playing, setPlaying] = useState("");
   const end = useRef<HTMLDivElement>(null);
@@ -154,8 +155,24 @@ export default function Conversation({ data, reload }: { data: UseCaseFull; relo
           </div>
         )}
         {data.agentError && !data.agentBusy && (
-          <div className="rounded-xl border border-bad/40 bg-bad/10 px-4 py-2 text-sm" role="alert">
-            Something went wrong: {data.agentError}. Send another message to try again.
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-bad/40 bg-bad/10 px-4 py-2 text-sm" role="alert">
+            <span className="min-w-0 flex-1">The last step didn&rsquo;t finish: {data.agentError.replace(/\.$/, "")}.</span>
+            <button
+              type="button"
+              className="btn btn-ghost shrink-0 px-3 py-1 text-xs"
+              disabled={retrying}
+              onClick={async () => {
+                setRetrying(true);
+                try {
+                  await fetch(`/api/use-cases/${data.id}/retry`, { method: "POST" });
+                } finally {
+                  setRetrying(false);
+                  reload();
+                }
+              }}
+            >
+              {retrying ? "Retrying" : "Try again"}
+            </button>
           </div>
         )}
         <div ref={end} />

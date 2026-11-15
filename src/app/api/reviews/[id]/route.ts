@@ -47,7 +47,9 @@ export async function PATCH(req: Request, { params }: Ctx) {
     case "signoff":
       prompt = `Sign-off decision at the BMAD gate "${item.title.replace(/^Sign off: /, "")}": ${
         parsed.data.status === "approved" && !answer ? "approved" : parsed.data.status === "dismissed" ? "not yet, the client wants to come back to it" : `the client says "${answer}"`
-      }. Continue the BMAD workflow from this gate accordingly.`;
+      }. Continue the BMAD workflow from this gate accordingly.${
+        parsed.data.status === "approved" ? " If this gate ends an agent's part, hand over to the next BMAD agent now, in this turn (set_stage, then start its workflow), and tell the client in one line who is taking over." : ""
+      }`;
       break;
     default:
       prompt = `The client ${parsed.data.status === "dismissed" ? "put off" : answer ? "answered" : "approved"} this review item (${item.kind}): "${item.title}"${answer ? `. Their answer: "${answer}"` : ""}. Use it in the BMAD work where it belongs.`;
