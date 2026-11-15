@@ -120,6 +120,25 @@ export default function KanbanBoard({ data, reload }: { data: UseCaseFull; reloa
                               className="mt-1.5 max-h-24 w-full rounded border border-line object-cover object-top"
                             />
                           )}
+                          {(() => {
+                            const fromFb = data.feedback.find((f) => f.becameRef && f.becameRef === t.ref);
+                            const fb = t.kind === "feedback" ? data.feedback.find((f) => f.ticketRef === t.ref) : undefined;
+                            const title = (ref: string) => data.tickets.find((x) => x.ref === ref)?.title;
+                            return (
+                              <>
+                                {fb?.becameRef && (
+                                  <p className="mt-1 text-[11px] text-accent">Sofia made this ticket {fb.becameRef}</p>
+                                )}
+                                {fromFb && <p className="mt-1 text-[11px] text-accent">From screen feedback {fromFb.ticketRef}</p>}
+                                {(fromFb?.changesRef || fb?.changesRef) && (
+                                  <p className="mt-0.5 text-[11px] text-muted" title={title((fromFb ?? fb)!.changesRef)}>
+                                    Changes {(fromFb ?? fb)!.changesRef}
+                                    {title((fromFb ?? fb)!.changesRef) ? `: ${title((fromFb ?? fb)!.changesRef)}` : ""}
+                                  </p>
+                                )}
+                              </>
+                            );
+                          })()}
                           {t.trackerUrl && (
                             <a href={t.trackerUrl} target="_blank" rel="noreferrer" className="mt-1 block text-[11px] text-accent underline">
                               Open in tracker

@@ -42,7 +42,9 @@ export type ReviewT = {
   source: string;
   targetId: string;
   status: string;
+  answer?: string;
   createdAt: string;
+  resolvedAt?: string | null;
 };
 
 export type UseCaseFull = {
@@ -91,6 +93,8 @@ export type FeedbackT = {
   comment: string;
   pageUrl: string;
   ticketRef: string;
+  becameRef: string;
+  changesRef: string;
   status: string;
   createdAt: string;
 };

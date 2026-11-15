@@ -19,7 +19,9 @@ export default function ReviewDrawer({
   onClose: () => void;
   reload: () => void;
 }) {
+  const [tab, setTab] = useState<"todo" | "history">("todo");
   const items = data.reviews.filter((r) => r.status === "open");
+  const done = data.reviews.filter((r) => r.status !== "open");
   return (
     <>
       <div
@@ -28,7 +30,7 @@ export default function ReviewDrawer({
         aria-hidden
       />
       <aside
-        className={`glass fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col transition-transform duration-300 ${
+        className={`glass fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col !bg-[var(--bg-elev)] shadow-2xl transition-transform duration-300 ${
           open ? "translate-x-0" : "translate-x-full"
         }`}
         aria-label="Review queue"
@@ -43,11 +45,42 @@ export default function ReviewDrawer({
             Close
           </button>
         </div>
-        <div className="flex-1 space-y-3 overflow-y-auto p-4">
-          {items.length === 0 && <p className="text-center text-sm text-muted">All caught up.</p>}
-          {items.map((r) => (
-            <ReviewCard key={r.id} item={r} data={data} reload={reload} />
+        <div className="flex border-b border-line text-sm" role="tablist">
+          {(
+            [
+              ["todo", `To do (${items.length})`],
+              ["history", `History (${done.length})`],
+            ] as const
+          ).map(([k, label]) => (
+            <button
+              key={k}
+              role="tab"
+              aria-selected={tab === k}
+              onClick={() => setTab(k)}
+              className={`flex-1 px-3 py-2 font-medium ${tab === k ? "border-b-2 border-accent text-ink" : "text-muted"}`}
+            >
+              {label}
+            </button>
           ))}
+        </div>
+        <div className="flex-1 space-y-3 overflow-y-auto p-4">
+          {tab === "todo" ? (
+            <>
+              {items.length === 0 && <p className="text-center text-sm text-muted">All caught up.</p>}
+              {items.map((r) => (
+                <ReviewCard key={r.id} item={r} data={data} reload={reload} />
+              ))}
+            </>
+          ) : (
+            <>
+              {done.length === 0 && <p className="text-center text-sm text-muted">Nothing decided yet.</p>}
+              {[...done]
+                .sort((a, b) => (b.resolvedAt ?? b.createdAt).localeCompare(a.resolvedAt ?? a.createdAt))
+                .map((r) => (
+                  <HistoryRow key={r.id} item={r} />
+                ))}
+            </>
+          )}
         </div>
       </aside>
     </>
@@ -107,6 +140,33 @@ function ReviewCard({ item, data, reload }: { item: ReviewT; data: UseCaseFull; 
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+const OUTCOME: Record<string, { label: string; cls: string }> = {
+  approved: { label: "Approved", cls: "bg-good/15 text-good" },
+  edited: { label: "Edited", cls: "bg-good/15 text-good" },
+  answered: { label: "Answered", cls: "bg-accent/15 text-ink" },
+  dismissed: { label: "Skipped", cls: "bg-warn/15 text-warn" },
+};
+
+// A decision already made: what it was, who asked, what the person said and when.
+function HistoryRow({ item }: { item: ReviewT }) {
+  const o = item.kind === "document" && item.status === "dismissed" ? { label: "Declined", cls: "bg-bad/15 text-bad" } : (OUTCOME[item.status] ?? OUTCOME.approved);
+  const when = item.resolvedAt ? new Date(item.resolvedAt) : null;
+  return (
+    <div className="rounded-xl border border-line p-3 text-sm">
+      <div className="flex items-center justify-between gap-2 text-xs text-muted">
+        <span className="chip">{REVIEW_KINDS[item.kind] ?? item.kind}</span>
+        <span className={`chip border-transparent ${o.cls}`}>{o.label}</span>
+      </div>
+      <p className="mt-1.5 font-medium leading-snug">{item.title}</p>
+      {item.answer && <p className="mt-1 text-muted">You said: &ldquo;{item.answer}&rdquo;</p>}
+      <p className="mt-1 text-xs text-muted">
+        Asked by {item.source}
+        {when ? `, decided ${when.toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}` : ""}
+      </p>
     </div>
   );
 }

@@ -106,6 +106,19 @@ export function baccTools(useCaseId: string, slug: string, tally: RunTally) {
         },
       ),
       tool(
+        "link_feedback",
+        "After Sofia turns a piece of screen feedback (F1, F2...) into a ticket, record which ticket it became and, when it changes an earlier requirement, which ticket that was. The board then shows the link both ways.",
+        { feedback_ref: z.string().min(1), ticket_ref: z.string().min(1), changes_ref: z.string().default("") },
+        async ({ feedback_ref, ticket_ref, changes_ref }) => {
+          const r = await prisma.feedback.updateMany({
+            where: { useCaseId, ticketRef: feedback_ref },
+            data: { becameRef: ticket_ref, changesRef: changes_ref },
+          });
+          if (!r.count) return ok(`No feedback ${feedback_ref}.`);
+          return ok();
+        },
+      ),
+      tool(
         "register_document",
         "Show a document a BMAD skill wrote or updated in the person's Documents panel. Path relative to the project root.",
         { path: z.string().min(1), title: z.string().min(1), type: z.string().default("other"), summary: z.string().default("") },

@@ -51,7 +51,7 @@ export async function POST(req: Request, { params }: Ctx) {
     await enqueue(
       id,
       "feedback",
-      `The client marked up a screen of the generated app (page ${parsed.data.pageUrl}) and said: "${parsed.data.comment}". The marked-up screenshot is bacc/feedback/feedback-${n}.png (open it with Read: the drawing shows the spot) with notes in bacc/feedback/feedback-${n}.md. Hand it to Sofia (\`bmad-agent-po\`) to turn into a backlog ticket (story or bug) in the ticket tree, referencing the screenshot, and confirm the meaning with the client first if it is unclear. It will be built in the next Generate.`,
+      `The client marked up a screen of the generated app (page ${parsed.data.pageUrl}) and said: "${parsed.data.comment}". The marked-up screenshot is bacc/feedback/feedback-${n}.png (open it with Read: the drawing shows the spot) with notes in bacc/feedback/feedback-${n}.md. Hand it to Sofia (\`bmad-agent-po\`) to turn into a backlog ticket (story or bug) in the ticket tree, referencing the screenshot, and confirm the meaning with the client first if it is unclear. If it changes something an earlier ticket asked for, keep that ticket as it was and make a new ticket that names the earlier one and says what changes, and have John update the PRD requirement if one is affected. Then call \`link_feedback\` with feedback_ref "F${n}", the new ticket's ref and, if it changes one, the earlier ticket's ref. Tell the client in one line which ticket it became; it waits in the backlog until they move it to Ready and press Generate.`,
     );
     await prisma.feedback.update({ where: { id: fb.id }, data: { status: "sent" } });
   }

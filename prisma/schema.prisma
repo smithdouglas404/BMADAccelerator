@@ -182,6 +182,8 @@ model Feedback {
   imagePath  String
   pageUrl    String   @default("")
   ticketRef  String   @default("")
+  becameRef  String   @default("") // the BMAD ticket Sofia made from it
+  changesRef String   @default("") // the earlier ticket it changes, if any
   status     String   @default("new") // new | sent | built
   createdAt  DateTime @default(now())
   useCase    UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)

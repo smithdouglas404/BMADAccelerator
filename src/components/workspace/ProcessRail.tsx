@@ -53,11 +53,20 @@ export default function ProcessRail({
             </ul>
             {s.gates.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1">
-                {s.gates.map((g) => (
-                  <span key={g} className="chip text-[10px] text-muted" title="Sign-off gate">
-                    <LockIcon /> {g}
-                  </span>
-                ))}
+                {s.gates.map((g) => {
+                  const ok = data.reviews.some(
+                    (r) => r.kind === "signoff" && (r.status === "approved" || r.status === "answered") && r.title.toLowerCase().includes(g.toLowerCase()),
+                  );
+                  return (
+                    <span
+                      key={g}
+                      className={`chip text-[10px] ${ok ? "border-good/40 bg-good/10 text-good" : "text-muted"}`}
+                      title={ok ? "Signed off (see Review, History)" : "Sign-off gate: waiting for your approval"}
+                    >
+                      {ok ? "✓" : <LockIcon />} {g}
+                    </span>
+                  );
+                })}
               </div>
             )}
           </button>

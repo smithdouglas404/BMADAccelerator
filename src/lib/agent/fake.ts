@@ -27,6 +27,16 @@ export async function fakeAgentTurn(uc: UseCase, prompt: string, tally: RunTally
     await say("ux", "I've noted the screen layout from the generated app in the UX notes.");
     return;
   }
+  const fb = prompt.match(/feedback_ref "(F\d+)"/);
+  if (fb) {
+    const toml = workspacePath(uc.slug, "_bmad-output", uc.initiative, "tickets", "epic-greeting", "tickets", "tickets.toml");
+    const text = await fs.readFile(toml, "utf8").catch(() => "");
+    const id = (text.match(/^\[\[entry\]\]/gm)?.length ?? 0) + 1;
+    await fs.appendFile(toml, `\n[[entry]]\nid = ${id}\ntype = "story"\ntitle = "Change the greeting (from screen feedback ${fb[1]})"\nverify = "Changes 1.1. See the marked-up screenshot."\nafter = []\n`);
+    await prisma.feedback.updateMany({ where: { useCaseId: uc.id, ticketRef: fb[1] }, data: { becameRef: `1.${id}`, changesRef: "1.1" } });
+    await say("po", `I've added your change as story 1.${id}. It changes story 1.1 and waits in the backlog until you move it to Ready and press Generate.`);
+    return;
+  }
   if (userTurns >= 2) {
     const init = workspacePath(uc.slug, "_bmad-output", uc.initiative);
     const epicDir = path.join(init, "tickets", "epic-greeting");
