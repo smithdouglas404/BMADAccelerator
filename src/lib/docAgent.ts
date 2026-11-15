@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { BMAD_DOC_TYPES, DOC_STAGES } from "@/lib/bmad";
+import { AGENTS, BMAD_DOC_TYPES, DOC_STAGES, ROUTABLE_AGENTS } from "@/lib/bmad";
 import { convertToText } from "@/lib/provision";
 
 export const MODEL = process.env.BACC_MODEL || "claude-opus-5-5";
@@ -13,6 +13,7 @@ const Suggestion = z.object({
   description: z.string(),
   summary: z.string(),
   tags: z.array(z.string()),
+  agents: z.array(z.object({ agent: z.enum(ROUTABLE_AGENTS), why: z.string() })),
 });
 
 const MAX_CHARS = 400_000;
@@ -47,6 +48,13 @@ ${types}
 - description: one plain sentence saying what kind of file this is and what it covers (for example "A 12-slide sales deck describing the new onboarding offer").
 - summary: a narrative of one or two short paragraphs, in plain words for a non-technical reader. Cover what the document is, who it is for or who wrote it, the main points, any issues, risks or open questions it raises, and the outcomes or decisions it points to. Leave out anything the document doesn't say.
 - tags: three to six short lowercase tags a business person would use (topics, teams, systems).
+- agents: every BMAD agent this document matters to, most important first, each with one plain sentence on what they will use from it. A document that covers several areas goes to several agents. The agents:
+  - analyst (Mary): the business problem, market, customers, goals and the product brief.
+  - pm (John): product requirements (PRD): features, scope, priorities, success measures.
+  - ux (Sally): screens, flows, look and feel, brand, content.
+  - architect (Winston): systems, data, integrations, AI or technical choices, security.
+  - po (Sofia): epics, stories and the backlog.
+  - dev (Amelia): code, technical setup and tests.
 ${truncated ? "\nThe document is long; you are seeing the first part only.\n" : ""}
 <document>
 ${text}
@@ -69,13 +77,14 @@ ${text}
       description: doc.description || s.description,
       summary: s.summary,
       tags: doc.tags.length ? doc.tags : s.tags.slice(0, 6),
+      routing: s.agents.filter((a, i, all) => all.findIndex((b) => b.agent === a.agent) === i),
     },
   });
   const label = BMAD_DOC_TYPES.find((t) => t.key === s.bmadType)?.label ?? s.bmadType;
   await prisma.reviewItem.updateMany({
     where: { targetId: doc.id, kind: "document", status: "open" },
     data: {
-      detail: `For: ${DOC_STAGES.find((x) => x.key === doc.stage)?.label ?? "General (any stage)"}. Suggested type: ${label}. ${s.description} Read the summary, then approve it so BMAD uses it, or decline it.`,
+      detail: `For: ${DOC_STAGES.find((x) => x.key === doc.stage)?.label ?? "General (any stage)"}. Suggested type: ${label}. ${s.description} Goes to ${s.agents.map((a) => AGENTS[a.agent].name).join(", ") || "the concierge"}. Read the summary, then approve it so BMAD uses it, or decline it.`,
     },
   });
 }

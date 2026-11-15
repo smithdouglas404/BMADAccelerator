@@ -11,6 +11,7 @@ export type DocumentT = {
   status: string;
   stage: string;
   declineNote: string;
+  routing: { agent: string; why: string }[];
   origin?: string;
 };
 

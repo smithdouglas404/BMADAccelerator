@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { BMAD_DOC_TYPES, DOC_STAGES } from "@/lib/bmad";
+import { AGENTS, BMAD_DOC_TYPES, DOC_STAGES, ROUTABLE_AGENTS, type Routing } from "@/lib/bmad";
 import { writeIntake } from "@/lib/provision";
 import { enqueue, agentsEnabled } from "@/lib/agent/runner";
 
@@ -17,6 +17,7 @@ const Body = z
     status: z.enum(["in_review", "approved", "declined"]),
     stage: z.enum(DOC_STAGES.map((s) => s.key) as [string, ...string[]]),
     declineNote: z.string().max(2000),
+    routing: z.array(z.object({ agent: z.enum(ROUTABLE_AGENTS), why: z.string().max(1000) })).max(6),
   })
   .partial();
 
@@ -67,10 +68,15 @@ export async function PATCH(req: Request, { params }: Ctx) {
       await writeIntake(uc.id);
       if (agentsEnabled()) {
         const type = BMAD_DOC_TYPES.find((t) => t.key === doc.bmadType);
+        const routing = (doc.routing as Routing) ?? [];
         await enqueue(
           uc.id,
           "document",
-          `The client approved a new document: "${doc.fileName}" (${type?.label ?? doc.bmadType}; usually goes to ${type?.routesTo ?? "the concierge"}; for ${DOC_STAGES.find((x) => x.key === doc.stage)?.label ?? "any stage"}). Its text version is ${doc.textPath || "not available"}; it is listed in bacc/intake.md. Bring it into the BMAD work where it belongs, using that agent's own workflow, and tell the client in one line.`,
+          `The client approved a new document: "${doc.fileName}" (${type?.label ?? doc.bmadType}; for ${DOC_STAGES.find((x) => x.key === doc.stage)?.label ?? "any stage"}). Its text version is ${doc.textPath || "not available"}; it is listed in bacc/intake.md. Summary: ${doc.summary}\n\nIt matters to these BMAD agents:\n${
+            routing.length
+              ? routing.map((r) => `- ${AGENTS[r.agent as keyof typeof AGENTS]?.name} (\`${AGENTS[r.agent as keyof typeof AGENTS]?.skill}\`): ${r.why}`).join("\n")
+              : `- ${type?.routesTo ?? "the concierge"}`
+          }\n\nBring it to each of them in BMAD's order (earlier stages first), using each agent's own workflow to fold it into their documents. Each agent should compare it with what BMAD already has and ask the client, one question at a time, about anything unclear, missing or in conflict. Tell the client in one line who is picking it up.`,
         );
       }
     }

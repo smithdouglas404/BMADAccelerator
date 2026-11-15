@@ -93,6 +93,7 @@ model Document {
   status      String   @default("in_review") // in_review | approved | declined
   stage       String   @default("general") // general | clarify | plan | build | learn
   declineNote String   @default("")
+  routing     Json     @default("[]") // [{ agent, why }]: every BMAD agent this document matters to
   origin      String   @default("upload") // upload | bmad
   textPath    String   @default("")
   createdAt   DateTime @default(now())

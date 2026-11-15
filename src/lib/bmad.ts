@@ -70,6 +70,10 @@ export const DOC_STAGES: { key: string; label: string }[] = [
   { key: "learn", label: "Stage 4: Learn and adjust" },
 ];
 
+// The BMAD agents a document can be routed to.
+export const ROUTABLE_AGENTS = ["analyst", "pm", "ux", "architect", "po", "dev"] as const;
+export type Routing = { agent: string; why: string }[];
+
 export const AGENTS: Record<
   AgentKey,
   { name: string; role: string; skill: string; stage: StageKey; color: string }
@@ -94,6 +98,7 @@ export const BMAD_DOC_TYPES: {
   hint: string;
 }[] = [
   { key: "prd", label: "Existing PRD", routesTo: "John (validate)", hint: "prd, requirements, product requirements" },
+  { key: "businesscase", label: "Business case", routesTo: "Mary, John", hint: "business case, business-case, businesscase, proposal, investment" },
   { key: "brief", label: "Brief or BRD", routesTo: "Mary", hint: "brief, business requirements, brd, charter" },
   { key: "research", label: "Research report", routesTo: "Deep Recon (process)", hint: "research, market, competitor, survey, analysis" },
   { key: "design", label: "Design system or brand", routesTo: "bmad-ux", hint: "design, brand, style, figma, ui, mock" },

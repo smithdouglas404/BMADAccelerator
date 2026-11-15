@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import VoiceRecorder from "@/components/VoiceRecorder";
-import { BMAD_DOC_TYPES, DOC_STAGES } from "@/lib/bmad";
+import { AGENTS, BMAD_DOC_TYPES, DOC_STAGES, ROUTABLE_AGENTS } from "@/lib/bmad";
 import type { DocumentT } from "@/lib/types";
 
 function size(bytes: number) {
@@ -30,6 +30,7 @@ export default function DocumentCard({ doc, onSaved }: { doc: DocumentT; onSaved
   const [newTag, setNewTag] = useState("");
   const [description, setDescription] = useState(doc.description);
   const [summary, setSummary] = useState(doc.summary);
+  const [routing, setRouting] = useState(doc.routing ?? []);
   const pending = !doc.summary || doc.summary.startsWith("No summary yet");
   // Fill in what the document agent writes while the person hasn't started editing.
   const edited = useRef(false);
@@ -39,7 +40,8 @@ export default function DocumentCard({ doc, onSaved }: { doc: DocumentT; onSaved
     setSummary(doc.summary);
     setTags(doc.tags);
     setType(doc.bmadType);
-  }, [doc.description, doc.summary, doc.tags, doc.bmadType]);
+    setRouting(doc.routing ?? []);
+  }, [doc.description, doc.summary, doc.tags, doc.bmadType, doc.routing]);
   const [declining, setDeclining] = useState(false);
   const [note, setNote] = useState(doc.declineNote || "");
   const [busy, setBusy] = useState(false);
@@ -56,6 +58,7 @@ export default function DocumentCard({ doc, onSaved }: { doc: DocumentT; onSaved
         bmadType: type,
         stage,
         tags,
+        routing,
         description,
         ...(summary && !summary.startsWith("No summary yet") ? { summary } : {}),
         ...(next ? { status: next } : {}),
@@ -133,6 +136,36 @@ export default function DocumentCard({ doc, onSaved }: { doc: DocumentT; onSaved
         </label>
       </div>
       <div className="mt-3 text-xs text-muted">
+        <p className="font-semibold">
+          Goes to <span className="font-normal">(the BMAD agents who will use it; tap to add or remove)</span>
+        </p>
+        <ul className="mt-1 space-y-1">
+          {routing.map((r) => {
+            const a = AGENTS[r.agent as keyof typeof AGENTS];
+            return (
+              <li key={r.agent} className="flex items-start gap-2">
+                <button
+                  className="chip shrink-0 border-transparent text-ink"
+                  style={{ background: `${a?.color}26` }}
+                  onClick={() => setRouting(routing.filter((x) => x.agent !== r.agent))}
+                  aria-label={`Remove ${a?.name}`}
+                >
+                  {a?.name}, {a?.role} ×
+                </button>
+                {r.why && <span className="pt-0.5">{r.why}</span>}
+              </li>
+            );
+          })}
+        </ul>
+        <div className="mt-1 flex flex-wrap gap-1">
+          {ROUTABLE_AGENTS.filter((k) => !routing.some((r) => r.agent === k)).map((k) => (
+            <button key={k} className="chip" onClick={() => setRouting([...routing, { agent: k, why: "" }])} aria-label={`Add ${AGENTS[k].name}`}>
+              + {AGENTS[k].name}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="mt-3 text-xs text-muted">
         <p className="font-semibold">Tags <span className="font-normal">(labels that help the agents find this file; tap to add or remove)</span></p>
         <div className="mt-1 flex flex-wrap gap-1">
           {tags.map((t) => (
@@ -171,7 +204,7 @@ export default function DocumentCard({ doc, onSaved }: { doc: DocumentT; onSaved
         </label>
       )}
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-xs text-muted">Goes to: {route}. Tap a mic button to talk instead of typing.</span>
+        <span className="text-xs text-muted">{routing.length ? "" : `Goes to: ${route}. `}Tap a mic button to talk instead of typing.</span>
         <div className="flex flex-wrap gap-2">
           {declining ? (
             <>
