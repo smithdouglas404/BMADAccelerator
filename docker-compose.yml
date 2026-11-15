@@ -117,6 +117,7 @@ services:
       BACC_IMAGE_QUALITY: ${BACC_IMAGE_QUALITY:-medium}
       BACC_IMAGE_LIMIT: ${BACC_IMAGE_LIMIT:-12}
       BACC_SHADCN_MCP: ${BACC_SHADCN_MCP:-}
+      BACC_APP_LLM: ${BACC_APP_LLM:-openai}
     volumes:
       - workspaces:/data/workspaces
       # The agents' session history, so conversations resume after a rebuild.

@@ -58,6 +58,14 @@ Open http://localhost:3000. Each use case's generated app runs on its own port
 
 The concierge is also the client's expert advisor: a product strategist, architect and design lead. Before each BMAD agent starts it brings two or three ideas of its own, it gives Sally a design concept with two or three directions (`bacc/design/concept.md`), it reviews every document before sign-off, and it reviews every build after Generate. The client decides on every idea. The tools enforce it: a handover waits for the advice, Sally waits for the concept, and a sign-off needs the advisor's review. See `bmad-module/bacc-expert-advisor/SKILL.md` and `CLAUDE.md` for the standing rules.
 
+## The AI and agentic advisor
+
+At every BMAD stage the concierge also reads the documents for jobs an AI agent could do and the steps where a person must stay in the loop, and suggests them. Before Winston (architect) starts it writes `bacc/advisor/agentic-map.md` and asks the client the questions BMAD doesn't (autonomy, approvals, what happens on a timeout). Winston waits for the map.
+
+Every pilot that uses agents is built on [Inngest AgentKit](https://agentkit.inngest.com) (`@inngest/agent-kit`): agents, tools, networks, routers, state, memory, models, MCP, human in the loop and streaming all map to its concepts, with no other framework. The AgentKit docs and examples are pinned in `scripts/fetch-vendor.sh` and copied into each workspace at `.claude/skills/bacc-agentic-advisor/library/`, so the advisor and Generate read the same library. Postgres is added only when the documents need a database (PGlite, in process).
+
+A generated app gets none of the accelerator's keys, with one exception: a model key for its own agents, chosen by `BACC_APP_LLM` (`openai` by default, `anthropic`, or `off`). Without a key the app runs its agents in demo mode.
+
 ## How generated apps are designed
 
 - **Picture it** (setup step 3): Claude researches products like the use case and offers clickable features and three visual directions, each with a small rendered preview. The picks go into `bacc/intake.md` for John, Sally and Generate.

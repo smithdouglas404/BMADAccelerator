@@ -6,6 +6,19 @@ import { prisma } from "@/lib/db";
 import { workspacePath } from "@/lib/workspace";
 
 // Each use case's generated app runs on its own port, so it has its own URL.
+// Generated apps get a minimal environment, never the accelerator's secrets. The one exception is a
+// model key for the app's own AgentKit agents (BACC_APP_LLM: "openai", the default, "anthropic" or "off").
+export function previewEnv(port: number): NodeJS.ProcessEnv {
+  const keep = ["PATH", "HOME", "USER", "SHELL", "LANG", "TZ", "TMPDIR", "CHROMIUM_PATH", "UV_CACHE_DIR", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy"];
+  const env = { PORT: String(port), HOST: "0.0.0.0", HOSTNAME: "0.0.0.0" } as Record<string, string | undefined>;
+  for (const k of Object.keys(process.env)) if (k.startsWith("npm_config_")) env[k] = process.env[k];
+  for (const k of keep) if (process.env[k]) env[k] = process.env[k];
+  const llm = (process.env.BACC_APP_LLM || "openai").toLowerCase();
+  if (llm === "openai" && process.env.OPENAI_API_KEY) env.OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+  if (llm === "anthropic" && process.env.ANTHROPIC_API_KEY) env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+  return env as NodeJS.ProcessEnv;
+}
+
 export const PORT_BASE = Number(process.env.BACC_PREVIEW_PORT_BASE || 4100);
 export const PORT_COUNT = process.env.BACC_PREVIEW_PORT_LAST
   ? Number(process.env.BACC_PREVIEW_PORT_LAST) - PORT_BASE + 1
@@ -125,12 +138,7 @@ export async function startPreview(useCaseId: string) {
     await freePort(port);
     const log = createWriteStream(workspacePath(uc.slug, "bacc", "preview.log"), { flags: "a" });
     log.write(`\n--- starting preview on ${port} at ${new Date().toISOString()}\n`);
-    const env: NodeJS.ProcessEnv = { ...process.env, PORT: String(port), HOST: "0.0.0.0", HOSTNAME: "0.0.0.0" };
-    delete (env as Record<string, string | undefined>).NODE_ENV;
-    delete env.DATABASE_URL;
-    delete env.ANTHROPIC_API_KEY;
-    delete env.CLAUDE_CODE_OAUTH_TOKEN;
-    delete env.ELEVENLABS_API_KEY;
+    const env = previewEnv(port);
     let child: ChildProcess;
     if (await exists(path.join(dir, "package.json"))) {
       const pkg = JSON.parse(await fs.readFile(path.join(dir, "package.json"), "utf8"));

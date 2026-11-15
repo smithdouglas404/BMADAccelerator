@@ -1,6 +1,6 @@
 # Inngest AgentKit: the accelerator's standard agent harness
 
-Docs: https://agentkit.inngest.com (full text for agents: https://agentkit.inngest.com/llms-full.txt). Checked 2026-11-15: `@inngest/agent-kit` 0.13.2, `inngest` 4.26.2, `inngest-cli` 1.53.0. Pin these exact versions in generated apps; check the docs when a newer one is needed.
+Docs: https://agentkit.inngest.com. **The full docs and examples are in this skill's `library/` folder** (pinned to release 0.13.2, copied into every workspace): `library/docs/` (concepts, advanced-patterns, streaming, reference, getting-started) and `library/examples/` (`agentkit-starter`: a Next.js chat with Postgres history, streaming and a shadcn/ui interface; `support-agent-human-in-the-loop`; `mem0-memory`; `realtime-ui-nextjs`; `use-agent`; `mcp-neon-agent`; `quick-start`). Read the page for a concept before you use it; don't write AgentKit from memory. Checked 2026-11-15: `@inngest/agent-kit` 0.13.2, `inngest` 4.26.2, `inngest-cli` 1.53.0. Pin these exact versions in generated apps; check the docs when a newer one is needed.
 
 ## Why this one
 
@@ -102,7 +102,8 @@ createServer({ functions: [tailor], networks: [network] }).listen(Number(process
 
 ## Running a pilot
 
-- `npm start` starts the app and the Inngest dev server together: `inngest-cli dev --no-discovery -u http://127.0.0.1:$PORT/api/inngest` (pin the `inngest-cli` version in package.json; set `INNGEST_DEV=1` for the app). Traces of every run show at http://127.0.0.1:8288.
-- Data: SQLite for the pilot by default (the preview has no database server); Postgres when the architecture names it, with the same tables. History threads live in the same database.
+- `npm start` starts the app and the Inngest dev server together: `inngest-cli dev --no-discovery -u http://127.0.0.1:$PORT/api/inngest -p $((PORT+1000))` (pin the `inngest-cli` version in package.json; set `INNGEST_DEV=1` and `INNGEST_BASE_URL=http://127.0.0.1:$((PORT+1000))` for the app). Several pilots run side by side, so derive the dev server port from the app's own `PORT`; never use the default 8288.
+- Data: SQLite for the pilot by default (the preview has no database server). When the architecture names Postgres, run it in-process with PGlite (`@electric-sql/pglite`) behind a small adapter that takes a `DATABASE_URL` in production, so no extra service is needed. History threads live in the same database.
+- Model key: the accelerator gives each pilot one key for its agents, `OPENAI_API_KEY` by default (or `ANTHROPIC_API_KEY`, set by `BACC_APP_LLM`); pick the adapter that matches the key that is set, with a small model.
 - No model key in the environment: a **demo mode** with scripted agent replies, labelled "Demo: no AI model connected" in the UI, so every flow, including approvals, still works end to end.
 - Production adds: Inngest Cloud or self-hosted Inngest (`inngest start` with Postgres and Redis) with `INNGEST_EVENT_KEY` and `INNGEST_SIGNING_KEY`; real auth for the approver; Postgres. Write this in the architecture, don't build it in the pilot.

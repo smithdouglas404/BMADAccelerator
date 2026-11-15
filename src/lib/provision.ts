@@ -93,8 +93,44 @@ export async function installSkills(useCaseId: string, slug: string) {
 // turn so a rule added later reaches use cases created before it.
 export async function syncAcceleratorSkills(slug: string) {
   const ws = workspacePath(slug);
+  const targets = await skillTargets();
   for (const name of await fs.readdir(CONCIERGE_DIR)) {
-    for (const t of await skillTargets()) await copyDir(path.join(CONCIERGE_DIR, name), path.join(ws, t, name));
+    for (const t of targets) await copyDir(path.join(CONCIERGE_DIR, name), path.join(ws, t, name));
+  }
+  // The AgentKit library (its docs and the examples the reference names) goes with the bacc-agentic-advisor skill.
+  const ak = path.join(VENDOR_DIR, "agentkit");
+  if (!(await exists(ak))) return;
+  const pinned = (await fs.readFile(path.join(ak, ".pinned"), "utf8").catch(() => "")).trim();
+  for (const t of targets) {
+    const dest = path.join(ws, t, "bacc-agentic-advisor", "library");
+    const mark = path.join(dest, ".library");
+    if ((await fs.readFile(mark, "utf8").catch(() => "")).trim() === pinned) continue;
+    await copyDocs(path.join(ak, "docs"), path.join(dest, "docs"));
+    for (const ex of AGENTKIT_EXAMPLES) await copyDocs(path.join(ak, "examples", ex), path.join(dest, "examples", ex));
+    await fs.copyFile(path.join(ak, "LICENSE.md"), path.join(dest, "LICENSE.md")).catch(() => {});
+    await fs.writeFile(mark, pinned + "\n");
+  }
+}
+
+const AGENTKIT_EXAMPLES = ["agentkit-starter", "support-agent-human-in-the-loop", "mem0-memory", "realtime-ui-nextjs", "use-agent", "mcp-neon-agent", "quick-start"];
+
+// Text files only (no images, lockfiles or node_modules): the library is for reading.
+async function copyDocs(src: string, dest: string) {
+  let entries: import("fs").Dirent[] = [];
+  try {
+    entries = await fs.readdir(src, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const e of entries) {
+    if (e.name === "node_modules" || e.name === "graphics" || e.name.startsWith(".")) continue;
+    const from = path.join(src, e.name);
+    const to = path.join(dest, e.name);
+    if (e.isDirectory()) await copyDocs(from, to);
+    else if (/\.(mdx?|tsx?|jsx?|mjs|json|css|sql|txt|example)$/.test(e.name) && !/lock\.json$/.test(e.name)) {
+      await fs.mkdir(dest, { recursive: true });
+      await fs.copyFile(from, to);
+    }
   }
 }
 
