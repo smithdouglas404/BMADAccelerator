@@ -22,6 +22,8 @@ TOKEN="$(perl -0777 -ne '
   s/([A-Za-z0-9_-])[ \t]*\n[ \t]*(?=[A-Za-z0-9_-])/$1/g;
   my @all = /(sk-ant-oat[A-Za-z0-9_-]+)/g;
   my ($best) = sort { length($b) <=> length($a) } @all;
+  # The window can glue the next word ("Store...") onto the token; tokens end in "AA".
+  $best = $1 if $best && $best =~ /^(sk-ant-oat.{85,}?AA)(?=[A-Z][a-z])/;
   print $best if $best;' "$LOG")"
 
 if [ "${#TOKEN}" -lt 90 ]; then
