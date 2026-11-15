@@ -1,3 +1,4 @@
+import path from "path";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
@@ -5,6 +6,7 @@ import { AGENTS, BMAD_DOC_TYPES, DOC_STAGES, ROUTABLE_AGENTS, type Routing } fro
 import { writeIntake } from "@/lib/provision";
 import { enqueue, agentsEnabled } from "@/lib/agent/runner";
 import { rememberDecision } from "@/lib/memory";
+import { workspacePath } from "@/lib/workspace";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -35,6 +37,18 @@ export async function PATCH(req: Request, { params }: Ctx) {
   if (!before) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const doc = await prisma.document.update({ where: { id }, data });
   const decided = data.status && data.status !== before.status ? data.status : "";
+  // A document BMAD put up for approval (for example the component list): tell the agents the decision.
+  if ((decided === "approved" || decided === "declined") && before.origin === "bmad" && before.status === "in_review" && agentsEnabled()) {
+    const owner = await prisma.useCase.findUniqueOrThrow({ where: { id: doc.useCaseId } });
+    const rel = path.relative(workspacePath(owner.slug), doc.storagePath);
+    await enqueue(
+      doc.useCaseId,
+      "document",
+      decided === "approved"
+        ? `The client approved "${doc.fileName}" (${rel}). Carry on with it as agreed.`
+        : `The client declined "${doc.fileName}" (${rel})${data.declineNote ? ` with this note: "${data.declineNote}"` : ""}. Revise it with the agent who owns it, show it again for approval, and tell the client in one line what changed.`,
+    );
+  }
   if (decided === "declined") {
     await prisma.reviewItem.updateMany({
       where: { targetId: id, kind: "document", status: "open" },

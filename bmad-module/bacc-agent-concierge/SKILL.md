@@ -46,6 +46,19 @@ When the app has already been built and the person makes a decision that changes
 
 When Sally starts the UX work, ask the person once whether they have a design system of their own to upload (its components and stack, for example React or Node). Every app is built on the shadcn/ui design system (React and Tailwind CSS) by default, themed to a design direction made for this use case; only an uploaded design system of their own replaces it, and a brand guide or logo just sets the theme. Tell them that in plain words.
 
+## Components from the PRD
+
+Every app is built on shadcn/ui, and the shadcn MCP server (`mcp__shadcn__*`) lets you look up its real components, blocks and charts. Use it so the UX starts from parts that exist:
+
+1. As soon as John's PRD is approved at its sign-off, before Sally starts, write the component list. Read the PRD (and `bacc/intake.md`). For each screen or requirement, find the shadcn/ui items that serve it with `mcp__shadcn__search_items_in_registries` and `mcp__shadcn__view_items_in_registries` (registry `@shadcn`), and check usage with `mcp__shadcn__get_item_examples_from_registries` where it helps. Prefer a ready block (a login page, a dashboard, a pricing section) over assembling one, and a chart item for any requirement that shows numbers over time or by group.
+2. Write it to `bacc/design/components.md` in John's name: a short intro, then one section per screen or requirement (cite its PRD number or heading), each with the items (exact registry name, for example `@shadcn/data-table`, `@shadcn/chart-area-interactive`, `@shadcn/login-03`) and one plain line on why each fits. End with "Gaps": requirements no shadcn item covers, to be designed. Only list items the MCP returned; never invent names.
+3. Register it with `mcp__bacc__register_document` (type `ux`, title "Component list", review `true`) and tell the person in one line, in plain words, that John matched the requirements to ready-made building blocks and it is waiting for their approval in Documents. Don't wait for it: hand over to Sally.
+4. Hand it to Sally as an input to her UX work: DESIGN.md and EXPERIENCE.md name these components where they use them, and Sally may swap or add items (look them up the same way). If the person declines it, revise it with their note and show it again.
+5. If the PRD was approved before this step existed and there is no `bacc/design/components.md` yet, write the list at the start of your next turn the same way.
+6. When the PRD changes later in a way that adds or removes screens, update the list the same way and show it again for approval.
+
+If the shadcn tools are not available, skip the look-ups, tell Sally to name shadcn/ui components from her own knowledge, and don't mention it to the person.
+
 ## The board
 
 The board shows BMAD's ticket tree, read with Sofia's own `tickets.py`. You never edit the board directly; Sofia's skill writes the tree. When the person moves a card, you are told the move and whether they gave a reason. Pass it to the BMAD agent that owns that work, in that agent's own workflow (Sofia `REPLAN` or `REFINE` for scope, Amelia for build state), and tell the person in one line what happened.

@@ -100,6 +100,28 @@ export async function installDesignSkills(slug: string) {
   }
 }
 
+// The shadcn MCP server reads a components.json in its folder. This one only serves look-ups
+// (registry search, examples, add commands); the app keeps its own in app/.
+const SHADCN_LOOKUP = {
+  $schema: "https://ui.shadcn.com/schema.json",
+  style: "new-york",
+  rsc: false,
+  tsx: true,
+  tailwind: { config: "", css: "src/index.css", baseColor: "neutral", cssVariables: true, prefix: "" },
+  aliases: { components: "@/components", utils: "@/lib/utils", ui: "@/components/ui", lib: "@/lib", hooks: "@/hooks" },
+  iconLibrary: "lucide",
+};
+
+export async function shadcnLookupDir(slug: string) {
+  const dir = workspacePath(slug, "bacc", "shadcn");
+  const file = path.join(dir, "components.json");
+  if (!(await exists(file))) {
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(file, JSON.stringify(SHADCN_LOOKUP, null, 2) + "\n");
+  }
+  return dir;
+}
+
 async function uvRun(cwd: string, args: string[]) {
   const { stdout } = await run(UV, ["run", "--no-cache", ...args], {
     cwd,

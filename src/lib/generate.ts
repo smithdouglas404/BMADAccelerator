@@ -57,6 +57,8 @@ Design (as much a part of the job as the features):
 
 The app must run with no accounts or paid services: \`npm install\` then \`npm start\` (do any build in \`npm run build\`, which runs before start), listening on \`process.env.PORT\` and host 0.0.0.0. Use SQLite or files for data.
 
+Components: if \`bacc/design/components.md\` exists, it maps the PRD's screens and requirements to shadcn/ui components, blocks and charts the client approved. Build each screen from the items it names. The shadcn MCP tools (\`mcp__shadcn__*\`) are available: look items up with \`mcp__shadcn__search_items_in_registries\` and \`mcp__shadcn__view_items_in_registries\`, check usage with \`mcp__shadcn__get_item_examples_from_registries\`, and get the exact install command with \`mcp__shadcn__get_add_command_for_items\`. Run every shadcn command inside \`app/\`, never at the project root. If you use an item the list doesn't name, or skip one, say so in the UI and UX notes. Before your screenshot rounds, run \`mcp__shadcn__get_audit_checklist\` and work through it.
+
 Check it with your own eyes before you finish:
 1. Start it on a spare port (for example 4999).
 2. Screenshot every main page at desktop and phone size, saving into the project's \`bacc/design/shots/\` folder (the task gives its full path): \`node ${SHOT} http://127.0.0.1:4999 <shots folder> / /other-page ...\`. It prints each file and warns about page errors or content wider than the screen. Keep the screenshots there, not in /tmp.

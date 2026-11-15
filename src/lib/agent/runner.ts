@@ -3,7 +3,7 @@ import path from "path";
 import { query, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { prisma } from "@/lib/db";
 import { workspacePath } from "@/lib/workspace";
-import { provisionWorkspace, writeIntake } from "@/lib/provision";
+import { provisionWorkspace, shadcnLookupDir, writeIntake } from "@/lib/provision";
 import { syncBoard } from "@/lib/bmadTickets";
 import { MODEL } from "@/lib/docAgent";
 import { LimitError, authEnv, authOrder, claudeConfigured, limitMessage, type Auth } from "@/lib/agent/auth";
@@ -160,6 +160,8 @@ async function runSdkTurnOnce(opts: {
   const auth = opts.auth ?? authOrder()[0] ?? "key";
   const ws = workspacePath(opts.slug);
   const texts: string[] = [];
+  // The official shadcn MCP server (pinned in the image): component, block and chart look-ups.
+  const shadcnDir = process.env.BACC_SHADCN_MCP === "0" ? "" : await shadcnLookupDir(opts.slug).catch(() => "");
   const q = query({
     prompt: opts.prompt,
     options: {
@@ -168,7 +170,10 @@ async function runSdkTurnOnce(opts: {
       ...(opts.effort ? { effort: opts.effort } : {}),
       settingSources: ["project"],
       systemPrompt: { type: "preset", preset: "claude_code", append: opts.appendSystem },
-      mcpServers: { bacc: baccTools(opts.useCaseId, opts.slug, opts.tally) },
+      mcpServers: {
+        bacc: baccTools(opts.useCaseId, opts.slug, opts.tally),
+        ...(shadcnDir ? { shadcn: { type: "stdio" as const, command: process.env.SHADCN_BIN || "shadcn", args: ["mcp", "--cwd", shadcnDir] } } : {}),
+      },
       permissionMode: "bypassPermissions",
       allowDangerouslySkipPermissions: true,
       disallowedTools: ["AskUserQuestion"],

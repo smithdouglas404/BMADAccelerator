@@ -7,6 +7,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=ghcr.io/astral-sh/uv:0.9.5 /uv /uvx /usr/local/bin/
 ENV UV_TOOL_BIN_DIR=/usr/local/bin UV_TOOL_DIR=/opt/uv-tools UV_PYTHON_INSTALL_DIR=/opt/uv-python \
     CHROMIUM_PATH=/usr/bin/chromium
+# shadcn: its MCP server lets the agents look up shadcn/ui components, blocks and charts. Pinned.
+ARG SHADCN_VERSION=4.23.0
+RUN npm install -g shadcn@${SHADCN_VERSION} && npm cache clean --force
 RUN uv python install 3.11 3.12 && uv tool install 'markitdown[pptx,docx,xlsx,xls,pdf]' \
     && chmod -R a+rX /opt/uv-tools /opt/uv-python
 

@@ -193,8 +193,14 @@ export function baccTools(useCaseId: string, slug: string, tally: RunTally) {
       ),
       tool(
         "register_document",
-        "Show a document a BMAD skill wrote or updated in the person's Documents panel. Path relative to the project root.",
-        { path: z.string().min(1), title: z.string().min(1), type: z.string().default("other"), summary: z.string().default("") },
+        "Show a document a BMAD skill wrote or updated in the person's Documents panel. Path relative to the project root. Set review true when the person must approve it (for example the component list); their decision arrives as a message.",
+        {
+          path: z.string().min(1),
+          title: z.string().min(1),
+          type: z.string().default("other"),
+          summary: z.string().default(""),
+          review: z.boolean().default(false),
+        },
         async (args) => {
           const abs = path.resolve(workspacePath(slug), args.path);
           if (!abs.startsWith(workspacePath(slug))) return ok("Path must be inside the project.");
@@ -214,11 +220,30 @@ export function baccTools(useCaseId: string, slug: string, tally: RunTally) {
             description: args.summary.split(". ")[0] ?? "",
             origin: "bmad",
             textPath: abs,
-            approved: true,
-            status: "approved",
+            approved: !args.review,
+            status: args.review ? "in_review" : "approved",
           };
-          if (existing) await prisma.document.update({ where: { id: existing.id }, data });
-          else await prisma.document.create({ data: { useCaseId, storagePath: abs, ...data } });
+          const doc = existing
+            ? await prisma.document.update({ where: { id: existing.id }, data })
+            : await prisma.document.create({ data: { useCaseId, storagePath: abs, ...data } });
+          if (args.review) {
+            await prisma.reviewItem.updateMany({
+              where: { useCaseId, targetId: doc.id, kind: "document", status: "open" },
+              data: { status: "dismissed", answer: "Replaced by a newer version", resolvedAt: new Date() },
+            });
+            await prisma.reviewItem.create({
+              data: {
+                useCaseId,
+                kind: "document",
+                title: `Approve "${args.title}"`,
+                detail: args.summary || "Read it, then approve it or decline it with a note.",
+                reason: "Needs your approval",
+                source: "BMAD",
+                targetId: doc.id,
+              },
+            });
+            return ok("Shown for approval. The decision arrives as a message.");
+          }
           return ok();
         },
       ),

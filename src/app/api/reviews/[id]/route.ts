@@ -49,6 +49,10 @@ export async function PATCH(req: Request, { params }: Ctx) {
         parsed.data.status === "approved" && !answer ? "approved" : parsed.data.status === "dismissed" ? "not yet, the client wants to come back to it" : `the client says "${answer}"`
       }. Continue the BMAD workflow from this gate accordingly.${
         parsed.data.status === "approved" ? " If this gate ends an agent's part, hand over to the next BMAD agent now, in this turn (set_stage, then start its workflow), and tell the client in one line who is taking over." : ""
+      }${
+        parsed.data.status === "approved" && /\bPRD\b|product requirements/i.test(item.title)
+          ? " This is the PRD: before Sally starts, write the component list from the shadcn MCP as your skill describes (Components from the PRD) and show it for approval."
+          : ""
       }`;
       break;
     default:
