@@ -13,6 +13,8 @@ const hex = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 export const InspirationOptions = z.object({
   kind: z.string().describe("One plain sentence: what kind of product this is"),
   similar: z.array(z.object({ name: z.string(), what: z.string() })).describe("Up to 6 real products or sites like this one that you looked at"),
+  nav: z.array(z.string()).describe("3 short menu labels this kind of site would have, e.g. Services, Prices, About"),
+  primaryAction: z.string().describe("The main button label for this kind of site, 1 to 3 words, e.g. Book now"),
   features: z
     .array(
       z.object({
@@ -77,7 +79,7 @@ async function research(text: string): Promise<InspirationOptionsT> {
           effort: "medium",
           persistSession: false,
           settingSources: [],
-          outputFormat: { type: "json_schema", schema: z.toJSONSchema(InspirationOptions) as Record<string, unknown> },
+          outputFormat: { type: "json_schema", schema: z.toJSONSchema(InspirationOptions, { target: "draft-7" }) as Record<string, unknown> },
           env: authEnv(auth),
         },
       });

@@ -108,7 +108,7 @@ async function suggestWithPlan(prompt: string, auth: Auth = "plan") {
       effort: "low",
       persistSession: false,
       settingSources: [],
-      outputFormat: { type: "json_schema", schema: z.toJSONSchema(Suggestion) as Record<string, unknown> },
+      outputFormat: { type: "json_schema", schema: z.toJSONSchema(Suggestion, { target: "draft-7" }) as Record<string, unknown> },
       env: authEnv(auth),
     },
   });

@@ -22,7 +22,7 @@ function useGoogleFont(family: string) {
 }
 
 // A small rendered mock of a home page in one direction: its colors, fonts, corners and a headline.
-function StylePreview({ d }: { d: Direction }) {
+function StylePreview({ d, nav, action }: { d: Direction; nav: string[]; action: string }) {
   useGoogleFont(d.displayFont);
   useGoogleFont(d.bodyFont);
   const r = d.radius === "none" ? 0 : d.radius === "small" ? 6 : 16;
@@ -34,9 +34,10 @@ function StylePreview({ d }: { d: Direction }) {
       <div className="flex items-center justify-between px-3 py-2" style={{ borderBottom: `1px solid ${p.muted}33` }}>
         <span style={{ fontFamily: display, fontWeight: 700, fontSize: 12 }}>{d.name}</span>
         <span className="flex gap-2" style={{ fontSize: 9, color: p.muted }}>
-          <span>Shop</span>
-          <span>About</span>
-          <span style={{ background: p.accent, color: p.background, padding: "1px 6px", borderRadius: r }}>Cart</span>
+          {nav.slice(0, 2).map((n) => (
+            <span key={n}>{n}</span>
+          ))}
+          <span style={{ background: p.accent, color: p.background, padding: "1px 6px", borderRadius: r }}>{nav[2] ?? "Contact"}</span>
         </span>
       </div>
       <div className="px-3 pb-3 pt-4">
@@ -45,7 +46,7 @@ function StylePreview({ d }: { d: Direction }) {
           {d.tagline}
         </div>
         <div className="mt-3 flex gap-2">
-          <span style={{ background: p.accent, color: p.background, fontSize: 10, padding: "4px 10px", borderRadius: r, fontWeight: 600 }}>Get started</span>
+          <span style={{ background: p.accent, color: p.background, fontSize: 10, padding: "4px 10px", borderRadius: r, fontWeight: 600 }}>{action}</span>
           <span style={{ border: `1px solid ${p.accent2}`, color: p.accent2, fontSize: 10, padding: "4px 10px", borderRadius: r }}>Learn more</span>
         </div>
         <div className="mt-3 grid grid-cols-3 gap-2">
@@ -185,7 +186,7 @@ export default function PictureStep({ data, reload }: { data: UseCaseFull; reloa
                     onClick={() => setDirection(on ? "" : d.id)}
                     className={`rounded-2xl border p-3 text-left transition-colors ${on ? "border-accent bg-accent/10 ring-2 ring-accent/40" : "border-line hover:border-accent/50"}`}
                   >
-                    <StylePreview d={d} />
+                    <StylePreview d={d} nav={options.nav?.length ? options.nav : ["Home", "About", "Contact"]} action={options.primaryAction || "Get started"} />
                     <div className="mt-3 text-sm font-semibold">{d.name}</div>
                     <div className="text-xs text-muted">{d.mood}</div>
                     <div className="mt-2 flex gap-1" aria-hidden>
