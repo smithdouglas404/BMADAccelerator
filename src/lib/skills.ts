@@ -2,7 +2,7 @@ import catalog from "@/data/ecc-skills.json";
 
 // Skills library. Claude Code's .claude/skills/ is always loaded; Codex and Cursor
 // read .agents/skills/; Antigravity gets its own folder (path to confirm against
-// Antigravity's docs). These targets map onto BMAD's `npx skills add` tool choice.
+// Antigravity's docs). These are the coding agents a skill can be installed for.
 export const SKILL_TARGETS = [
   { key: "claude", label: "Claude Code", dir: ".claude/skills/", locked: true },
   { key: "codex", label: "Codex", dir: ".agents/skills/", locked: false },

@@ -1,5 +1,4 @@
 import { promises as fs } from "fs";
-import { decisionsForPrompt, pendingForBuild } from "./buildQueue";
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
@@ -8,136 +7,95 @@ import { prisma } from "@/lib/db";
 import { claudeConfigured } from "@/lib/agent/auth";
 import { onAppGenerated } from "@/lib/memory";
 import { workspacePath } from "@/lib/workspace";
-import { installDesignSkills, provisionWorkspace, writeIntake } from "@/lib/provision";
+import { installDesignSkills, provisionWorkspace, syncStudioSkills, writeIntake } from "@/lib/provision";
 import { appDir, assignPort, startPreview, stopPreview } from "@/lib/preview";
 import { enqueue, runSdkTurn, agentsEnabled } from "@/lib/agent/runner";
 import type { RunTally } from "@/lib/agent/tools";
+import { writePackage } from "@/lib/studio/state";
+import { pushToGit } from "@/lib/studio/sync";
 
 const run = promisify(execFile);
 const busy = new Set<string>();
 
-async function changedDocs(uc: UseCase) {
-  const root = workspacePath(uc.slug, "_bmad-output");
-  const since = uc.lastGeneratedAt?.getTime() ?? 0;
-  const out: string[] = [];
-  async function walk(dir: string) {
-    let entries: import("fs").Dirent[] = [];
-    try {
-      entries = await fs.readdir(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const e of entries) {
-      const p = path.join(dir, e.name);
-      if (e.isDirectory()) await walk(p);
-      else if (e.name.endsWith(".md") || e.name.endsWith(".toml")) {
-        if ((await fs.stat(p)).mtimeMs > since) out.push(path.relative(workspacePath(uc.slug), p));
-      }
-    }
-  }
-  await walk(root);
-  return out.filter((p) => !p.includes(`${path.sep}generate${path.sep}`));
-}
-
 const SHOT = path.join(process.cwd(), "scripts", "shot.mjs");
 
-const GENERATOR_RULES = `You are the Generate step of the BMAD Accelerator. Work exactly as you would if the client had opened Claude Code and said "build me this": you bring everything you know about the best products of this kind, and you build the complete, high-fidelity product a leading company would ship. The BMAD documents, the client's answers, picks and screen mark-ups are more information on top of that, the way a person vibe coding keeps telling you more. More information must always make the app better, never smaller.
+// Claude Code's standing rules for every build. The package's own CLAUDE_CODE_PROMPT.md carries the
+// product: these rules carry how to build it.
+const GENERATOR_RULES = `You are Claude Code inside the Working Backwards Studio. Work exactly as you would if the owner had opened Claude Code and said "build me this": you bring everything you know about the best products of this kind and build the complete, high-fidelity product a leading company would ship. The Studio's package (PRFAQ, capabilities, decisions, backlog, annotations) is more information on top of that, the way a person vibe coding keeps telling you more. More information must always make the app better, never smaller.
 
-How to use what the client and BMAD have said:
-- Floor, not ceiling. Start from the full product for its category (decide the category first: candy for sale is an online shop, a booking service is a booking site, and so on) and everything the leading products in that category have. Then apply the documents and decisions as additions and changes. Where they are silent, use your own best judgement at full ambition, as in Claude Code. Silence never removes anything.
-- Only an explicit "no" from the client removes something (a requirement marked out of scope, a decision, a review answer). A pilot limit changes behaviour, not presence: "pre-order only, no payment" means the basket, quantities and checkout are all there and checkout ends in a pre-order confirmation instead of a card form; "one pre-order is one box" means the basket and checkout are there and allow one box per order, with a short note why. A limit is a rule inside the full flow, never a reason to leave a part of it out, and a document line that sets one is not the client saying no to the rest. Things beyond the pilot work as clearly labelled demos instead of being missing.
-- Where the documents make a real choice (a feature, a rule, a name, a price, a wording, a flow), build it exactly. Where they only describe a minimum, build the minimum as part of the full product.
-- Newer wins: the client's ticked review-queue decisions and screen mark-ups win over older document lines; the client's numbered picks in \`bacc/design/picks.md\` (from \`bacc/design/options.md\`) win over your own design judgement and over any concept they did not pick from. A design concept the client never chose from is a suggestion, not a rule.
-- Write every choice you made yourself, and every place you went beyond the documents, under "Assumptions made" in the notes, so BMAD and the client can confirm or change them.
-- Show the floor in the app. \`bacc/floor.md\` gives every feature an id (F1, F2...). Put \`data-floor="F12"\` on the element that shows each item (the section, card, button or form; several ids space-separated), so the client can point at it. Copy \`.claude/skills/bacc-floor/floor-flags.js\` into the front end's public folder as \`bacc-floor.js\` and load it on every page with \`<script src="/bacc-floor.js" defer></script>\` in \`index.html\`. It shows nothing on its own; in the accelerator's preview it marks the [assumed] items so the client can keep, change or remove them on the page. Keep both in every later build.
+The floor rule:
+- Start from the full product for its category and everything the leading products in it have. The "Capability floor" section of \`studio/package/TECHNICAL_REQUIREMENTS.md\` lists it, and PRD.md and TRD.md describe it: build every [confirmed] and [assumed] item, never an [out] one. Where the package is silent, use your own judgement at full ambition. Silence never removes anything; only the owner's explicit "no" does.
+- A pilot limit changes behaviour, not presence: "no real integrations yet" keeps every screen and step, and the step that would call the outside system ends in a clearly labelled demo. Things beyond the pilot work as clearly labelled demos instead of being missing.
+- Approved decisions and annotations win over older lines. Write every choice you made yourself under "Assumptions made" in the build notes, so the Muse can confirm it with the owner.
 
 Design:
-- Read \`.claude/skills/frontend-design/SKILL.md\` and \`.claude/skills/frontend-design-direction/SKILL.md\` first. Then write \`bacc/design/direction.md\`: the category and the three leading products you measure against; the product, audience and primary job; palette (4 to 6 named hex values) and typefaces with the reason for each; the home-page layout as a small ASCII wireframe; the signature detail. The category's conventions come first and a theme is an accent on top (an online shop shows products in the first screen, professional type, trust signals).
-- Use real-looking imagery wherever a leading product in this category would (product photos in a shop, rooms in a hotel site, and so on) with \`mcp__bacc__make_image\` (a limited number per run; if it isn't available, draw instead). Draw icons and illustrations as finished, high-fidelity SVG. Pictures must show what is really sold or described (never fresh fruit for a sweet that contains none); never copy a real brand's name, logo or packaging, never show real people, never fetch images from outside.
-- Every build is on shadcn/ui (React, Vite, Tailwind CSS, Google web fonts): \`npx shadcn@latest init\`, then \`npx shadcn@latest add\` for each component, themed through its CSS variables so it looks like this product, not the shadcn demo. The one override: an approved "Design system or brand" upload (listed in \`bacc/intake.md\`) that defines its own stack. If \`bacc/design/components.md\` exists, use the items it names, plus whatever else the full product needs. The shadcn MCP tools (\`mcp__shadcn__*\`) find registry items (one short word per search) and give install commands; run every shadcn command inside \`app/\`. Run \`mcp__shadcn__get_audit_checklist\` before your screenshot rounds.
+- Read \`.claude/skills/frontend-design/SKILL.md\` and \`.claude/skills/frontend-design-direction/SKILL.md\` first. Write \`studio/design/direction.md\`: the category and three leading products you measure against, the audience and primary job, palette (4 to 6 named hex values) and typefaces with reasons, the home-page layout as a small ASCII wireframe, the signature detail. The category's conventions come first; a theme is an accent on top.
+- Real-looking imagery wherever a leading product would have it, made with \`mcp__studio__make_image\` (a limited number per run; draw if it isn't available). Pictures show what this product really deals with. Never copy a real brand, never show real people, never fetch images from outside.
+- Every build is on shadcn/ui (React, Vite, Tailwind CSS, Google web fonts): \`npx shadcn@latest init\`, then \`npx shadcn@latest add\` per component, themed so it looks like this product. The one override: an owner upload that defines its own design system or stack. Use the items in \`studio/package/COMPONENT_MAP.json\` plus whatever else the full product needs. The shadcn MCP tools (\`mcp__shadcn__*\`) find registry items and give install commands; run shadcn commands inside \`app/\`. Run \`mcp__shadcn__get_audit_checklist\` before your screenshot rounds.
 
-AI agents: suggest and build agents only where they add real value (workflows, messages, alerts and notifications, recommendations or insights); fixed rules stay plain code. Build agents with Inngest AgentKit (\`@inngest/agent-kit\`) only, following \`.claude/skills/bacc-agentic-advisor/references/agentkit.md\` and its \`library/\` (exact pinned versions), mapped as \`bacc/advisor/agentic-map.md\` says when it exists. Person-in-the-loop steps wait with \`step.waitForEvent\` behind an approval screen. Keys only from the environment; with no key, a labelled demo mode so every flow still works.
+Agents: build agents only where \`studio/package/AGENT_KIT_ROUTING.json\` or an approved decision asks for one (workflows, messages, alerts, recommendations, insights); fixed rules stay plain code. Use Inngest AgentKit (\`@inngest/agent-kit\`) only, following \`.claude/skills/studio-agentkit/SKILL.md\` and its references. Person-in-the-loop steps wait with \`step.waitForEvent\` behind an approval screen. Keys only from the environment (\`AGENT_PROVIDER\`, \`AGENT_MODEL\`); with no key, a labelled demo mode so every flow still works.
 
-Running and safety (these are the only hard rules):
-- Build in \`app/\` only; nothing else in the project is yours to change except the notes file and \`bacc/design/\`.
-- It must run with no accounts or paid services: \`npm install\`, \`npm run build\`, \`npm start\`, listening on \`process.env.PORT\` and host 0.0.0.0. SQLite or files for data.
-- Seed products, pages and prices with realistic sample content, labelled as samples where a document marks a placeholder. Never invent people: no made-up customers, orders, sign-ups, reviews or contact details. Areas for those (reviews, account, order history) exist with friendly empty states.
-- Allergy, health, money and AI wording must be honest.
-- Never kill processes by name or pattern (\`pkill -f\`, \`killall\`, \`ps | grep ... | kill\`): your own command line contains words like "shadcn" and "claude". Run anything that could hang with \`timeout\` and no input, and stop only PIDs you started.
+Running and safety (the only hard rules):
+- Build in \`app/\` only; nothing else in the project is yours to change except the build notes and \`studio/design/\`.
+- Copy \`.claude/skills/working-backwards-studio/assets/studio-bridge.js\` to \`app/public/studio-bridge.js\` and load it in \`app/index.html\` with \`<script src="/studio-bridge.js" defer></script>\`. It tells the Studio which page the owner is on during Vibe review; it does nothing outside the Studio.
+- It runs with no accounts or paid services: \`npm install\`, \`npm run build\`, \`npm start\`, listening on \`process.env.PORT\` and host 0.0.0.0. SQLite or files for data.
+- Realistic sample data (records, pages, figures), labelled as samples. Never invent people: no made-up customers, reviews or contact details; those areas exist with friendly empty states.
+- Health, safety, money, legal and AI wording must be honest.
+- Never kill processes by name or pattern (\`pkill -f\`, \`killall\`): your own command line contains words like "shadcn" and "claude". Run anything that could hang with \`timeout\` and no input, and stop only PIDs you started.
 
 Check it with your own eyes before you finish:
 1. Start it on a spare port (for example 4999).
-2. Screenshot every main page at desktop and phone size into the project's \`bacc/design/shots/\` folder: \`node ${SHOT} http://127.0.0.1:4999 <shots folder> / /other-page ...\`.
-3. Open each screenshot with Read and compare it with the three leading products in your direction. Anything they all have that this app lacks is a bug, unless the client removed it on purpose. Also check hierarchy, type, spacing, imagery and the phone layout.
+2. Screenshot every main page at desktop and phone size into \`studio/shots/\`: \`node ${SHOT} http://127.0.0.1:4999 <shots folder> / /other-page ...\`.
+3. Open each screenshot with Read and compare it with the three leading products in your direction. Anything they all have that this app lacks is a bug, unless the owner said no to it. Check hierarchy, type, spacing, imagery and the phone layout.
 4. Fix and repeat until it would stand next to them. At least two rounds. Then stop the app.
 
-Talk to the client with \`mcp__bacc__say\` (agent \`generator\`), two or three short sentences in plain words. Plain text you write is not shown.`;
+Talk to the owner only with \`mcp__studio__say\`, two or three short sentences in plain words. Plain text you write is not shown.`;
 
-function generatePrompt(
-  uc: UseCase,
-  notesPath: string,
-  docs: string[],
-  feedback: { comment: string; imagePath: string; pageUrl: string }[],
-  redesign: boolean,
-  fresh = false,
-  decisions = "",
-) {
-  const first = uc.generateCount === 0 || fresh;
-  const fb = feedback
-    .map((f, i) => `${i + 1}. "${f.comment}" — marked-up screenshot: ${f.imagePath}${f.pageUrl ? ` (page ${f.pageUrl})` : ""}`)
-    .join("\n");
-  const fullProduct =
-    "First read `bacc/intake.md` and `bacc/floor.md` (the product floor: the category, its leading products and everything this kind of product has; build every [confirmed] and [assumed] item and never an [out] one) and picture what you would build if the client had typed only their idea into Claude Code: the complete product a leading company in this category ships. Build that. Then read the BMAD documents and decisions below and layer them on as additions and changes. If `bacc/floor.md` doesn't exist yet, write it first with the bacc-floor skill (`.claude/skills/bacc-floor/SKILL.md`), marking only what the client said or a document settled as [confirmed], and register it with `mcp__bacc__register_document` (path `bacc/floor.md`, type `brief`, title \"Product floor\", review true).";
+export function generatePrompt(opts: { version: number; iteration: number; notesPath: string; shotsDir: string; first: boolean; fresh: boolean; redesign: boolean }) {
+  const { version, iteration, notesPath, shotsDir, first, fresh, redesign } = opts;
   const opening = fresh
-    ? `Build the app from scratch (version ${uc.generateCount + 1}). The client set the earlier app and its whole design aside: \`app/\` is empty, and there is no design concept, options catalogue, picks, direction or UX document. Never open \`bacc/archive/\` or an older version in git: the old design must not shape this one in any way. Build only from the client's requirements (intake, uploads, the product floor, their answers and the requirement documents) and your own judgement for this category. ${fullProduct}`
+    ? `Build the app from scratch (version ${version}). The owner set the earlier app and its whole design aside: \`app/\` is empty and there is no design direction. Never open \`studio/archive/\` or an older version in git: the old design must not shape this one in any way.`
     : first
-      ? `Generate the first version of the app. ${fullProduct}`
-    : redesign
-      ? `Redesign the app (version ${uc.generateCount + 1}). Keep every feature, page, rule and piece of data that works, but treat the look as not good enough: write a fresh \`bacc/design/direction.md\` from scratch, without reusing the current palette, fonts or layout, and rebuild the whole UI to it. Also bring in any change from the inputs below.`
-      : `Regenerate the app (version ${uc.generateCount + 1}). Carry on as you would in Claude Code when the client tells you more: build in what the new inputs below ask for and keep everything else. If \`bacc/floor.md\` doesn't exist yet, write and register it first (bacc-floor skill), then build it. If the app is still missing something the leading products in its category all have, or a [confirmed] or [assumed] item in \`bacc/floor.md\`, add it too; never build an [out] item. If \`bacc/design/direction.md\` is missing or doesn't name the category and its three leading products, write it and bring the whole UI up to it.`;
-  const components = first
-    ? "\n\nComponent list: if `bacc/design/components.md` doesn't exist yet and the PRD does, write it first. For each screen and requirement in the PRD, look up shadcn/ui items with the shadcn MCP tools (one short word per search) and list the exact registry names with one line on why each fits, plus a \"Gaps\" section; only list items the tools returned. Register it with `mcp__bacc__register_document` (type `ux`, title \"Component list\", review true) and build from it without waiting."
-    : "";
-  const stackCheck = first
-    ? ""
-    : "\n\nFirst check the stack: if the app's front end is not built on shadcn/ui with React and Tailwind (unless an approved 'Design system or brand' upload defines a different one), move it onto shadcn/ui in this run, whatever else the run asks. Keep the server, the data and every route and feature working, and check them all afterwards.";
-  return `${opening}${components}${stackCheck}
+      ? `Build the first version of the app (version ${version}).`
+      : redesign
+        ? `Redesign the app (version ${version}). Keep every feature, page, rule and piece of data that works, but treat the look as not good enough: write a fresh \`studio/design/direction.md\` without reusing the current palette, fonts or layout, and rebuild the whole UI to it.`
+        : `Iterate on the app (version ${version}). Carry on as you would in Claude Code when the owner tells you more: build in what changed and keep everything else. If the app still lacks something the leading products in its category all have, or a [confirmed] or [assumed] floor item, add it too.`;
+  return `${opening}
 
-${docs.length ? `BMAD documents ${first || redesign ? "available now" : "changed since the last generation"}:\n${docs.map((d) => `- ${d}`).join("\n")}` : first ? "BMAD has no documents yet: build from bacc/intake.md." : "No BMAD document changed since the last generation."}
-${fb ? `\nScreen feedback from the client since the last generation (open each screenshot with Read: the drawings show the spot they mean):\n${fb}\n` : ""}${
-    decisions
-      ? `\nDecisions from the client's review queue that they ticked for this build. Build each one in, even where a BMAD document doesn't say it yet; a newer decision here wins over an older document line. List any you couldn't build, and why, in the notes:\n${decisions}\n`
-      : ""
+The Studio assembled package iteration ${iteration} for this build in \`studio/package/\`. Start with \`studio/package/CLAUDE_CODE_PROMPT.md\` and follow it; it points to the other files (PRFAQ.md, VALIDATED_USE_CASE.md, PRD.md, TRD.md, SPEC_TRACE.json, SPEC_DIFF.md, TECHNICAL_REQUIREMENTS.md, COMPONENT_MAP.json, AGENT_KIT_ROUTING.json, KANBAN.json, BACKLOG.json, EVIDENCE.json, VISUAL_ANNOTATIONS.json, CONVERSATION.json, PACKAGE_MANIFEST.json). For each annotation in VISUAL_ANNOTATIONS.json with a \`frameFile\`, open the picture with Read: it shows the spot the owner meant.${
+    first || fresh ? "" : "\n\nFirst check the stack: if the front end is not built on shadcn/ui with React and Tailwind (unless an owner upload defines a different one), move it onto shadcn/ui in this run, keeping every route, feature and piece of data working."
   }
-Save your screenshots in \`${workspacePath(uc.slug, "bacc", "design", "shots")}\`.
 
-When the app works and you have checked the screenshots, write \`${notesPath}\` for BMAD, with these sections:
+Save your screenshots in \`${shotsDir}\`.
+
+When the app works and you have checked the screenshots, write \`${notesPath}\` with these sections:
 ## What was built
-## UI and UX notes (for Sally, the UX designer)
-## New or changed requirements (for John, the product manager)
-## Technical decisions and changes (for Winston, the architect)
+## What the owner should look at
+## Gaps against the leading products
 ## Assumptions made
-Each item one line, in plain words. Put the design direction in the UI and UX notes so Sally can bring it into DESIGN.md. Then tell the client with \`mcp__bacc__say\` (agent \`generator\`) what they can now see in the preview.`;
+Each item one line, in plain words. Then tell the owner with \`mcp__studio__say\` what they can now see in the preview.`;
 }
 
-async function fakeGenerate(uc: UseCase, notesPath: string, tally: RunTally) {
+async function fakeGenerate(uc: UseCase, n: number, notesPath: string, tally: RunTally) {
   const dir = appDir(uc.slug);
   await fs.mkdir(dir, { recursive: true });
   const safe = uc.name.replace(/[<>&]/g, "");
   await fs.writeFile(
     path.join(dir, "index.html"),
     `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${safe}</title>
-<style>body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:system-ui;background:linear-gradient(135deg,#1e1b4b,#0f766e);color:#fff}h1{font-size:clamp(2.5rem,8vw,5rem);margin:0}p{opacity:.8}</style></head>
-<body><main><h1>Hello World</h1><p>${safe}, version ${uc.generateCount + 1}</p></main></body></html>`,
+<style>body{margin:0;min-height:100vh;font-family:system-ui;background:#f6f3ee;color:#1c1917}header{display:flex;justify-content:space-between;align-items:center;padding:18px 28px;border-bottom:1px solid #e7e2da}nav a{margin-left:18px;color:inherit}main{max-width:760px;margin:0 auto;padding:64px 28px}h1{font-size:clamp(2.2rem,6vw,4rem);margin:0 0 12px}p{opacity:.7}label{display:block;margin:28px 0 8px;font-weight:600}input{width:100%;padding:12px;border:1px solid #d6d0c6;border-radius:8px;font:inherit}button{margin-top:14px;padding:12px 18px;border:0;border-radius:8px;background:#1c1917;color:#fff;font:inherit}</style>
+<script src="/studio-bridge.js" defer></script></head>
+<body><header><strong>${safe}</strong><nav aria-label="Main"><a href="/">Home</a><a href="/#how">How it works</a></nav></header><main><h1>${safe}</h1><p>Stand-in version ${n}, built from the Studio package (sandbox check only).</p><label for="q">Start here</label><input id="q" placeholder="Describe what you need"><button type="button">Get started</button></main></body></html>`,
   );
+  await fs.copyFile(path.join(process.cwd(), "studio-skills", "working-backwards-studio", "assets", "studio-bridge.js"), path.join(dir, "studio-bridge.js")).catch(() => {});
   await fs.mkdir(path.dirname(workspacePath(uc.slug, notesPath)), { recursive: true });
   await fs.writeFile(
     workspacePath(uc.slug, notesPath),
-    "## What was built\n- One page that says Hello World.\n## UI and UX notes (for Sally, the UX designer)\n- Centered greeting on a gradient.\n## New or changed requirements (for John, the product manager)\n- None.\n## Technical decisions and changes (for Winston, the architect)\n- Static HTML, no server code.\n## Assumptions made\n- English only.\n",
+    "## What was built\n- A first page with the product's name.\n## What the owner should look at\n- The first screen.\n## Gaps against the leading products\n- Everything beyond the first screen (stand-in build).\n## Assumptions made\n- English only.\n",
   );
   tally.spoke++;
   await prisma.message.create({
-    data: { useCaseId: uc.id, role: "bmad-agent", agent: "generator", content: "Your app is ready in the preview: one page that greets visitors with Hello World." },
+    data: { useCaseId: uc.id, role: "agent", agent: "Claude Code", content: `Version ${n} is ready in the preview.` },
   });
 }
 
@@ -151,150 +109,87 @@ async function commitApp(dir: string, n: number) {
   await run("git", ["add", "-A"], { cwd: dir });
   await run(
     "git",
-    ["-c", "user.name=BMAD Accelerator", "-c", "user.email=generate@bmad-accelerator.local", "commit", "-q", "--allow-empty", "-m", `Generate version ${n}`],
+    ["-c", "user.name=Working Backwards Studio", "-c", "user.email=build@studio.local", "commit", "-q", "--allow-empty", "-m", `Build version ${n}`],
     { cwd: dir },
   );
 }
 
-// Start fresh: the current app, its design direction and screenshots move to bacc/archive/, out of Generate's sight.
+// Start fresh: the current app, its design direction and screenshots move to studio/archive/, out of
+// Claude Code's sight. Doug, 2026-11-15: "Abandon the old design... everything should be based off the
+// requirements." The product truth (PRFAQ, capabilities, decisions, backlog, evidence) stays.
 async function setAsideApp(uc: UseCase) {
   await stopPreview(uc.id);
   const stamp = `v${uc.generateCount}-${new Date().toISOString().replace(/[:.]/g, "-")}`;
-  const archive = workspacePath(uc.slug, "bacc", "archive", stamp);
+  const archive = workspacePath(uc.slug, "studio", "archive", stamp);
   await fs.mkdir(archive, { recursive: true });
-  // Doug, 2026-11-15: "Abandon the old design... everything should be based off the requirements."
-  // Every design artefact goes: the app, the whole design folder (concept, options, picks, components,
-  // direction, shots), BMAD's UX documents and the advisor's old app reviews. Requirements stay.
   await fs.rename(appDir(uc.slug), path.join(archive, "app")).catch(() => {});
-  await fs.rename(workspacePath(uc.slug, "bacc", "design"), path.join(archive, "design")).catch(() => {});
-  const advisor = workspacePath(uc.slug, "bacc", "advisor");
-  for (const f of await fs.readdir(advisor).catch(() => [] as string[])) {
-    if (/^(app-review|comparison)|^ux-designer-/i.test(f)) {
-      await fs.mkdir(path.join(archive, "advisor"), { recursive: true });
-      await fs.rename(path.join(advisor, f), path.join(archive, "advisor", f)).catch(() => {});
-    }
-  }
-  const out = workspacePath(uc.slug, "_bmad-output");
-  for (const ini of await fs.readdir(out).catch(() => [] as string[])) {
-    for (const d of await fs.readdir(path.join(out, ini)).catch(() => [] as string[])) {
-      if (!/^ux-/i.test(d)) continue;
-      await fs.mkdir(path.join(archive, "bmad-ux", ini), { recursive: true });
-      await fs.rename(path.join(out, ini, d), path.join(archive, "bmad-ux", ini, d)).catch(() => {});
-    }
-  }
+  await fs.rename(workspacePath(uc.slug, "studio", "design"), path.join(archive, "design")).catch(() => {});
+  await fs.rename(workspacePath(uc.slug, "studio", "shots"), path.join(archive, "shots")).catch(() => {});
   await fs.mkdir(appDir(uc.slug), { recursive: true });
 }
 
-// Small, fast updates after each client answer on the product map (keep, change, remove, add).
-// Changes made while a build runs are collected and go into the next quick build.
-const quickQueue = new Map<string, { reasons: string[]; timer: NodeJS.Timeout | null }>();
-const QUICK_DELAY_MS = Number(process.env.BACC_QUICK_BUILD_DELAY_MS || 20_000);
-
-export function requestQuickBuild(useCaseId: string, reason: string) {
-  const q = quickQueue.get(useCaseId) ?? { reasons: [], timer: null };
-  q.reasons.push(reason);
-  if (q.timer) clearTimeout(q.timer);
-  q.timer = setTimeout(() => void flushQuick(useCaseId), QUICK_DELAY_MS);
-  quickQueue.set(useCaseId, q);
-}
-
-async function flushQuick(useCaseId: string) {
-  const q = quickQueue.get(useCaseId);
-  if (!q || !q.reasons.length) return;
-  if (busy.has(useCaseId)) {
-    q.timer = setTimeout(() => void flushQuick(useCaseId), QUICK_DELAY_MS);
-    return;
-  }
-  const uc = await prisma.useCase.findUnique({ where: { id: useCaseId }, select: { generateCount: true } });
-  // Before the first build the floor build picks the changes up anyway.
-  if (!uc || uc.generateCount === 0) return;
-  const reasons = q.reasons.splice(0);
-  q.timer = null;
-  await runGenerate(useCaseId, { quick: reasons });
-}
-
-export function quickPrompt(n: number, notesPath: string, reasons: string[]) {
-  return `Update the running app (version ${n}) for these changes the client just made on the product map, and nothing else:
-${reasons.map((r) => `- ${r}`).join("\n")}
-
-\`bacc/floor.md\` has every item's current state: build [confirmed] and [assumed] items, take out [out] ones (with their \`data-floor\` marks). Keep the design, every other page and feature, and the \`data-floor\` marks and \`bacc-floor.js\` script as they are. Work small and fast, as in Claude Code when the client asks for one change: make the change, check \`npm run build\` passes, screenshot only the pages you changed (desktop and phone) into \`bacc/design/shots/\`, look at them once and fix anything broken.
-
-Then write \`${notesPath}\` with "## What was built" (one line per change) and "## Assumptions made", and tell the client in one line with \`mcp__bacc__say\` (agent \`generator\`) what changed in the preview.`;
-}
-
-export async function runGenerate(useCaseId: string, opts: { redesign?: boolean; fresh?: boolean; quick?: string[] } = {}) {
-  if (busy.has(useCaseId)) {
-    if (opts.quick?.length) for (const r of opts.quick) requestQuickBuild(useCaseId, r);
-    return;
-  }
+export async function runGenerate(useCaseId: string, opts: { redesign?: boolean; fresh?: boolean } = {}) {
+  if (busy.has(useCaseId)) return;
   busy.add(useCaseId);
   try {
     let uc = await prisma.useCase.findUniqueOrThrow({ where: { id: useCaseId } });
-    await prisma.useCase.update({
-      where: { id: useCaseId },
-      data: { generateBusy: true, generateStatus: "Getting ready", agentError: "" },
-    });
+    await prisma.useCase.update({ where: { id: useCaseId }, data: { generateBusy: true, generateStatus: "Assembling the package", agentError: "" } });
     if (!uc.provisioned) await provisionWorkspace(useCaseId);
-    else await writeIntake(useCaseId);
+    else {
+      await writeIntake(useCaseId);
+      await syncStudioSkills(useCaseId, uc.slug);
+    }
     uc = await prisma.useCase.findUniqueOrThrow({ where: { id: useCaseId } });
     await assignPort(uc);
-    const n = uc.generateCount + 1;
-    const notesPath = path.join("_bmad-output", uc.initiative || "generate", "generate", `generate-notes-${n}.md`);
     await installDesignSkills(uc.slug);
+    const n = uc.generateCount + 1;
     const fresh = !!opts.fresh && uc.generateCount > 0;
     const redesign = !fresh && !!opts.redesign && uc.generateCount > 0;
-    const quick = !fresh && !redesign && !!opts.quick?.length && uc.generateCount > 0;
-    // A full build reads the whole floor, so product-map changes waiting for a quick build go in with it.
-    if (!quick) {
-      const q = quickQueue.get(useCaseId);
-      if (q) {
-        if (q.timer) clearTimeout(q.timer);
-        quickQueue.delete(useCaseId);
-      }
-    }
     if (fresh) {
       await prisma.useCase.update({ where: { id: useCaseId }, data: { generateStatus: "Setting the old app aside" } });
       await setAsideApp(uc);
-      // The concierge's own session remembers the old design: tell it, in its queue, that it's gone.
       if (agentsEnabled())
         await enqueue(
           useCaseId,
-          "user",
-          "The client started fresh and abandoned the old design completely (Doug: \"Abandon the old design... everything should be based off the requirements\"). The old app, design concept, options, picks, components list, direction and UX documents are set aside in bacc/archive/. Never open them, quote them or refer to the old design again, in any message or document. From here, design comes only from the client's requirements and their answers: ask the probing questions a leading product of this kind needs, and let each answer raise more questions. When Sally's stage comes, write a new concept and options catalogue from the requirements. Don't reply to this note.",
+          "note",
+          "The owner started fresh and set the old design aside completely (in studio/archive/). Never open it, quote it or refer to the old design again. From here, the look comes only from the product truth and the owner's answers. Don't reply to this note.",
         );
     }
-    const docs = await changedDocs(redesign || fresh ? { ...uc, lastGeneratedAt: null } : uc);
-    // A quick build carries only the product-map changes; feedback and ticked decisions wait for the next full one.
-    const feedback = quick ? [] : await prisma.feedback.findMany({ where: { useCaseId, status: { in: ["new", "sent"] } } });
-    // Review-queue decisions the client ticked for this build (see buildQueue.ts).
-    const ticked = quick ? [] : pendingForBuild(await prisma.reviewItem.findMany({ where: { useCaseId, includeInBuild: true, builtInVersion: 0 }, orderBy: { createdAt: "asc" } }));
+    // What this build answers: annotations not yet built, decisions and backlog items marked for the build.
+    const feedback = await prisma.feedback.findMany({ where: { useCaseId, status: "new" } });
+    const decisions = await prisma.decision.findMany({ where: { useCaseId, includeInBuild: true, builtInVersion: 0, status: { in: ["approved", "assumed"] } } });
+    const items = await prisma.backlogItem.findMany({ where: { useCaseId, includeInBuild: true, state: "ready" } });
+
+    const pkg = await writePackage(useCaseId);
+    const notesPath = path.join("studio", "builds", `build-notes-${n}.md`);
+    await fs.mkdir(workspacePath(uc.slug, "studio", "builds"), { recursive: true });
+    await prisma.move.updateMany({ where: { useCaseId, status: "ready" }, data: { status: "building" } });
     const tally: RunTally = { spoke: 0 };
 
     if (process.env.BACC_FAKE_AGENT === "1" && !claudeConfigured()) {
-      await fakeGenerate(uc, notesPath, tally);
+      await fakeGenerate(uc, n, notesPath, tally);
     } else {
+      await prisma.useCase.update({ where: { id: useCaseId }, data: { generateStatus: "Claude Code is building" } });
       await runSdkTurn({
         useCaseId,
         slug: uc.slug,
-        prompt: quick
-          ? quickPrompt(n, notesPath, opts.quick!)
-          : generatePrompt(
-              uc,
-              notesPath,
-              docs,
-              feedback.map((f) => ({ ...f, imagePath: path.relative(workspacePath(uc.slug), f.imagePath) })),
-              redesign,
-              fresh,
-              decisionsForPrompt(ticked),
-            ),
+        prompt: generatePrompt({
+          version: n,
+          iteration: pkg.iteration,
+          notesPath,
+          shotsDir: workspacePath(uc.slug, "studio", "shots"),
+          first: uc.generateCount === 0,
+          fresh,
+          redesign,
+        }),
         // A fresh build starts a new session, so nothing from the old app's build carries over.
         resume: fresh ? "" : uc.generateSessionId,
         appendSystem: GENERATOR_RULES,
+        speaker: "Claude Code",
         tally,
-        maxTurns: quick ? 150 : 600,
-        // Generate gets more thinking for the design work; BACC_GENERATE_MODEL can pick another model.
+        maxTurns: 600,
         model: process.env.BACC_GENERATE_MODEL || undefined,
-        effort: quick ? "medium" : "high",
+        effort: "high",
         onSession: async (id) => {
           await prisma.useCase.update({ where: { id: useCaseId }, data: { generateSessionId: id } });
         },
@@ -305,42 +200,35 @@ export async function runGenerate(useCaseId: string, opts: { redesign?: boolean;
     }
     await prisma.useCase.update({ where: { id: useCaseId }, data: { generateStatus: "Starting the preview" } });
     await commitApp(appDir(uc.slug), n);
-    await prisma.useCase.update({ where: { id: useCaseId }, data: { generateCount: n, lastGeneratedAt: new Date(), ...(uc.stage === "clarify" || uc.stage === "plan" ? { stage: "build" } : {}) } });
+    await prisma.useCase.update({ where: { id: useCaseId }, data: { generateCount: n, lastGeneratedAt: new Date() } });
     await stopPreview(useCaseId);
     await startPreview(useCaseId);
-    if (ticked.length) {
-      await prisma.reviewItem.updateMany({ where: { id: { in: ticked.map((r) => r.id) } }, data: { builtInVersion: n } });
-    }
-    if (feedback.length) {
-      await prisma.feedback.updateMany({ where: { id: { in: feedback.map((f) => f.id) } }, data: { status: "built" } });
-      // Their cards on the board move to Done too.
-      await prisma.ticket.updateMany({
-        where: { useCaseId, kind: "feedback", ref: { in: feedback.map((f) => f.ticketRef) } },
-        data: { status: "done" },
-      });
-    }
-    // Long-term memory: what was built, and the developer (and Sofia, for feedback) learn from it.
-    const notes = await fs.readFile(path.join(workspacePath(uc.slug), notesPath), "utf8").catch(() => "");
-    onAppGenerated({ ...uc, stage: uc.stage === "learn" ? "learn" : "build" }, notes.slice(0, 4000) || `Version ${n} of the app.`, feedback.map((f) => `${f.ticketRef}: ${f.comment}`).join("\n"));
-    // Write what Generate learned back into BMAD, through BMAD's own agents (after a full build).
-    if (agentsEnabled() && !quick) {
+    if (decisions.length) await prisma.decision.updateMany({ where: { id: { in: decisions.map((d) => d.id) } }, data: { builtInVersion: n } });
+    if (items.length) await prisma.backlogItem.updateMany({ where: { id: { in: items.map((b) => b.id) } }, data: { state: "built", builtInVersion: n } });
+    if (feedback.length) await prisma.feedback.updateMany({ where: { id: { in: feedback.map((f) => f.id) } }, data: { status: "built" } });
+    await prisma.move.updateMany({ where: { useCaseId, status: "building" }, data: { status: "review" } });
+
+    const notes = await fs.readFile(workspacePath(uc.slug, notesPath), "utf8").catch(() => "");
+    onAppGenerated(uc, notes.slice(0, 4000) || `Version ${n} of the app.`, feedback.map((f) => f.comment).join("\n"));
+
+    // The pilot goes to the owner's repository when one is connected (never forced).
+    if (uc.repoUrl && process.env.GITHUB_TOKEN) await pushToGit(useCaseId).catch((e) => console.warn("git push failed", e));
+
+    if (agentsEnabled()) {
       await enqueue(
         useCaseId,
-        "generate",
-        `Generate finished version ${n} of the app (it is running in the client's preview). Its notes for BMAD are in ${notesPath}. Bring them into BMAD through the owning agents' own update workflows: UI and UX notes to Sally (\`bmad-agent-ux-designer\`), new or changed requirements to John (\`bmad-agent-pm\`), technical decisions to Winston (\`bmad-agent-architect\`). Where BMAD would ask the client first, ask them, one question at a time. Tell the client in one line what you're updating.\n\nThen, as the client's expert advisor, review the built app (bacc-expert-advisor skill, section 4): open the screenshots in bacc/design/shots/, compare them first with the three leading products named in bacc/design/direction.md (anything they all have that the app lacks is a bug unless the client removed it on purpose, and so is anything that looks less professional), then check them against the PRD, Sally's documents, bacc/design/concept.md, bacc/design/components.md and bacc/advisor/agentic-map.md if it exists (bacc-agentic-advisor skill, "After a build"), write bacc/advisor/app-review-v${n}.md, call mcp__bacc__advise for "generator" with your top three changes, tell the client your verdict in two or three plain sentences and ask whether to build them in at the next Regenerate.`,
+        "build",
+        `Build finished: version ${n} is running in the owner's preview. Claude Code's notes are in ${notesPath}; its screenshots are in studio/shots/. Review the app as the owner's expert (studio-muse skill, "Builds"): open the screenshots, compare them with the three leading products named in studio/design/direction.md (anything they all have that the app lacks is a gap), move the board's cards that are now done, tell the owner your verdict in two or three sentences, and turn your top changes into recommendations. Confirm each "Assumptions made" line with the owner as an assumed decision.`,
       );
     }
   } catch (e) {
     console.error("generate failed", e);
     await prisma.useCase.update({
       where: { id: useCaseId },
-      data: { agentError: `Generate: ${e instanceof Error ? e.message.slice(0, 400) : String(e)}` },
+      data: { agentError: `Build: ${e instanceof Error ? e.message.slice(0, 400) : String(e)}` },
     });
   } finally {
     busy.delete(useCaseId);
     await prisma.useCase.update({ where: { id: useCaseId }, data: { generateBusy: false, generateStatus: "" } }).catch(() => {});
-    // Product-map changes made during this build go next.
-    const q = quickQueue.get(useCaseId);
-    if (q?.reasons.length && !q.timer) q.timer = setTimeout(() => void flushQuick(useCaseId), 2000);
   }
 }

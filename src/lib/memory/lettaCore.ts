@@ -1,10 +1,10 @@
 /**
- * BMAD role agents on self-hosted Letta. Pure functions, no network, no key.
+ * The Studio's role agents on self-hosted Letta. Pure functions, no network, no key.
  *
- * Copied from Capability-Economics-Guide scripts/src/bmad-letta-core.ts (INN-129) and changed only
- * where the accelerator differs. There, the Letta agents do the BMAD work. Here, BMAD runs unmodified
- * in Claude Code for each client use case, so each Letta agent is that role's working mind ACROSS use
- * cases: persona, its status, its top lessons and the shared portfolio block. Mem0 is the archive.
+ * The same pattern as Doug's Capability-Economics-Guide (INN-129), changed only where the Studio differs:
+ * the Studio's agents do the work in Claude Code for each product, so each Letta agent is that role's
+ * working mind ACROSS products: persona, its status, its top lessons and the shared portfolio block.
+ * Mem0 is the archive.
  *
  * - Gates: a person approves a sign-off in the accelerator. The app (the orchestrator) then records the
  *   decision in Mem0, updates the shared block and sends the role a [GATE PASSED] message, and the role
@@ -19,16 +19,16 @@ export const TAG = "bacc";
 export const SHARED_BLOCK_LABEL = "bacc_portfolio";
 export const LESSONS_BLOCK_LABEL = "top_lessons";
 /** Mem0 scope, the same contract as the original: one app id, one user id, an agent id per role. */
-export const MEM0_APP_ID = "bmad-accelerator";
+export const MEM0_APP_ID = "working-backwards-studio";
 export const MEM0_USER_ID = "bacc";
 
-export type RoleKey = "analyst" | "pm" | "ux" | "architect" | "po" | "dev";
+export type RoleKey = "muse" | "validator" | "ux" | "engineer";
 
 export interface Role {
   key: RoleKey;
-  /** BMAD role title */
+  /** Role title */
   title: string;
-  /** The BMAD persona's name, as the client sees it in the accelerator */
+  /** The role's name, as the owner sees it in the Studio */
   name: string;
   /** Letta agent name */
   agentName: string;
@@ -37,21 +37,21 @@ export interface Role {
   persona: string;
 }
 
-export const memAgentId = (key: string) => (key === "concierge" ? "bacc-concierge" : `bmad-${key}`);
+export const memAgentId = (key: string) => `studio-${key}`;
 
 const COMMON_RULES = [
-  "BMAD runs unmodified in Claude Code for each client use case. You do not do that work. You are the role's long-term working mind across all use cases: you remember what worked, what went wrong and what clients decided, and you give advice from it.",
+  "The Studio's agents run in Claude Code for each product. You do not do that work. You are the role's long-term working mind across all products: you remember what worked, what went wrong and what owners decided, and you give advice from it.",
   "Facts from the Mem0 archive arrive inside <retrieved_context>. Search it with search_memory (a focused query; role and kind narrow it) before answering about earlier use cases, decisions or answers. If you need facts you were not given and the search finds nothing, end your reply with one line per need: NEED_CONTEXT: <search query>. Never invent a requirement or a past decision; quote what you rely on and name the use case it came from.",
   "One client's details are private to that use case. Lessons you save must be general (\"retail pilots: ask about payment provider and currency early\"), never one client's prices, names or plans.",
   "Keep your status block current with your memory tools: CURRENT_USE_CASE, CURRENT_TASK, OPEN_QUESTIONS.",
   "The top_lessons block is written by the app from your saved lessons. Do not edit it; save lessons with save_lesson.",
   "A message starting [GATE PASSED] or [APP GENERATED] reports progress in a use case. Decide whether there is a lesson that would help a future, similar use case. If there is, save it with save_lesson (one lesson per call, with a confidence from 0 to 1). Then reply in two or three sentences. Do not call ask_role for these.",
-  "When you need something another role knows, ask it with ask_role (role keys: analyst, pm, ux, architect, po, dev; pass your own key as from_role). A message starting [QUESTION from the ...] is another role or the app asking you: answer it directly from your memory and never call ask_role while answering.",
+  "When you need something another role knows, ask it with ask_role (role keys: muse, validator, ux, engineer; pass your own key as from_role). A message starting [QUESTION from the ...] is another role or the app asking you: answer it directly from your memory and never call ask_role while answering.",
   "Plain language. Things only the owner decides: spending money or prices, secrets or production access, legal or privacy, deleting customer data, messages to people outside the project.",
 ].join("\n- ");
 
 function persona(name: string, title: string, job: string): string {
-  return `You are the memory of ${name}, the ${title} in the BMAD method, for the BMAD Accelerator.\n${job}\n\nRules:\n- ${COMMON_RULES}`;
+  return `You are the memory of ${name} (${title}) in the Agentic Working Backwards Studio.\n${job}\n\nRules:\n- ${COMMON_RULES}`;
 }
 
 const role = (key: RoleKey, name: string, title: string, job: string): Role => ({
@@ -64,12 +64,10 @@ const role = (key: RoleKey, name: string, title: string, job: string): Role => (
 });
 
 export const ROLES: Role[] = [
-  role("analyst", "Mary", "Business Analyst", "In each use case Mary researches the market and users and writes the brief, BRD or PRFAQ. Remember which questions uncovered the real problem and which assumptions turned out wrong."),
-  role("pm", "John", "Product Manager", "In each use case John writes and updates the PRD and other planning documents. Remember which requirements clients changed later, and which scope choices made pilots succeed."),
-  role("ux", "Sally", "UX Designer", "In each use case Sally records how the product looks and behaves. Remember which screens and flows clients asked to change after seeing the generated app."),
-  role("architect", "Winston", "System Architect", "In each use case Winston owns the architecture and its decisions. Remember which technical choices held up in generated pilots and which had to be reversed."),
-  role("po", "Sofia", "Product Owner", "In each use case Sofia writes the requirements and the tickets and keeps the board. Remember how work was best sliced, and what feedback typically came back after a Generate."),
-  role("dev", "Amelia", "Developer", "In each use case Amelia builds and verifies the stories. Remember what broke in builds, what tests caught, and what clients corrected on screen."),
+  role("muse", "Muse", "Product physician", "In each product the Muse holds the conversation, writes the PRFAQ and the capability floor, and turns every yes into a decision. Remember which questions uncovered the real promise, which assumptions owners corrected, and which capabilities every product of a kind needs."),
+  role("validator", "Use Case Validator", "Validator", "In each product the validator tests the problem, the customer, the evidence, the proof point and the thin slice. Remember which proof points held up in pilots and which were too soft."),
+  role("ux", "UX / Component Mapper", "Product surface", "In each product the mapper turns capabilities into real shadcn/ui components and screens. Remember which screens and flows owners changed after seeing the built app."),
+  role("engineer", "Product Engineer", "Pilot boundary", "In each product the engineer shapes the pilot: build moves, AgentKit workflows and human-in-the-loop points, and Claude Code builds it. Remember what broke in builds, which agentic workflows earned their place, and what owners corrected on screen."),
 ];
 
 export function roleFor(key: string): Role | undefined {
@@ -248,7 +246,7 @@ export const SEARCH_TOOL_SOURCE = `def search_memory(query: str, role: str = "",
         return "Mem0 is not configured for this agent (MEM0_API_KEY secret missing). Say so and continue without it."
     filters = {"user_id": "${MEM0_USER_ID}", "app_id": "${MEM0_APP_ID}"}
     if role:
-        filters["agent_id"] = "bmad-" + role.strip().lower()
+        filters["agent_id"] = "studio-" + role.strip().lower()
     if kind:
         filters["kind"] = kind.strip().lower()
     body = json.dumps({"query": query, "filters": filters, "top_k": max(1, min(int(top_k), 10))}).encode()
@@ -304,7 +302,7 @@ export const LESSON_TOOL_SOURCE = `def save_lesson(role: str, lesson: str, confi
     body = json.dumps({
         "messages": [{"role": "user", "content": lesson.strip()}],
         "user_id": "${MEM0_USER_ID}",
-        "agent_id": "bmad-" + role,
+        "agent_id": "studio-" + role,
         "infer": True,
         "metadata": {"app_id": "${MEM0_APP_ID}", "kind": "lesson", "agent_role": role, "source": "letta:save_lesson", "confidence": c},
     }).encode()
@@ -336,7 +334,7 @@ export const LESSON_TOOL_SOURCE = `def save_lesson(role: str, lesson: str, confi
  * tag, the role list and the server password, which reaches the tool as the LETTA_SERVER_PASSWORD secret).
  */
 export const ASK_TOOL_SOURCE = `def ask_role(role: str, question: str, from_role: str) -> str:
-    """Ask another BMAD role agent a question and wait for its answer.
+    """Ask another Studio role agent a question and wait for its answer.
 
     Use this when you need something another role remembers. Do not use it to answer a
     question another role asked you.

@@ -2,39 +2,77 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { ensureWorkspace, slugify } from "@/lib/workspace";
+import { validationScore, workingName, type Validation } from "@/lib/studio/core";
+import { explainReadiness } from "@/lib/studio/spec";
+import { ensureRoutes, ensureSpec } from "@/lib/studio/state";
+import { ensureStarted } from "@/lib/studio/actions";
 
+// Every product the team is shaping, newest first.
 export async function GET() {
-  const useCases = await prisma.useCase.findMany({
+  const rows = await prisma.useCase.findMany({
     orderBy: { updatedAt: "desc" },
-    include: { _count: { select: { reviews: { where: { status: "open" } }, documents: true } } },
+    include: { capabilities: { select: { readiness: true } }, spec: true, decisions: { select: { status: true, includeInBuild: true } }, moves: { select: { status: true } }, _count: { select: { backlog: true, decisions: true, evidence: true } } },
   });
-  return NextResponse.json(useCases);
+  return NextResponse.json(
+    rows.map((u) => ({
+      id: u.id,
+      name: u.name,
+      statement: u.statement || u.description.slice(0, 200),
+      category: u.category,
+      stageLabel: u.stageLabel,
+      // The same one number the product's own screens show.
+      readiness: explainReadiness({
+        sections: u.spec,
+        evidenceCount: u._count.evidence,
+        decisions: u.decisions,
+        validation: validationScore((u.validation ?? {}) as Validation),
+        capabilities: u.capabilities,
+        movesTotal: u.moves.length,
+        movesDone: u.moves.filter((m) => m.status === "review" || m.status === "done").length,
+      }).overall,
+      versions: u.generateCount,
+      thoughts: u._count.backlog,
+      decisions: u._count.decisions,
+      busy: u.agentBusy || u.generateBusy,
+      updatedAt: u.updatedAt,
+    })),
+  );
 }
 
 const CreateBody = z.object({
-  name: z.string().trim().min(1).max(120),
+  // Optional: the Muse names the product from what they said; until then it has a working name.
+  name: z.string().trim().max(120).default(""),
   description: z.string().max(20000).default(""),
+  author: z.object({ name: z.string().max(80).default(""), role: z.string().max(60).default("Product owner") }).optional(),
 });
 
+// A new product: the owner's own words. The Muse opens it straight away.
 export async function POST(req: Request) {
   const parsed = CreateBody.safeParse(await req.json());
-  if (!parsed.success) return NextResponse.json({ error: "Name is required." }, { status: 400 });
-  const slug = slugify(parsed.data.name);
+  if (!parsed.success) return NextResponse.json({ error: "Say a few words about the product." }, { status: 400 });
+  const { description, author } = parsed.data;
+  if (!parsed.data.name && !description.trim()) return NextResponse.json({ error: "Say a few words about the product." }, { status: 400 });
+  const name = parsed.data.name || workingName(description);
+  const slug = slugify(name);
   await ensureWorkspace(slug);
-  const useCase = await prisma.useCase.create({
+  const uc = await prisma.useCase.create({
     data: {
       slug,
-      name: parsed.data.name,
-      description: parsed.data.description,
-      onboardingStep: 1,
-      messages: {
-        create: {
-          role: "concierge",
-          content:
-            "Welcome. I'm your concierge. I'll guide you through BMAD, explain each question in plain words, and check my understanding with you before anything goes to the BMAD agents.",
-        },
-      },
+      name,
+      description,
+      messages: description ? { create: { role: "user", agent: "You", content: description, author: author?.name ?? "", authorRole: author?.role ?? "" } } : undefined,
+      members: author?.name ? { create: { name: author.name, role: author.role } } : undefined,
     },
   });
-  return NextResponse.json(useCase, { status: 201 });
+  await ensureRoutes(uc.id);
+  await ensureSpec(uc.id);
+  return NextResponse.json(uc, { status: 201 });
+}
+
+// Uploads are added right after creation; the client calls this to open the product for the Muse.
+export async function PUT(req: Request) {
+  const { id } = (await req.json().catch(() => ({}))) as { id?: string };
+  if (!id) return NextResponse.json({ error: "Missing product" }, { status: 400 });
+  await ensureStarted(id);
+  return NextResponse.json({ ok: true });
 }

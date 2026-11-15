@@ -32,6 +32,7 @@ export const PROVIDERS: { id: Provider; name: string; env: string; models: strin
 export const OTHER_KEYS: { env: string; name: string }[] = [
   { env: "ELEVENLABS_API_KEY", name: "ElevenLabs (voice)" },
   { env: "LINEAR_API_KEY", name: "Linear (tracker)" },
+  { env: "GITHUB_TOKEN", name: "GitHub (push the pilot to your repository)" },
 ];
 
 export type Role = {
@@ -47,15 +48,15 @@ export type Role = {
 export const ROLES: Role[] = [
   {
     env: "BACC_MODEL",
-    label: "BMAD agents and the concierge",
+    label: "The Muse and its team",
     note: "Runs on your Claude plan first; the Anthropic key is the backup. Claude models only.",
     providers: ["anthropic"],
     fallback: "claude-sonnet-5-5",
   },
   {
     env: "BACC_GENERATE_MODEL",
-    label: "Generate (builds the app)",
-    note: "Same as the BMAD agents unless you pick one. Claude models only.",
+    label: "Claude Code (builds the pilot)",
+    note: "Same as the Muse unless you pick one. Claude models only.",
     providers: ["anthropic"],
     fallback: "",
   },
@@ -69,7 +70,7 @@ export const ROLES: Role[] = [
   {
     env: "BACC_IMAGE_MODEL",
     label: "Pictures",
-    note: "Only for pictures a document asks for. OpenAI image models.",
+    note: "Product pictures Claude Code asks for. OpenAI image models.",
     providers: ["openai"],
     fallback: "gpt-image-2",
   },

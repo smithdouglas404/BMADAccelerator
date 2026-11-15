@@ -140,7 +140,9 @@ export async function startPreview(useCaseId: string) {
     await stopPreview(useCaseId);
     const port = await assignPort(uc);
     await freePort(port);
-    const log = createWriteStream(workspacePath(uc.slug, "bacc", "preview.log"), { flags: "a" });
+    await fs.mkdir(workspacePath(uc.slug, "studio"), { recursive: true });
+    const log = createWriteStream(workspacePath(uc.slug, "studio", "preview.log"), { flags: "a" });
+    log.on("error", () => {});
     log.write(`\n--- starting preview on ${port} at ${new Date().toISOString()}\n`);
     const env = previewEnv(port);
     let child: ChildProcess;

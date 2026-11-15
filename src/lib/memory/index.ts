@@ -5,7 +5,7 @@
  * The loop, per agent turn:
  *  1. Recall once: search Mem0 across every use case and read each role's top lessons from Letta,
  *     then hand both to the agents inside <retrieved_context>.
- *  2. Work: BMAD runs unmodified.
+ *  2. Work: the Studio's agents run in Claude Code.
  *  3. Ask: the agents can search memory, or ask a Letta role what it remembers.
  *  4. Remember: answers, approvals, gate decisions, screen feedback and builds are saved to Mem0 as
  *     they happen, with the same labels every time (contract.ts).
@@ -17,7 +17,6 @@ import { AgentMemory, VERBATIM_KINDS, type MemoryHit, type MemoryKind, type Memo
 import { Mem0RestClient } from "./mem0Rest";
 import { MEM0_APP_ID, MEM0_USER_ID, ROLES, generatedMessage, gateMessage, memAgentId, roleFor } from "./lettaCore";
 import * as letta from "./letta";
-import { AGENTS } from "@/lib/bmad";
 
 const client = process.env.MEM0_BASE_URL ? new Mem0RestClient(process.env.MEM0_BASE_URL, process.env.MEM0_API_KEY ?? "") : null;
 export const memory = new AgentMemory({ client, log: (m) => console.warn(m) });
@@ -27,11 +26,11 @@ type UseCaseRef = { id: string; name: string };
 
 const clip = (s: string, n = 3000) => (s.length > n ? `${s.slice(0, n)}...` : s);
 const nameOf = (agent: string) => {
-  const a = AGENTS[agent as keyof typeof AGENTS];
-  return a ? `${a.name} (${a.role})` : agent;
+  const r = roleFor(agent);
+  return r ? `${r.name} (${r.title})` : agent;
 };
-// Only BMAD roles own memories; the concierge and others write under the concierge.
-const ownerKey = (agent: string) => (roleFor(agent) ? agent : "concierge");
+// Every memory belongs to one of the Studio's roles; anything else is the Muse's.
+const ownerKey = (agent: string) => (roleFor(agent) ? agent : "muse");
 
 function scope(agent: string, uc: UseCaseRef): MemoryScope {
   return { appId: MEM0_APP_ID, agentId: memAgentId(ownerKey(agent)), userId: MEM0_USER_ID, runId: uc.id };
@@ -92,7 +91,7 @@ function label(h: MemoryHit) {
   const md = (h.metadata ?? {}) as Record<string, unknown>;
   // Mem0's server keeps "role" for the message role, so the agent's role travels as agent_role.
   const r = typeof md.agent_role === "string" ? md.agent_role : "";
-  const role = r ? (roleFor(r)?.name ?? (r === "concierge" ? "Concierge" : r)) : "";
+  const role = r ? (roleFor(r)?.name ?? r) : "";
   const uc = typeof md.use_case_title === "string" ? `use case "${md.use_case_title}"` : "";
   return [md.kind, role, uc].filter(Boolean).join(" | ");
 }
@@ -100,7 +99,7 @@ function label(h: MemoryHit) {
 /** Searches every use case's memory; hits from `excludeUseCase` are left out (its own files hold them). */
 export async function searchMemory(query: string, opts: { role?: string; kinds?: MemoryKind[]; excludeUseCase?: string; limit?: number; runId?: string } = {}) {
   if (!memory.configured || !query.trim()) return [] as MemoryHit[];
-  const agents = opts.role && roleFor(opts.role) ? [memAgentId(opts.role)] : [...ROLES.map((r) => r.memAgentId), memAgentId("concierge")];
+  const agents = opts.role && roleFor(opts.role) ? [memAgentId(opts.role)] : [...ROLES.map((r) => r.memAgentId)];
   const hits = await memory.recall(query.slice(0, 2000), {
     scope: { appId: MEM0_APP_ID, agentId: agents[0], userId: MEM0_USER_ID, runId: opts.runId },
     alsoAgents: agents.slice(1),
@@ -140,16 +139,13 @@ export async function recallForTurn(uc: UseCaseRef & { description?: string }, p
   ].join("\n\n");
 }
 
-/** The Letta role that owns a gate, from its wording. */
-export function roleForGate(gate: string, fallback = "pm") {
+/** The Studio role that owns a decision, from its wording. */
+export function roleForGate(gate: string, fallback = "muse") {
   const g = gate.toLowerCase();
-  if (/prfaq|brief|brd|research|business case/.test(g)) return "analyst";
-  if (/architect/.test(g)) return "architect";
-  if (/ux|design|screen/.test(g)) return "ux";
-  if (/ticket|stor|epic|backlog|breakdown|retro/.test(g)) return "po";
-  if (/build|test|code|review/.test(g)) return "dev";
-  if (/prd|requirement|plan|pitch|spec/.test(g)) return "pm";
-  return roleFor(fallback) ? fallback : "pm";
+  if (/valid|proof|evidence|customer|problem/.test(g)) return "validator";
+  if (/ux|design|screen|component|layout/.test(g)) return "ux";
+  if (/build|agent|workflow|technical|data|integration|move/.test(g)) return "engineer";
+  return roleFor(fallback) ? fallback : "muse";
 }
 
 /** Step 5 of the loop: the role saves lessons, then the app refreshes its top lessons block. */
@@ -198,15 +194,15 @@ export function onAppGenerated(uc: UseCaseRef & { stage?: string }, built: strin
         useCaseId: uc.id,
         title: uc.name,
         stage,
-        activeRole: roleFor("dev")?.title ?? prev?.activeRole ?? "",
+        activeRole: roleFor("engineer")?.title ?? prev?.activeRole ?? "",
         gatesPassed: prev?.gatesPassed ?? [],
         lastHandoff: clip(built.split("\n").find((l) => l.trim()) ?? "New version built", 300),
       });
     } catch (e) {
       console.warn("letta portfolio update failed", e instanceof Error ? e.message : e);
     }
-    await reflect("dev", generatedMessage(uc.name, built, feedbackBuilt));
-    if (feedbackBuilt) await reflect("po", generatedMessage(uc.name, built, feedbackBuilt));
+    await reflect("engineer", generatedMessage(uc.name, built, feedbackBuilt));
+    if (feedbackBuilt) await reflect("ux", generatedMessage(uc.name, built, feedbackBuilt));
   })();
 }
 

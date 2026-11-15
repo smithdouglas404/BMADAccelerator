@@ -1,5 +1,5 @@
 FROM node:22-bookworm-slim AS base
-# git: BMAD workspaces and generated apps are git repos. python3 + uv: BMAD's own scripts.
+# git: product workspaces and generated apps are git repos. python3 + uv: the Studio skill scripts (package checks).
 # chromium + fonts: screenshots for screen markup and Generate's design review. unzip: skill uploads. markitdown: reads uploads.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       openssl git ca-certificates curl python3 unzip chromium fonts-dejavu-core fonts-liberation fonts-noto-color-emoji \
@@ -31,8 +31,8 @@ COPY --from=build --chown=node:node /app ./
 RUN mkdir -p /data/workspaces && chown -R node:node /data
 USER node
 RUN mkdir -p /home/node/.claude
-RUN git config --global user.name "BMAD Accelerator" && git config --global user.email "bmad@accelerator.local" \
+RUN git config --global user.name "Working Backwards Studio" && git config --global user.email "studio@working-backwards.local" \
     && git config --global init.defaultBranch main
-# 3000: the accelerator. 4100-4129: each use case's generated app.
+# 3000: the Studio. 4100-4129: each product's generated app.
 EXPOSE 3000 4100-4129
 CMD ["sh", "-c", "npx prisma migrate deploy && npm start"]

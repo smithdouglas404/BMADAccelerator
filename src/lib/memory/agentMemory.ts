@@ -159,7 +159,7 @@ export class AgentMemory {
 
   /**
    * Ask helper: recall for a question and format it as context, or tell the caller
-   * what is missing with NEED_CONTEXT lines (the BMAD role agents' convention).
+   * what is missing with NEED_CONTEXT lines (the Studio role agents' convention).
    */
   async ask(question: string, opts: RecallOptions): Promise<{ context: string; needContext: string[]; degraded?: boolean }> {
     const hits = await this.recall(question, opts);

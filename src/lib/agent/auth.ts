@@ -1,5 +1,5 @@
 /**
- * How Claude Code (the BMAD agents, the concierge, Generate and the document agent) signs in.
+ * How Claude Code (the Muse and its team, Generate and the document agent) signs in.
  *
  * - "plan": the owner's Claude subscription (CLAUDE_CODE_OAUTH_TOKEN from `claude setup-token`).
  * - "key": the Anthropic API key, billed per use.

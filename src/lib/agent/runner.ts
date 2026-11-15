@@ -1,20 +1,21 @@
 import { promises as fs } from "fs";
-import { RESEARCH_TEAM } from "./team";
+import { STUDIO_TEAM } from "./team";
 import path from "path";
 import { query, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { prisma } from "@/lib/db";
 import { workspacePath } from "@/lib/workspace";
-import { provisionWorkspace, shadcnLookupDir, syncAcceleratorSkills, writeIntake } from "@/lib/provision";
-import { syncBoard } from "@/lib/bmadTickets";
+import { provisionWorkspace, shadcnLookupDir, syncStudioSkills, writeIntake, STUDIO_SKILLS_DIR } from "@/lib/provision";
 import { agentModel } from "@/lib/docAgent";
+import { mcpServersFor, mcpSummary } from "@/lib/studio/mcp";
+import { ensureRoutes } from "@/lib/studio/state";
 import { LimitError, authEnv, authOrder, claudeConfigured, limitMessage, type Auth } from "@/lib/agent/auth";
-import { baccTools, type RunTally } from "./tools";
+import { studioTools, type RunTally } from "./tools";
 import { fakeAgentTurn } from "./fake";
 import { recallForTurn, startMemoryJobs } from "@/lib/memory";
 import { withContext } from "@/lib/memory/lettaCore";
 
-// One agent turn at a time per use case. Queued events (messages, card moves,
-// feedback, Generate notes) are combined into the next turn, in order.
+// One Muse turn at a time per product. Queued events (messages, captures, pulled-forward
+// recommendations, annotations, build notes) are combined into the next turn, in order.
 const running = new Set<string>();
 
 export async function enqueue(useCaseId: string, kind: string, prompt: string) {
@@ -76,9 +77,8 @@ export async function kick(useCaseId: string) {
   }
 }
 
-export async function conciergeInstructions() {
-  const file = path.join(process.cwd(), "bmad-module/bacc-agent-concierge/SKILL.md");
-  const md = await fs.readFile(file, "utf8");
+export async function museInstructions() {
+  const md = await fs.readFile(path.join(STUDIO_SKILLS_DIR, "studio-muse", "SKILL.md"), "utf8");
   return md.replace(/^---[\s\S]*?---\s*/, "");
 }
 
@@ -87,7 +87,10 @@ function statusFor(block: { type: string; name?: string; input?: unknown }) {
   const input = (block.input ?? {}) as Record<string, string>;
   switch (block.name) {
     case "Skill":
-      return `Running ${input.skill ?? input.command ?? "a BMAD skill"}`;
+      return `Using the ${input.skill ?? input.command ?? ""} skill`;
+    case "Task":
+    case "Agent":
+      return `Sending out ${input.subagent_type ?? "a helper"}`;
     case "Read":
     case "Glob":
     case "Grep":
@@ -96,7 +99,7 @@ function statusFor(block: { type: string; name?: string; input?: unknown }) {
     case "Edit":
       return `Writing ${path.basename(input.file_path ?? "a document")}`;
     case "Bash":
-      return "Running BMAD's scripts";
+      return "Running a command";
     case "WebSearch":
     case "WebFetch":
       return "Researching";
@@ -109,7 +112,7 @@ type TurnOpts = Parameters<typeof runSdkTurnOnce>[0];
 
 // Runs a turn, resuming the use case's Claude session. If that session can't be
 // resumed (for example its history was lost when the container was rebuilt), the
-// turn starts a fresh session instead: BMAD's files hold the real state.
+// turn starts a fresh session instead: the Studio's database holds the real state.
 async function runSdkTurnResuming(opts: TurnOpts) {
   try {
     return await runSdkTurnOnce(opts);
@@ -128,7 +131,7 @@ export async function runSdkTurn(opts: TurnOpts) {
     const auth = order[i] ?? "key";
     try {
       if (i === 0) return await runSdkTurnResuming({ ...opts, auth });
-      // A session started under another sign-in may not resume; BMAD's files hold the state anyway.
+      // A session started under another sign-in may not resume; the Studio holds the state anyway.
       return await runSdkTurnOnce({ ...opts, auth }).catch((err) =>
         err instanceof LimitError ? Promise.reject(err) : runSdkTurnOnce({ ...opts, auth, resume: "" }),
       );
@@ -157,13 +160,15 @@ async function runSdkTurnOnce(opts: {
   auth?: Auth;
   model?: string;
   effort?: "low" | "medium" | "high";
+  speaker?: string;
 }) {
   const auth = opts.auth ?? authOrder()[0] ?? "key";
   const ws = workspacePath(opts.slug);
   const texts: string[] = [];
   // The official shadcn MCP server (pinned in the image): component, block and chart look-ups.
   const shadcnDir = process.env.BACC_SHADCN_MCP === "0" ? "" : await shadcnLookupDir(opts.slug).catch(() => "");
-  await syncAcceleratorSkills(opts.slug).catch((e) => console.error("skill sync", e));
+  await syncStudioSkills(opts.useCaseId, opts.slug).catch((e) => console.error("skill sync", e));
+  const connectors = await mcpServersFor(opts.useCaseId).catch(() => ({}));
   const q = query({
     prompt: opts.prompt,
     options: {
@@ -173,14 +178,15 @@ async function runSdkTurnOnce(opts: {
       settingSources: ["project"],
       systemPrompt: { type: "preset", preset: "claude_code", append: opts.appendSystem },
       mcpServers: {
-        bacc: baccTools(opts.useCaseId, opts.slug, opts.tally),
+        ...connectors,
+        studio: studioTools(opts.useCaseId, opts.slug, opts.tally, { speaker: opts.speaker }),
         ...(shadcnDir ? { shadcn: { type: "stdio" as const, command: process.env.SHADCN_BIN || "shadcn", args: ["mcp", "--cwd", shadcnDir] } } : {}),
       },
       permissionMode: "bypassPermissions",
       allowDangerouslySkipPermissions: true,
       disallowedTools: ["AskUserQuestion"],
-      // The advisor's research team (category, industry, innovation), sent out when the floor is written.
-      agents: RESEARCH_TEAM,
+      // The Muse's team: validator, UX / component mapper, product engineer and the research team.
+      agents: STUDIO_TEAM,
       resume: opts.resume || undefined,
       maxTurns: opts.maxTurns ?? 200,
       env: authEnv(auth),
@@ -217,51 +223,20 @@ async function runSdkTurnOnce(opts: {
   return { texts, sessionId };
 }
 
-const ASK_NUDGE = "[follow-up: the question]";
-
-// A turn that ends by announcing a question, without asking it, would leave the client waiting on
-// nothing. A last message that is itself a question becomes the open question; one that only
-// promises a question gets one follow-up turn to ask it.
-async function settleAnnouncedQuestion(useCaseId: string, since: Date, prompt: string) {
-  if (await prisma.question.count({ where: { useCaseId, status: { in: ["open", "waiting"] } } })) return;
-  const last = await prisma.message.findFirst({
-    where: { useCaseId, createdAt: { gte: since }, role: { in: ["concierge", "bmad-agent"] } },
-    orderBy: { createdAt: "desc" },
-  });
-  if (!last) return;
-  const text = last.content.trim();
-  if (text.endsWith("?")) {
-    const sentence = text.split(/(?<=[.!?])\s+|\n+/).filter(Boolean).pop() ?? text;
-    await prisma.question.create({
-      data: { useCaseId, agent: last.agent || "concierge", question: sentence.slice(0, 500), explanation: "", status: "open" },
-    });
-    await prisma.useCase.update({ where: { id: useCaseId }, data: { pendingQuestion: sentence.slice(0, 500) } });
-    return;
-  }
-  const promises = /\b(one|a|next|few|quick|some)\s+(more\s+)?questions?\b|\b(I|I'll|I will|let me|she'll|he'll|they'll|we'll)\s+(need to\s+)?ask\b/i.test(text);
-  if (promises && !prompt.includes(ASK_NUDGE)) {
-    await enqueue(
-      useCaseId,
-      "followup",
-      `${ASK_NUDGE} Your last message said a question was coming, but it was never asked, so the client is waiting. Ask it now with mcp__bacc__ask (one question), then end your turn.`,
-    );
-  }
-}
-
 async function runTurn(useCaseId: string, prompt: string) {
-  const turnStart = new Date();
   const uc = await prisma.useCase.findUniqueOrThrow({ where: { id: useCaseId } });
   if (!uc.provisioned) {
-    await prisma.useCase.update({ where: { id: useCaseId }, data: { agentStatus: "Installing BMAD" } });
+    await prisma.useCase.update({ where: { id: useCaseId }, data: { agentStatus: "Setting up the workspace" } });
     await provisionWorkspace(useCaseId);
   } else {
     await writeIntake(useCaseId);
   }
+  await ensureRoutes(useCaseId);
   const fresh = await prisma.useCase.findUniqueOrThrow({ where: { id: useCaseId } });
   const tally: RunTally = { spoke: 0 };
 
-  // Recall once per turn: what earlier use cases taught (Mem0) and each role's top lessons (Letta).
-  await prisma.useCase.update({ where: { id: useCaseId }, data: { agentStatus: "Remembering earlier use cases" } });
+  // Recall once per turn: what earlier products taught (Mem0) and each role's top lessons (Letta).
+  await prisma.useCase.update({ where: { id: useCaseId }, data: { agentStatus: "Remembering earlier products" } });
   const recalled = await recallForTurn(fresh, prompt).catch(() => "");
   prompt = withContext(prompt, recalled);
   await prisma.useCase.update({ where: { id: useCaseId }, data: { agentStatus: "Thinking" } });
@@ -269,12 +244,13 @@ async function runTurn(useCaseId: string, prompt: string) {
   if (process.env.BACC_FAKE_AGENT === "1" && !claudeConfigured()) {
     await fakeAgentTurn(fresh, prompt, tally);
   } else {
+    const connectorNote = await mcpSummary(useCaseId).catch(() => "");
     const { texts } = await runSdkTurn({
       useCaseId,
       slug: fresh.slug,
       prompt,
       resume: fresh.claudeSessionId,
-      appendSystem: await conciergeInstructions(),
+      appendSystem: `${await museInstructions()}${connectorNote ? `\n\n${connectorNote}` : ""}`,
       tally,
       onSession: async (id) => {
         if (id !== fresh.claudeSessionId) {
@@ -285,21 +261,14 @@ async function runTurn(useCaseId: string, prompt: string) {
         await prisma.useCase.update({ where: { id: useCaseId }, data: { agentStatus: s } });
       },
     });
-    // Safety net: if the agent wrote to the person without using `say`, show its last words.
+    // Safety net: if the Muse wrote to the owner without using `say`, show its last words.
     if (!tally.spoke && texts.length) {
-      await prisma.message.create({ data: { useCaseId, role: "concierge", content: texts[texts.length - 1] } });
+      await prisma.message.create({ data: { useCaseId, role: "muse", agent: "Muse · Product physician", content: texts[texts.length - 1] } });
     }
   }
-  await settleAnnouncedQuestion(useCaseId, turnStart, prompt).catch((e) => console.error("question check", e));
-  await syncBoard(useCaseId).catch((e) => console.error("board sync", e));
 }
 
-// The first turn after intake: the concierge greets the person and starts BMAD.
-export const START_PROMPT = `The client just finished intake for this use case. Their own words, their documents and their choices are in bacc/intake.md; their uploads, with text versions, are in bacc/uploads/.
+// The Muse's first turn for a product: it opens the studio.
+export const START_PROMPT = `[opening] The owner just described a new product. Their own words, documents and choices are in studio/intake.md; their uploads, with text versions, are in studio/uploads/.
 
-You lead this work; BMAD is installed in this project as a tool for structured documents, reviews and the ticket tree. The client's intake is only part of the floor. Start now:
-1. Read bacc/intake.md and the uploads.
-2. Load the bacc-floor skill and write bacc/floor.md from what you already know: the category and industry, the leading products, the full scaffold of everything this kind of product has, the gap questions and the ideas. Don't research yet; speed matters here. Register it; that starts the first build of the app from the floor, so the client sees a working product within minutes.
-3. Greet the client in one short message: say what kind of product you understood this to be, that a first full version is being built from what leading products in that category have, and that they can keep, change or remove anything on the Product map. Then ask the most important gap question, one question only.
-4. While the build runs, send your research team out in parallel with the Agent tool, in one message: \`category-researcher\`, \`industry-expert\` and \`innovation-scout\`. When they report, raise the floor from bacc/research/ (new items as [assumed], better gap questions, ideas grounded in the client's context), register it again, and tell the client in one or two sentences what the research added. The next build picks it up.
-5. After that, use the \`bmad\` skill to decide which BMAD agent starts, and hand it the floor as the client's input: the full product, where BMAD draws out how this client differs.`;
+Open the studio now, as your skill's "The opening" section says: name the category, write the product in one breath, the capability floor (four to eight capabilities, at least 30 items, everything the leading products of this kind have), the first PRFAQ, the evidence and validation you already have, and five to eight recommendations; start the first build; send your whole team out in parallel; then greet the owner in one short message with the single most important question and your suggested answer. Speed matters: the owner should see their product's shape within a minute and a working first version within minutes.`;

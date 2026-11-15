@@ -4,7 +4,7 @@
  * Every memory is written with the same labels so any agent can find it again.
  */
 
-export const APP_IDS = ["bmad-accelerator"] as const;
+export const APP_IDS = ["working-backwards-studio"] as const;
 export type AppId = (typeof APP_IDS)[number];
 
 export const MEMORY_KINDS = [
@@ -27,7 +27,7 @@ export const VERBATIM_KINDS: ReadonlySet<MemoryKind> = new Set<MemoryKind>([
 
 export interface MemoryScope {
   appId: AppId;
-  /** The agent that owns or wrote the memory, e.g. "bmad-architect" or "cvi-agent". */
+  /** The agent that owns or wrote the memory, e.g. "studio-engineer" or "cvi-agent". */
   agentId: string;
   userId?: string;
   runId?: string;

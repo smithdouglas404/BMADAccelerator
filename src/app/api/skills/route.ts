@@ -6,8 +6,8 @@ export async function GET() {
   return NextResponse.json(await prisma.customSkill.findMany({ orderBy: { createdAt: "desc" } }));
 }
 
-// Upload a skill (.zip of its folder, or a SKILL.md). It is validated with BMAD's own
-// validator and stays off until someone switches it on.
+// Upload a skill (.skill or .zip of its folder, or a SKILL.md). Its shape is checked against the Agent Skills format
+// and it stays off until someone switches it on; switched on, every product's agents get it.
 export async function POST(req: Request) {
   const form = await req.formData();
   const file = form.get("file");

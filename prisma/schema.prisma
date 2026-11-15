@@ -1,8 +1,5 @@
-// BMAD Accelerator data model.
-// BMAD's own files (ticket tree, PRD, UX, architecture) stay the source of truth
-// inside each use case's workspace folder. These tables hold what the accelerator
-// adds around BMAD: intake, documents, conversation, review queue, and a mirror of
-// the ticket tree for the live Kanban.
+// Agentic Working Backwards Studio data model. The use case is the central object; the
+// Studio is the conversational source of truth, and Git and Linear are projections of it.
 
 generator client {
   provider = "prisma-client-js"
@@ -14,62 +11,239 @@ datasource db {
 }
 
 model UseCase {
+  id                String    @id @default(cuid())
+  slug              String    @unique
+  name              String
+  // The owner's own first words about the product, kept verbatim.
+  description       String    @default("")
+  // The product in one breath (Whole product view).
+  statement         String    @default("")
+  category          String    @default("")
+  audience          String    @default("")
+  stageLabel        String    @default("Discovery → pilot")
+  customerQuote     String    @default("")
+  // The living PRFAQ (Markdown): press release, customer FAQs, internal FAQs.
+  prfaq             String    @default("")
+  prfaqUpdatedAt    DateTime?
+  // The validated use case and its signals (problem, customer, evidence, proof, thinSlice).
+  validatedUseCase  String    @default("")
+  validation        Json      @default("{}")
+  // The capability the Muse is holding now, and the owner / engineer lens.
+  // The UX / Component Mapper's shadcn/ui map and the Product Engineer's technical notes.
+  components        Json      @default("[]") // [{ name, why }]
+  techNotes         String[]  @default([])
+  focus             String    @default("")
+  lens              String    @default("owner") // owner | engineer
+  session           Int       @default(1)
+  floorSeq          Int       @default(0)
+  repoUrl           String    @default("")
+  gitBranch         String    @default("studio")
+  gitStatus         String    @default("")
+  gitPushedAt       DateTime?
+  linearTeam        String    @default("")
+  linearStatus      String    @default("")
+  linearSyncedAt    DateTime?
+  claudeSessionId   String    @default("")
+  provisioned       Boolean   @default(false)
+  // The Muse has opened the studio for this use case (PRFAQ, capabilities, first build).
+  started           Boolean   @default(false)
+  agentBusy         Boolean   @default(false)
+  agentStatus       String    @default("")
+  agentError        String    @default("")
+  // Generate loop, package iterations and live preview
+  generateSessionId String    @default("")
+  generateBusy      Boolean   @default(false)
+  generateStatus    String    @default("")
+  generateCount     Int       @default(0)
+  packageCount      Int       @default(0)
+  lastGeneratedAt   DateTime?
+  previewPort       Int       @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  skills        UseCaseSkill[]
+  documents     Document[]
+  messages      Message[]
+  recordings    Recording[]
+  feedback      Feedback[]
+  events        AgentEvent[]
+  capabilities  Capability[]
+  decisions     Decision[]
+  backlog       BacklogItem[]
+  evidence      Evidence[]
+  moves         Move[]
+  routes        AgentRoute[]
+  spec          SpecSection[]
+  specRevisions SpecRevision[]
+  members       Member[]
+}
+
+// The people working on a product, each with a role (product owner, business analyst, product
+// engineer...). One shared source: everyone sees and changes the same product truth.
+model Member {
+  id        String   @id @default(cuid())
+  useCaseId String
+  name      String
+  role      String   @default("Product owner")
+  createdAt DateTime @default(now())
+  useCase   UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+}
+
+// A capability area of the product, with its floor items and how close it is to its ceiling.
+model Capability {
+  id          String   @id @default(cuid())
+  useCaseId   String
+  key         String
+  label       String
+  kicker      String   @default("")
+  description String   @default("")
+  readiness   Int      @default(0)
+  delta       String   @default("")
+  signal      String   @default("")
+  color       String   @default("")
+  position    Int      @default(0)
+  // Floor items: [{ id: "F12", text, state: confirmed | assumed | out }]
+  items       Json     @default("[]")
+  updatedAt   DateTime @updatedAt
+  useCase     UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+
+  @@unique([useCaseId, key])
+}
+
+// The human-in-the-loop register: decisions approved by a "yes", assumptions, and open questions.
+model Decision {
+  id             String    @id @default(cuid())
+  useCaseId      String
+  text           String
+  status         String    @default("approved") // approved | assumed | open | rejected
+  capability     String    @default("")
+  words          String    @default("") // the owner's original words
+  agent          String    @default("Muse")
+  options        Json      @default("[]") // [{ label, value }] for a human-in-the-loop choice
+  answer         String    @default("")
+  session        Int       @default(1)
+  includeInBuild Boolean   @default(true)
+  builtInVersion Int       @default(0)
+  createdAt      DateTime  @default(now())
+  resolvedAt     DateTime?
+  useCase        UseCase   @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+}
+
+// Everything the owner thought of: captures, capability signals, parked thoughts, Muse recommendations.
+model BacklogItem {
   id             String   @id @default(cuid())
-  slug           String   @unique
-  name           String
-  description    String   @default("")
-  // Intent cards (Choose a Planning Path)
-  intentDone     String   @default("")
-  intentKeep     String   @default("")
-  intentOutScope String   @default("")
-  // Who / why (Mary: PRFAQ, brief)
-  customer       String   @default("")
-  problem        String   @default("")
-  // Sizing chips
-  size           String   @default("project") // change | epic | project
-  needsApprovals Boolean  @default(false)
-  clientVendor   Boolean  @default(false)
-  regulated      Boolean  @default(false)
-  ideaStage      String   @default("new") // new | existing | fuzzy
-  repoUrl        String   @default("")
-  // Modes
-  uxMode         String   @default("coaching") // fast | coaching | handoff
-  archMode       String   @default("coaching") // fast | coaching
-  // First-run wizard step: 0 describe, 1 documents, 2 confirm, 3 done
-  onboardingStep Int      @default(0)
-  // Where the user stopped (pause and resume)
-  stage          String   @default("clarify") // clarify | plan | build | learn
-  // The "picture it" step: researched feature and style options, and what the client picked.
-  inspiration    Json?
-  activeAgent    String   @default("concierge")
-  pendingQuestion String  @default("")
-  claudeSessionId String  @default("")
-  // BMAD workspace and agent runtime
-  provisioned    Boolean  @default(false)
-  bmadVersion    String   @default("")
-  initiative     String   @default("")
-  agentBusy      Boolean  @default(false)
-  agentStatus    String   @default("")
-  agentError     String   @default("")
-  // Generate loop and live preview
-  generateSessionId String @default("")
-  generateBusy   Boolean  @default(false)
-  generateStatus String   @default("")
-  generateCount  Int      @default(0)
-  lastGeneratedAt DateTime?
-  previewPort    Int      @default(0)
+  useCaseId      String
+  title          String
+  note           String   @default("")
+  kind           String   @default("capture") // capture | epic | distraction
+  group          String   @default("Unsorted signal")
+  source         String   @default("Working session")
+  // A Muse recommendation: consider | workflow | hitl; empty for the owner's own thoughts.
+  recKind        String   @default("")
+  probe          String   @default("") // the question the Muse asks when it is pulled forward
+  state          String   @default("held") // suggested | held | probing | ready | built
+  hidden         String   @default("") // capability | epic | story | task | workflow (engineer lens)
+  includeInBuild Boolean  @default(false)
+  builtInVersion Int      @default(0)
+  annotationId   String   @default("")
+  trackerId      String   @default("")
+  trackerUrl     String   @default("")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  useCase        UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+}
 
-  skills     UseCaseSkill[]
-  documents  Document[]
-  messages   Message[]
-  tickets    Ticket[]
-  reviews    ReviewItem[]
-  recordings Recording[]
-  feedback   Feedback[]
-  events     AgentEvent[]
-  questions  Question[]
+model Evidence {
+  id         String   @id @default(cuid())
+  useCaseId  String
+  source     String
+  type       String   @default("conversation") // interview | research | uploaded | conversation
+  insight    String
+  confidence String   @default("medium") // high | medium | open
+  trace      String   @default("")
+  documentId String   @default("")
+  createdAt  DateTime @default(now())
+  useCase    UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+}
+
+// Build moves on the "Make it real" board, each traced to a capability and a decision.
+model Move {
+  id         String   @id @default(cuid())
+  useCaseId  String
+  title      String
+  capability String   @default("")
+  decision   String   @default("")
+  status     String   @default("queued") // queued | ready | building | review | done
+  owner      String   @default("Product Engineer")
+  signal     String   @default("")
+  hidden     String   @default("story")
+  components String[] @default([])
+  routes     String[] @default([])
+  prompt     String   @default("")
+  position   Int      @default(0)
+  trackerId  String   @default("")
+  trackerUrl String   @default("")
+  updatedAt  DateTime @updatedAt
+  useCase    UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+}
+
+// The agent route: Muse / Interviewer, Use Case Validator, UX / Component Mapper, Product Engineer.
+model AgentRoute {
+  id        String   @id @default(cuid())
+  useCaseId String
+  agent     String
+  action    String   @default("")
+  state     String   @default("waiting") // complete | active | ready | waiting
+  detail    String   @default("")
+  position  Int      @default(0)
+  updatedAt DateTime @updatedAt
+  useCase   UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+
+  @@unique([useCaseId, agent])
+}
+
+// The living specification: PRD and TRD sections the Muse and its team fill from the conversation,
+// evidence and annotations. Every section keeps its provenance (trace) and the owner's review.
+model SpecSection {
+  id           String   @id @default(cuid())
+  useCaseId    String
+  tab          String // prd | trd
+  key          String // stable id, e.g. prd-use-case, trd-data
+  ref          String   @default("") // PR-001 / TR-001, permanent
+  title        String
+  kicker       String   @default("")
+  content      String   @default("")
+  completeness Int      @default(0)
+  confidence   String   @default("open") // high | medium | open
+  basis        String   @default("not-researched") // confirmed | recommended | inferred | open | not-researched
+  status       String   @default("draft") // draft | exploring | evidence-backed | owner-approved | engineer-reviewed | ready-prototype | ready-pilot | production-ready
+  review       String   @default("") // keep | revise | challenge | remove (the owner's last review)
+  reviewNote   String   @default("")
+  source       String   @default("")
+  capability   String   @default("")
+  related      String[] @default([]) // backlog, move, decision, evidence ids or refs
+  trace        Json     @default("[]") // [{label, detail, type}]
+  position     Int      @default(0)
+  updatedBy    String   @default("")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  useCase      UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+
+  @@unique([useCaseId, key])
+}
+
+// A versioned snapshot of the spec, taken with every package, with the plain diff from the one before.
+model SpecRevision {
+  id        String   @id @default(cuid())
+  useCaseId String
+  version   Int
+  reason    String   @default("")
+  snapshot  Json     @default("[]")
+  diff      String   @default("")
+  createdAt DateTime @default(now())
+  useCase   UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+
+  @@unique([useCaseId, version])
 }
 
 model UseCaseSkill {
@@ -88,16 +262,14 @@ model Document {
   mimeType    String
   sizeBytes   Int
   storagePath String
-  bmadType    String   @default("other") // see BMAD_DOC_TYPES
+  kind        String   @default("other") // evidence type the document agent picked
   tags        String[] @default([])
   description String   @default("")
   summary     String   @default("")
   approved    Boolean  @default(false)
   status      String   @default("in_review") // in_review | approved | declined
-  stage       String   @default("general") // general | clarify | plan | build | learn
   declineNote String   @default("")
-  routing     Json     @default("[]") // [{ agent, why }]: every BMAD agent this document matters to
-  origin      String   @default("upload") // upload | bmad
+  origin      String   @default("upload") // upload | studio
   textPath    String   @default("")
   createdAt   DateTime @default(now())
   useCase     UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
@@ -106,60 +278,21 @@ model Document {
 model Message {
   id        String   @id @default(cuid())
   useCaseId String
-  role      String // user | concierge | bmad-agent | system
-  agent     String   @default("") // BMAD agent key when role = bmad-agent
+  role      String // user | muse | signal | agent
+  agent     String   @default("") // who spoke: Muse, a specialist, or a signal label
+  accent    String   @default("") // capability key the message belongs to
   content   String
+  // The person who spoke (several people can work on one product) and their role.
+  author     String  @default("")
+  authorRole String  @default("")
+  // Who they addressed: "" for the Muse, or a specialist's key.
+  addressed  String  @default("")
+  // The words as spoken, when the message was cleaned up from voice.
+  raw        String  @default("")
+  // The decision a "Decision captured" signal recorded, so it can be undone.
+  ref        String  @default("")
   createdAt DateTime @default(now())
   useCase   UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
-}
-
-// Mirror of BMAD's ticket tree (initiative > epic > story | bug | spike).
-model Ticket {
-  id          String   @id @default(cuid())
-  useCaseId   String
-  ref         String // BMAD id, e.g. "1.2"
-  kind        String // epic | story | bug | spike
-  title       String
-  epicRef     String   @default("")
-  status      String   @default("backlog") // backlog | ready | in_progress | built | done
-  blocked     Boolean  @default(false)
-  refined     Boolean  @default(true)
-  after       String[] @default([])
-  unknown     String   @default("")
-  verify      String   @default("")
-  position    Int      @default(0)
-  trackerStatus String @default("")
-  bmadStatus  String   @default("")
-  trackerId   String   @default("")
-  trackerUrl  String   @default("")
-  updatedAt   DateTime @updatedAt
-  useCase     UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
-
-  @@unique([useCaseId, ref])
-}
-
-// Human-in-the-loop inbox: everything BMAD or the concierge needs a person for.
-model ReviewItem {
-  id         String    @id @default(cuid())
-  useCaseId  String
-  kind       String // see REVIEW_KINDS
-  title      String
-  detail     String    @default("")
-  reason     String    @default("")
-  source     String    @default("concierge")
-  targetId   String    @default("")
-  status     String    @default("open") // open | approved | edited | answered | dismissed
-  answer     String    @default("")
-  createdAt  DateTime  @default(now())
-  resolvedAt DateTime?
-  // Goes into the next Generate run. On for decisions the client made; off for open to-dos until they answer or tick it.
-  includeInBuild Boolean @default(false)
-  // The app version this decision was built into (0 = not built yet).
-  builtInVersion Int @default(0)
-  // When the client refined an earlier decision from History, and what they had said before.
-  refinedAt      DateTime?
-  previousAnswer String    @default("")
-  useCase    UseCase   @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
 }
 
 // Voice drafts: recordings with no time limit; continue, save or submit.
@@ -175,42 +308,38 @@ model Recording {
 }
 
 model Preferences {
-  id            String  @id @default("global")
+  id                String  @id @default("global")
   // Claude Code's .claude/skills is always on; these add more tool targets.
-  targetCodex   Boolean @default(false)
-  targetCursor  Boolean @default(false)
+  targetCodex       Boolean @default(false)
+  targetCursor      Boolean @default(false)
   targetAntigravity Boolean @default(false)
-  tracker       String  @default("builtin") // builtin | linear | jira | github | notion | trello
-  trackerProjectKey String @default("")
-  bmadVersion   String  @default("")
 }
 
 // Visual markup on a generated screen: the drawing, the comment, and the card it became.
 model Feedback {
-  id         String   @id @default(cuid())
-  useCaseId  String
-  comment    String
-  imagePath  String
-  pageUrl    String   @default("")
-  ticketRef  String   @default("")
-  becameRef  String   @default("") // the BMAD ticket Sofia made from it
-  changesRef String   @default("") // the earlier ticket it changes, if any
-  status     String   @default("new") // new | sent | built
-  createdAt  DateTime @default(now())
-  useCase    UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+  id        String   @id @default(cuid())
+  useCaseId String
+  comment   String
+  imagePath String
+  pageUrl   String   @default("")
+  target    String   @default("") // the surface the owner pointed at
+  shape     String   @default("object") // object | circle | full-screen
+  status    String   @default("new") // new | built
+  createdAt DateTime @default(now())
+  useCase   UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
 }
 
-// Queue of things the concierge must tell BMAD (card moves, feedback, generate notes),
+// Queue of things the Muse must hear (messages, captures, moves, annotations, build notes),
 // run one at a time per use case.
 model AgentEvent {
-  id         String   @id @default(cuid())
-  useCaseId  String
-  kind       String   // user | move | feedback | generate | review | start
-  prompt     String
-  status     String   @default("queued") // queued | running | done | failed
-  attempts   Int      @default(0)
-  createdAt  DateTime @default(now())
-  useCase    UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+  id        String   @id @default(cuid())
+  useCaseId String
+  kind      String // user | move | feedback | generate | review | start
+  prompt    String
+  status    String   @default("queued") // queued | running | done | failed
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+  useCase   UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
 }
 
 // Skills a team uploaded, validated before they are switched on.
@@ -223,20 +352,6 @@ model CustomSkill {
   report      String   @default("")
   enabled     Boolean  @default(false)
   createdAt   DateTime @default(now())
-}
-
-// Questions the agents ask the client, shown one at a time in the order asked.
-model Question {
-  id          String    @id @default(cuid())
-  useCaseId   String
-  agent       String
-  question    String
-  explanation String    @default("")
-  status      String    @default("waiting") // waiting | open | answered
-  answer      String    @default("")
-  createdAt   DateTime  @default(now())
-  answeredAt  DateTime?
-  useCase     UseCase   @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
 }
 
 // Keys and models set on the Settings page. Keys are stored encrypted (AES-256-GCM, see src/lib/settings.ts)
@@ -252,4 +367,24 @@ model ModelChoice {
   role      String   @id // the environment variable, e.g. BACC_MODEL
   model     String
   updatedAt DateTime @updatedAt
+}
+
+// MCP connectors (data sources and tools) the Studio's agents can use. Switched on for every
+// product, or only for the products that pick them.
+model McpServer {
+  id           String   @id @default(cuid())
+  name         String   @unique // short key the agents see, e.g. "notion"
+  label        String   @default("")
+  transport    String   @default("http") // http | sse | stdio
+  url          String   @default("")
+  command      String   @default("")
+  args         String[] @default([])
+  // Headers or environment values, stored encrypted like keys (AES-256-GCM), never sent to the browser.
+  secretCipher String   @default("")
+  secretNames  String[] @default([])
+  enabled      Boolean  @default(true)
+  allProducts  Boolean  @default(true)
+  useCases     String[] @default([])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }

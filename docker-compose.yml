@@ -56,7 +56,7 @@ services:
     volumes:
       - mem0-history:/app/history
 
-  # Each BMAD role's working mind: self-hosted Letta (open source).
+  # Each Studio agent's working mind: self-hosted Letta (open source).
   letta:
     image: letta/letta:0.16.8
     restart: unless-stopped
