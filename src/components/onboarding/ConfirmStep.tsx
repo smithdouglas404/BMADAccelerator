@@ -5,6 +5,9 @@ import Link from "next/link";
 import WizardSteps from "@/components/WizardSteps";
 import VoiceRecorder from "@/components/VoiceRecorder";
 import { patchUseCase, type UseCaseFull } from "@/lib/types";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 type Form = Pick<
   UseCaseFull,
@@ -43,7 +46,7 @@ function Choice<T extends string>({
           role="radio"
           aria-checked={value === o.key}
           onClick={() => onChange(o.key)}
-          className={`chip px-3 py-1.5 text-sm ${value === o.key ? "border-accent bg-accent/15 text-ink" : "text-muted"}`}
+          className={`chip px-3 py-1.5 text-sm ${value === o.key ? "border-primary bg-primary/15 text-foreground" : "text-muted-foreground"}`}
         >
           {o.label}
         </button>
@@ -54,7 +57,7 @@ function Choice<T extends string>({
 
 function YesNo({ value, onChange, label }: { value: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-line p-3">
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-border p-3">
       <span className="text-sm">{label}</span>
       <Choice
         label={label}
@@ -85,11 +88,11 @@ function Card({
       <div className="flex items-start justify-between gap-2">
         <div>
           <h3 className="font-semibold">{title}</h3>
-          <p className="text-xs text-muted">{hint}</p>
+          <p className="text-xs text-muted-foreground">{hint}</p>
         </div>
         <VoiceRecorder label="Say it" onTranscript={(t) => onChange(value ? `${value} ${t}` : t)} />
       </div>
-      <textarea className="field mt-3 min-h-20 text-sm" value={value} onChange={(e) => onChange(e.target.value)} />
+      <Textarea className="mt-3 min-h-20 text-sm" value={value} onChange={(e) => onChange(e.target.value)} />
     </div>
   );
 }
@@ -124,10 +127,10 @@ export default function ConfirmStep({ data, reload }: { data: UseCaseFull; reloa
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-10">
-      <WizardSteps current={2} />
+      <WizardSteps current={3} />
       <section className="pop-in mt-6">
         <h1 className="text-2xl font-semibold tracking-tight">Confirm the basics</h1>
-        <p className="mt-1 text-muted">
+        <p className="mt-1 text-muted-foreground">
           These are the inputs BMAD asks for first. Fill in what you can; anything left blank becomes a question
           in your Review queue.
         </p>
@@ -183,8 +186,8 @@ export default function ConfirmStep({ data, reload }: { data: UseCaseFull; reloa
               ]}
             />
             {f.ideaStage === "existing" && (
-              <input
-                className="field mt-2 text-sm"
+              <Input
+                className="mt-2 text-sm"
                 placeholder="Repository link (optional)"
                 value={f.repoUrl}
                 onChange={(e) => set("repoUrl", e.target.value)}
@@ -201,7 +204,7 @@ export default function ConfirmStep({ data, reload }: { data: UseCaseFull; reloa
         <div className="glass mt-4 grid gap-5 rounded-xl p-5 md:grid-cols-2">
           <div>
             <h3 className="font-semibold">Design help</h3>
-            <p className="mb-2 text-xs text-muted">Coaching shows you options; fast drafts it for you to review.</p>
+            <p className="mb-2 text-xs text-muted-foreground">Coaching shows you options; fast drafts it for you to review.</p>
             <Choice
               label="UX mode"
               value={f.uxMode}
@@ -215,7 +218,7 @@ export default function ConfirmStep({ data, reload }: { data: UseCaseFull; reloa
           </div>
           <div>
             <h3 className="font-semibold">Technical decisions</h3>
-            <p className="mb-2 text-xs text-muted">Coaching shows alternatives for each big call.</p>
+            <p className="mb-2 text-xs text-muted-foreground">Coaching shows alternatives for each big call.</p>
             <Choice
               label="Architecture mode"
               value={f.archMode}
@@ -229,15 +232,17 @@ export default function ConfirmStep({ data, reload }: { data: UseCaseFull; reloa
         </div>
 
         <div className="mt-6 flex flex-wrap justify-end gap-3">
-          <button className="btn btn-ghost" disabled={busy} onClick={() => finish(1)}>
+          <Button variant="ghost" disabled={busy} onClick={() => finish(1)}>
             Back
-          </button>
-          <Link href="/" className="btn btn-ghost" onClick={() => patchUseCase(data.id, f)}>
+          </Button>
+          <Button variant="ghost" asChild>
+<Link href="/" onClick={() => patchUseCase(data.id, f)}>
             Save and exit
           </Link>
-          <button className="btn btn-primary" disabled={busy} onClick={() => finish(3)}>
+</Button>
+          <Button disabled={busy} onClick={() => finish(3)}>
             Open workspace
-          </button>
+          </Button>
         </div>
       </section>
     </main>

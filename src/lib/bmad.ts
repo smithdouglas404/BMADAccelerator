@@ -13,6 +13,7 @@ export const STAGES: {
     key: "clarify",
     label: "Clarify",
     docs: [
+      { key: "intake", label: "Use-case brief" },
       { key: "brief", label: "Product brief" },
       { key: "prfaq", label: "PRFAQ" },
       { key: "research", label: "Research" },
@@ -57,7 +58,22 @@ export type AgentKey =
   | "po"
   | "architect"
   | "ux"
-  | "dev";
+  | "dev"
+  | "bmad"
+  | "generator";
+
+// Where an upload belongs: anywhere (general) or one BMAD stage.
+export const DOC_STAGES: { key: string; label: string }[] = [
+  { key: "general", label: "General (any stage)" },
+  { key: "clarify", label: "Stage 1: Clarify" },
+  { key: "plan", label: "Stage 2: Plan" },
+  { key: "build", label: "Stage 3: Build and verify" },
+  { key: "learn", label: "Stage 4: Learn and adjust" },
+];
+
+// The BMAD agents a document can be routed to.
+export const ROUTABLE_AGENTS = ["analyst", "pm", "ux", "architect", "po", "dev"] as const;
+export type Routing = { agent: string; why: string }[];
 
 export const AGENTS: Record<
   AgentKey,
@@ -67,9 +83,11 @@ export const AGENTS: Record<
   analyst: { name: "Mary", role: "Analyst", skill: "bmad-agent-analyst", stage: "clarify", color: "#22c3a6" },
   pm: { name: "John", role: "Product Manager", skill: "bmad-agent-pm", stage: "plan", color: "#3d8bff" },
   po: { name: "Sofia", role: "Product Owner", skill: "bmad-agent-po", stage: "plan", color: "#f59e0b" },
-  architect: { name: "Winston", role: "Architect", skill: "bmad-architecture", stage: "plan", color: "#ef6aa1" },
-  ux: { name: "Sally", role: "UX Designer", skill: "bmad-ux", stage: "plan", color: "#a3e635" },
+  architect: { name: "Winston", role: "Architect", skill: "bmad-agent-architect", stage: "plan", color: "#ef6aa1" },
+  ux: { name: "Sally", role: "UX Designer", skill: "bmad-agent-ux-designer", stage: "plan", color: "#a3e635" },
   dev: { name: "Amelia", role: "Developer", skill: "bmad-agent-dev", stage: "build", color: "#38bdf8" },
+  bmad: { name: "BMad", role: "Method guide", skill: "bmad", stage: "clarify", color: "#94a3b8" },
+  generator: { name: "Generate", role: "Claude Code builder", skill: "claude-code", stage: "build", color: "#f97316" },
 };
 
 // "Bring the documents you have": each upload is tagged with a BMAD type and
@@ -81,6 +99,7 @@ export const BMAD_DOC_TYPES: {
   hint: string;
 }[] = [
   { key: "prd", label: "Existing PRD", routesTo: "John (validate)", hint: "prd, requirements, product requirements" },
+  { key: "businesscase", label: "Business case", routesTo: "Mary, John", hint: "business case, business-case, businesscase, proposal, investment" },
   { key: "brief", label: "Brief or BRD", routesTo: "Mary", hint: "brief, business requirements, brd, charter" },
   { key: "research", label: "Research report", routesTo: "Deep Recon (process)", hint: "research, market, competitor, survey, analysis" },
   { key: "design", label: "Design system or brand", routesTo: "bmad-ux", hint: "design, brand, style, figma, ui, mock" },

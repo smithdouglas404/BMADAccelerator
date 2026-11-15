@@ -39,9 +39,25 @@ model UseCase {
   onboardingStep Int      @default(0)
   // Where the user stopped (pause and resume)
   stage          String   @default("clarify") // clarify | plan | build | learn
+  // The "picture it" step: researched feature and style options, and what the client picked.
+  inspiration    Json?
   activeAgent    String   @default("concierge")
   pendingQuestion String  @default("")
   claudeSessionId String  @default("")
+  // BMAD workspace and agent runtime
+  provisioned    Boolean  @default(false)
+  bmadVersion    String   @default("")
+  initiative     String   @default("")
+  agentBusy      Boolean  @default(false)
+  agentStatus    String   @default("")
+  agentError     String   @default("")
+  // Generate loop and live preview
+  generateSessionId String @default("")
+  generateBusy   Boolean  @default(false)
+  generateStatus String   @default("")
+  generateCount  Int      @default(0)
+  lastGeneratedAt DateTime?
+  previewPort    Int      @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -51,6 +67,9 @@ model UseCase {
   tickets    Ticket[]
   reviews    ReviewItem[]
   recordings Recording[]
+  feedback   Feedback[]
+  events     AgentEvent[]
+  questions  Question[]
 }
 
 model UseCaseSkill {
@@ -74,6 +93,12 @@ model Document {
   description String   @default("")
   summary     String   @default("")
   approved    Boolean  @default(false)
+  status      String   @default("in_review") // in_review | approved | declined
+  stage       String   @default("general") // general | clarify | plan | build | learn
+  declineNote String   @default("")
+  routing     Json     @default("[]") // [{ agent, why }]: every BMAD agent this document matters to
+  origin      String   @default("upload") // upload | bmad
+  textPath    String   @default("")
   createdAt   DateTime @default(now())
   useCase     UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
 }
@@ -104,6 +129,9 @@ model Ticket {
   verify      String   @default("")
   position    Int      @default(0)
   trackerStatus String @default("")
+  bmadStatus  String   @default("")
+  trackerId   String   @default("")
+  trackerUrl  String   @default("")
   updatedAt   DateTime @updatedAt
   useCase     UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
 
@@ -124,6 +152,13 @@ model ReviewItem {
   answer     String    @default("")
   createdAt  DateTime  @default(now())
   resolvedAt DateTime?
+  // Goes into the next Generate run. On for decisions the client made; off for open to-dos until they answer or tick it.
+  includeInBuild Boolean @default(false)
+  // The app version this decision was built into (0 = not built yet).
+  builtInVersion Int @default(0)
+  // When the client refined an earlier decision from History, and what they had said before.
+  refinedAt      DateTime?
+  previousAnswer String    @default("")
   useCase    UseCase   @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
 }
 
@@ -148,4 +183,73 @@ model Preferences {
   tracker       String  @default("builtin") // builtin | linear | jira | github | notion | trello
   trackerProjectKey String @default("")
   bmadVersion   String  @default("")
+}
+
+// Visual markup on a generated screen: the drawing, the comment, and the card it became.
+model Feedback {
+  id         String   @id @default(cuid())
+  useCaseId  String
+  comment    String
+  imagePath  String
+  pageUrl    String   @default("")
+  ticketRef  String   @default("")
+  becameRef  String   @default("") // the BMAD ticket Sofia made from it
+  changesRef String   @default("") // the earlier ticket it changes, if any
+  status     String   @default("new") // new | sent | built
+  createdAt  DateTime @default(now())
+  useCase    UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+}
+
+// Queue of things the concierge must tell BMAD (card moves, feedback, generate notes),
+// run one at a time per use case.
+model AgentEvent {
+  id         String   @id @default(cuid())
+  useCaseId  String
+  kind       String   // user | move | feedback | generate | review | start
+  prompt     String
+  status     String   @default("queued") // queued | running | done | failed
+  attempts   Int      @default(0)
+  createdAt  DateTime @default(now())
+  useCase    UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+}
+
+// Skills a team uploaded, validated before they are switched on.
+model CustomSkill {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String   @default("")
+  path        String
+  valid       Boolean  @default(false)
+  report      String   @default("")
+  enabled     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+// Questions the agents ask the client, shown one at a time in the order asked.
+model Question {
+  id          String    @id @default(cuid())
+  useCaseId   String
+  agent       String
+  question    String
+  explanation String    @default("")
+  status      String    @default("waiting") // waiting | open | answered
+  answer      String    @default("")
+  createdAt   DateTime  @default(now())
+  answeredAt  DateTime?
+  useCase     UseCase   @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+}
+
+// Keys and models set on the Settings page. Keys are stored encrypted (AES-256-GCM, see src/lib/settings.ts)
+// and never sent back to the browser; only the last four characters are shown.
+model StoredKey {
+  name      String   @id // the environment variable, e.g. ANTHROPIC_API_KEY
+  cipher    String
+  last4     String
+  updatedAt DateTime @updatedAt
+}
+
+model ModelChoice {
+  role      String   @id // the environment variable, e.g. BACC_MODEL
+  model     String
+  updatedAt DateTime @updatedAt
 }

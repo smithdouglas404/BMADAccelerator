@@ -8,6 +8,11 @@ export type DocumentT = {
   description: string;
   summary: string;
   approved: boolean;
+  status: string;
+  stage: string;
+  declineNote: string;
+  routing: { agent: string; why: string }[];
+  origin?: string;
 };
 
 export type MessageT = { id: string; role: string; agent: string; content: string; createdAt: string };
@@ -25,6 +30,8 @@ export type TicketT = {
   unknown: string;
   verify: string;
   position: number;
+  bmadStatus?: string;
+  trackerUrl?: string;
 };
 
 export type ReviewT = {
@@ -36,7 +43,13 @@ export type ReviewT = {
   source: string;
   targetId: string;
   status: string;
+  answer?: string;
   createdAt: string;
+  resolvedAt?: string | null;
+  includeInBuild: boolean;
+  builtInVersion: number;
+  refinedAt?: string | null;
+  previousAnswer?: string;
 };
 
 export type UseCaseFull = {
@@ -61,12 +74,43 @@ export type UseCaseFull = {
   stage: "clarify" | "plan" | "build" | "learn";
   activeAgent: string;
   pendingQuestion: string;
+  questionsWaiting?: number;
   skills: { skillId: string }[];
   documents: DocumentT[];
   messages: MessageT[];
   tickets: TicketT[];
   reviews: ReviewT[];
+  feedback: FeedbackT[];
+  provisioned: boolean;
+  bmadVersion: string;
+  agentBusy: boolean;
+  agentStatus: string;
+  agentError: string;
+  generateBusy: boolean;
+  generateStatus: string;
+  generateCount: number;
+  lastGeneratedAt: string | null;
+  inspiration: import("@/lib/inspire").Inspiration | null;
+  previewPort: number;
+  preview: { hasApp: boolean; port: number; running: boolean; starting: boolean };
+  agentsEnabled: boolean;
 };
+
+export type FeedbackT = {
+  id: string;
+  comment: string;
+  pageUrl: string;
+  ticketRef: string;
+  becameRef: string;
+  changesRef: string;
+  status: string;
+  createdAt: string;
+};
+
+export function previewUrl(port: number) {
+  if (typeof window === "undefined" || !port) return "";
+  return `${window.location.protocol}//${window.location.hostname}:${port}`;
+}
 
 export async function patchUseCase(id: string, body: Record<string, unknown>) {
   const res = await fetch(`/api/use-cases/${id}`, {

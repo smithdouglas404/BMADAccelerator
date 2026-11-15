@@ -4,6 +4,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import VoiceRecorder from "@/components/VoiceRecorder";
 import WizardSteps from "@/components/WizardSteps";
+import { ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { BlurFade } from "@/components/magicui/blur-fade";
 
 export default function NewUseCase() {
   const router = useRouter();
@@ -32,51 +39,47 @@ export default function NewUseCase() {
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
       <WizardSteps current={0} />
-      <section className="glass pop-in mt-6 rounded-2xl p-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Describe your use case</h1>
-        <p className="mt-1 text-muted">
-          Type it or just talk. Recording has no time limit. Stop when you like, then record again to continue
-          where you left off.
-        </p>
-
-        <label className="mt-6 block text-sm font-medium" htmlFor="name">
-          Name
-        </label>
-        <input
-          id="name"
-          className="field mt-1"
-          placeholder="e.g. Field technician scheduling app"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-
-        <div className="mt-5 flex items-end justify-between gap-3">
-          <label className="block text-sm font-medium" htmlFor="desc">
-            What do you want to build, for whom, and why?
-          </label>
-          <VoiceRecorder
-            onTranscript={(t) => setDescription((d) => (d ? `${d.trimEnd()} ${t}` : t))}
-            label={description ? "Continue talking" : "Talk instead"}
-          />
-        </div>
-        <textarea
-          id="desc"
-          className="field mt-2 min-h-48"
-          placeholder="A few sentences is plenty. The concierge will ask about anything missing."
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
-
-        {error && <p className="mt-3 text-sm text-bad">{error}</p>}
-        <div className="mt-6 flex flex-wrap justify-end gap-3">
-          <button className="btn btn-ghost" disabled={busy} onClick={() => create("home")}>
-            Save and exit
-          </button>
-          <button className="btn btn-primary" disabled={busy} onClick={() => create("documents")}>
-            Next: documents
-          </button>
-        </div>
-      </section>
+      <BlurFade delay={0.05}>
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="text-2xl tracking-tight">Describe your use case</CardTitle>
+            <CardDescription>
+              Type it or just talk. Recording has no time limit. Stop when you like, then record again to continue where you left off.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="space-y-2">
+              <Label htmlFor="name">Name</Label>
+              <Input id="name" placeholder="e.g. Field technician scheduling app" value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-end justify-between gap-3">
+                <Label htmlFor="desc">What do you want to build, for whom, and why?</Label>
+                <VoiceRecorder
+                  onTranscript={(t) => setDescription((d) => (d ? `${d.trimEnd()} ${t}` : t))}
+                  label={description ? "Continue talking" : "Talk instead"}
+                />
+              </div>
+              <Textarea
+                id="desc"
+                className="min-h-48"
+                placeholder="A few sentences is plenty. The concierge will ask about anything missing."
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </div>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+          </CardContent>
+          <CardFooter className="justify-end gap-2 border-t">
+            <Button variant="ghost" disabled={busy} onClick={() => create("home")}>
+              Save and exit
+            </Button>
+            <Button disabled={busy} onClick={() => create("documents")}>
+              Next: documents <ArrowRight />
+            </Button>
+          </CardFooter>
+        </Card>
+      </BlurFade>
     </main>
   );
 }

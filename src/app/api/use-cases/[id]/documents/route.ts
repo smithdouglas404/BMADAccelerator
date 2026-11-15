@@ -3,8 +3,10 @@ import { promises as fs } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
-import { BMAD_DOC_TYPES, guessDocType } from "@/lib/bmad";
+import { BMAD_DOC_TYPES, DOC_STAGES, guessDocType } from "@/lib/bmad";
 import { ensureWorkspace, workspacePath } from "@/lib/workspace";
+import { describeDocument } from "@/lib/docAgent";
+import { writeIntake } from "@/lib/provision";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -21,6 +23,9 @@ export async function POST(req: Request, { params }: Ctx) {
   const form = await req.formData();
   const files = form.getAll("files").filter((f): f is File => f instanceof File);
   if (!files.length) return NextResponse.json({ error: "No files" }, { status: 400 });
+  const stageIn = String(form.get("stage") || "general");
+  const stage = DOC_STAGES.some((s) => s.key === stageIn) ? stageIn : "general";
+  const stageLabel = DOC_STAGES.find((s) => s.key === stage)!.label;
 
   await ensureWorkspace(useCase.slug);
   const created = [];
@@ -28,7 +33,8 @@ export async function POST(req: Request, { params }: Ctx) {
     if (file.size > MAX_BYTES) continue;
     const safeName = path.basename(file.name).replace(/[^\w.\- ]/g, "_");
     const stored = `${randomUUID()}-${safeName}`;
-    const storagePath = workspacePath(useCase.slug, "uploads", stored);
+    const storagePath = workspacePath(useCase.slug, "bacc", "uploads", stored);
+    await fs.mkdir(path.dirname(storagePath), { recursive: true });
     await fs.writeFile(storagePath, Buffer.from(await file.arrayBuffer()));
     const bmadType = guessDocType(safeName);
     const typeLabel = BMAD_DOC_TYPES.find((t) => t.key === bmadType)?.label ?? "Other";
@@ -40,6 +46,7 @@ export async function POST(req: Request, { params }: Ctx) {
         sizeBytes: file.size,
         storagePath,
         bmadType,
+        stage,
         tags: [],
       },
     });
@@ -48,7 +55,7 @@ export async function POST(req: Request, { params }: Ctx) {
         useCaseId: id,
         kind: "document",
         title: `Confirm "${safeName}"`,
-        detail: `Suggested type: ${typeLabel}. Add tags and a one-line description, then approve so BMAD knows what this document covers.`,
+        detail: `For: ${stageLabel}. Suggested type: ${typeLabel}. Read the summary, then approve it so BMAD uses it, or decline it.`,
         reason: "New upload",
         source: "Document agent",
         targetId: doc.id,
@@ -57,5 +64,9 @@ export async function POST(req: Request, { params }: Ctx) {
     created.push(doc);
   }
   await prisma.useCase.update({ where: { id }, data: { updatedAt: new Date() } });
+  // The document agent reads each upload in the background; the card updates when it is done.
+  void Promise.all(created.map((d) => describeDocument(d.id).catch((e) => console.error("document agent", e)))).then(
+    () => (useCase.provisioned ? writeIntake(id) : undefined),
+  );
   return NextResponse.json(created, { status: 201 });
 }
