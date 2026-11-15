@@ -4,6 +4,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { prisma } from "@/lib/db";
 import { inspirationMarkdown } from "@/lib/inspire";
+import { pickPartners } from "@/lib/shadcnPartners";
 import { workspacePath, WORKSPACES_DIR } from "@/lib/workspace";
 import { AGENTS, BMAD_DOC_TYPES, DOC_STAGES, type Routing } from "@/lib/bmad";
 
@@ -157,12 +158,33 @@ const SHADCN_LOOKUP = {
   iconLibrary: "lucide",
 };
 
+// Partner registries the advisor and Sally search beside @shadcn (Doug, Nov 15: bring what the
+// marketplaces offer). Their addresses come from shadcn's own registry index, never typed by hand.
+// BACC_SHADCN_REGISTRIES: a comma-separated list of namespaces, "all" for every listed registry, or "off".
+let partnerIndex: Promise<Record<string, string>> | null = null;
+
+async function partnerRegistries(): Promise<Record<string, string>> {
+  partnerIndex ??= fetch("https://ui.shadcn.com/r/registries.json", { signal: AbortSignal.timeout(8000) })
+    .then((r) => (r.ok ? r.json() : {}))
+    .then((j) => (j && typeof j === "object" && !Array.isArray(j) ? (j as Record<string, string>) : {}))
+    .catch(() => {
+      partnerIndex = null; // try again next turn
+      return {};
+    });
+  return pickPartners(await partnerIndex);
+}
+
 export async function shadcnLookupDir(slug: string) {
   const dir = workspacePath(slug, "bacc", "shadcn");
   const file = path.join(dir, "components.json");
-  if (!(await exists(file))) {
+  const current = JSON.parse((await fs.readFile(file, "utf8").catch(() => "")) || "null");
+  let registries = await partnerRegistries();
+  // If the index can't be reached, keep what the last turn found.
+  if (!Object.keys(registries).length && process.env.BACC_SHADCN_REGISTRIES !== "off") registries = current?.registries ?? {};
+  const merged = { ...SHADCN_LOOKUP, registries };
+  if (!current || JSON.stringify(current.registries ?? {}) !== JSON.stringify(merged.registries)) {
     await fs.mkdir(dir, { recursive: true });
-    await fs.writeFile(file, JSON.stringify(SHADCN_LOOKUP, null, 2) + "\n");
+    await fs.writeFile(file, JSON.stringify(merged, null, 2) + "\n");
   }
   return dir;
 }

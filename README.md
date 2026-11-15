@@ -26,7 +26,10 @@ npm run dev
 Open http://localhost:3000. Each use case's generated app runs on its own port
 (4100 to 4129), so it has its own link, such as http://localhost:4100.
 
-## Keys (in `.env`)
+## Keys and models
+
+Open **Settings > Models and keys** to add your Anthropic, OpenAI and Gemini keys (and ElevenLabs and Linear), and to pick the model for each job: the BMAD agents, Generate, the document reader, pictures, agent memory and the AI agents inside generated apps. A model needs its provider's key. Keys are stored encrypted, shown only by their last four characters, and take effect straight away. Keys in `.env` still work and are used when nothing is saved on the page.
+
 
 | Key | What it turns on |
 |---|---|

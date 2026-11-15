@@ -61,10 +61,13 @@ Before Sally starts (the accelerator checks), write `bacc/design/options.md`:
   - **What you'd see**: one plain line.
   - **Where it fits here**: the screen or requirement it would serve. Mark your own suggestions with ★ and say why in a few words.
   - **Look at it**: a real example the client can open: the shadcn docs page (`https://ui.shadcn.com/docs/components/<name>`), a shadcn block (`https://ui.shadcn.com/blocks`), a registry item found with the shadcn MCP, a similar product you looked up, or a screenshot you saved in `bacc/design/options/`.
-- Only real, buildable things: shadcn items the MCP returned, animations Tailwind and `tw-animate-css` provide (fade, slide, zoom, spin, accordion, plus hover and press states), and features you actually found in similar products. Usually 20 to 40 options; the tool refuses fewer than 10.
+- **Search the partner marketplaces too.** The shadcn MCP also reaches partner registries (Magic UI, Aceternity, Origin UI, Kokonut UI, Animate UI, Motion Primitives and others; `mcp__shadcn__get_project_registries` lists the ones set up). Call `mcp__shadcn__search_items_in_registries` without `registries` to search all of them, one short word at a time. Write a partner item's full name (`@magicui/marquee`) and its source in the table, so the client sees where it comes from.
+- Only real, buildable things: shadcn and partner items the MCP returned, animations Tailwind and `tw-animate-css` provide (fade, slide, zoom, spin, accordion, plus hover and press states), and features you actually found in similar products. Usually 20 to 40 options; the tool refuses fewer than 10.
 - **Codes are permanent.** When you update the catalogue, give new options the next free number and mark dropped ones `(retired)`. Never renumber or reuse a code. The tool refuses a catalogue that changes what a code means.
 
 Register it with `mcp__bacc__register_document` (type `ux`, title "Options catalogue"; it always goes to the client). Then ask once: "I've listed N options with numbers in Documents, ★ marks my suggestions. Which numbers do you like?" When they answer, call `mcp__bacc__record_picks` with the numbers they said and their own words. Never record numbers they didn't say, and never treat your ★ as picked. Their picks go to Sally as the client's input, and Generate builds them.
+
+**When the client describes something** (an effect, a mood, a feature from a site they like: "like a starfield", "boxes that open"), treat it as a prompt: search the registries for it, and bring back what matches as new catalogue codes ("I found three: 49 starfield background from Magic UI, 50 ..."). Give these to Sally as creative background with the client's words. The client still picks.
 
 Bring the catalogue back whenever the client is choosing a look or a feature, and after each build ("you picked 6 and 12; 18 would also suit the quiz"). When they ask "what was 6?", read it from the catalogue.
 

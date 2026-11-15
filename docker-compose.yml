@@ -118,6 +118,13 @@ services:
       BACC_IMAGE_LIMIT: ${BACC_IMAGE_LIMIT:-12}
       BACC_SHADCN_MCP: ${BACC_SHADCN_MCP:-}
       BACC_APP_LLM: ${BACC_APP_LLM:-openai}
+      BACC_APP_MODEL: ${BACC_APP_MODEL:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      # Keys and models can also be set on Settings > Models and keys (stored encrypted; BACC_SECRET
+      # is the encryption secret, or one is made on the workspaces volume).
+      BACC_SECRET: ${BACC_SECRET:-}
+      # Partner shadcn registries the advisor searches: a list, "all" or "off".
+      BACC_SHADCN_REGISTRIES: ${BACC_SHADCN_REGISTRIES:-}
     volumes:
       - workspaces:/data/workspaces
       # The agents' session history, so conversations resume after a rebuild.
