@@ -22,9 +22,12 @@ services:
     ports:
       - "3000:3000"
       # Each use case's generated app gets its own port, so its own link.
-      - "4100-4129:4100-4129"
+      # Change the range in .env if another program already uses one of these ports.
+      - "${BACC_PREVIEW_PORT_BASE:-4100}-${BACC_PREVIEW_PORT_LAST:-4129}:${BACC_PREVIEW_PORT_BASE:-4100}-${BACC_PREVIEW_PORT_LAST:-4129}"
     environment:
       DATABASE_URL: postgresql://bacc:bacc@db:5432/bacc
+      BACC_PREVIEW_PORT_BASE: ${BACC_PREVIEW_PORT_BASE:-4100}
+      BACC_PREVIEW_PORT_LAST: ${BACC_PREVIEW_PORT_LAST:-4129}
       ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
       ELEVENLABS_STT_MODEL: ${ELEVENLABS_STT_MODEL:-scribe_v1}
       ELEVENLABS_VOICE_ID: ${ELEVENLABS_VOICE_ID:-}

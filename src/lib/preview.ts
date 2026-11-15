@@ -7,7 +7,9 @@ import { workspacePath } from "@/lib/workspace";
 
 // Each use case's generated app runs on its own port, so it has its own URL.
 export const PORT_BASE = Number(process.env.BACC_PREVIEW_PORT_BASE || 4100);
-export const PORT_COUNT = Number(process.env.BACC_PREVIEW_PORT_COUNT || 30);
+export const PORT_COUNT = process.env.BACC_PREVIEW_PORT_LAST
+  ? Number(process.env.BACC_PREVIEW_PORT_LAST) - PORT_BASE + 1
+  : Number(process.env.BACC_PREVIEW_PORT_COUNT || 30);
 
 const procs = new Map<string, ChildProcess>();
 const starting = new Set<string>();
@@ -34,7 +36,7 @@ export async function assignPort(uc: UseCase) {
       return p;
     }
   }
-  throw new Error("No free preview port. Raise BACC_PREVIEW_PORT_COUNT.");
+  throw new Error("No free preview port. Widen BACC_PREVIEW_PORT_BASE to BACC_PREVIEW_PORT_LAST in .env.");
 }
 
 export async function isUp(port: number) {
