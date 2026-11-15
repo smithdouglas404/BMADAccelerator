@@ -49,6 +49,7 @@ How to use what the client and BMAD have said:
 - Where the documents make a real choice (a feature, a rule, a name, a price, a wording, a flow), build it exactly. Where they only describe a minimum, build the minimum as part of the full product.
 - Newer wins: the client's ticked review-queue decisions and screen mark-ups win over older document lines; the client's numbered picks in \`bacc/design/picks.md\` (from \`bacc/design/options.md\`) win over your own design judgement and over any concept they did not pick from. A design concept the client never chose from is a suggestion, not a rule.
 - Write every choice you made yourself, and every place you went beyond the documents, under "Assumptions made" in the notes, so BMAD and the client can confirm or change them.
+- Show the floor in the app. \`bacc/floor.md\` gives every feature an id (F1, F2...). Put \`data-floor="F12"\` on the element that shows each item (the section, card, button or form; several ids space-separated), so the client can point at it. Copy \`.claude/skills/bacc-floor/floor-flags.js\` into the front end's public folder as \`bacc-floor.js\` and load it on every page with \`<script src="/bacc-floor.js" defer></script>\` in \`index.html\`. It shows nothing on its own; in the accelerator's preview it marks the [assumed] items so the client can keep, change or remove them on the page. Keep both in every later build.
 
 Design:
 - Read \`.claude/skills/frontend-design/SKILL.md\` and \`.claude/skills/frontend-design-direction/SKILL.md\` first. Then write \`bacc/design/direction.md\`: the category and the three leading products you measure against; the product, audience and primary job; palette (4 to 6 named hex values) and typefaces with the reason for each; the home-page layout as a small ASCII wireframe; the signature detail. The category's conventions come first and a theme is an accent on top (an online shop shows products in the first screen, professional type, trust signals).
@@ -171,8 +172,48 @@ async function setAsideApp(uc: UseCase) {
   await fs.mkdir(appDir(uc.slug), { recursive: true });
 }
 
-export async function runGenerate(useCaseId: string, opts: { redesign?: boolean; fresh?: boolean } = {}) {
-  if (busy.has(useCaseId)) return;
+// Small, fast updates after each client answer on the product map (keep, change, remove, add).
+// Changes made while a build runs are collected and go into the next quick build.
+const quickQueue = new Map<string, { reasons: string[]; timer: NodeJS.Timeout | null }>();
+const QUICK_DELAY_MS = Number(process.env.BACC_QUICK_BUILD_DELAY_MS || 20_000);
+
+export function requestQuickBuild(useCaseId: string, reason: string) {
+  const q = quickQueue.get(useCaseId) ?? { reasons: [], timer: null };
+  q.reasons.push(reason);
+  if (q.timer) clearTimeout(q.timer);
+  q.timer = setTimeout(() => void flushQuick(useCaseId), QUICK_DELAY_MS);
+  quickQueue.set(useCaseId, q);
+}
+
+async function flushQuick(useCaseId: string) {
+  const q = quickQueue.get(useCaseId);
+  if (!q || !q.reasons.length) return;
+  if (busy.has(useCaseId)) {
+    q.timer = setTimeout(() => void flushQuick(useCaseId), QUICK_DELAY_MS);
+    return;
+  }
+  const uc = await prisma.useCase.findUnique({ where: { id: useCaseId }, select: { generateCount: true } });
+  // Before the first build the floor build picks the changes up anyway.
+  if (!uc || uc.generateCount === 0) return;
+  const reasons = q.reasons.splice(0);
+  q.timer = null;
+  await runGenerate(useCaseId, { quick: reasons });
+}
+
+export function quickPrompt(n: number, notesPath: string, reasons: string[]) {
+  return `Update the running app (version ${n}) for these changes the client just made on the product map, and nothing else:
+${reasons.map((r) => `- ${r}`).join("\n")}
+
+\`bacc/floor.md\` has every item's current state: build [confirmed] and [assumed] items, take out [out] ones (with their \`data-floor\` marks). Keep the design, every other page and feature, and the \`data-floor\` marks and \`bacc-floor.js\` script as they are. Work small and fast, as in Claude Code when the client asks for one change: make the change, check \`npm run build\` passes, screenshot only the pages you changed (desktop and phone) into \`bacc/design/shots/\`, look at them once and fix anything broken.
+
+Then write \`${notesPath}\` with "## What was built" (one line per change) and "## Assumptions made", and tell the client in one line with \`mcp__bacc__say\` (agent \`generator\`) what changed in the preview.`;
+}
+
+export async function runGenerate(useCaseId: string, opts: { redesign?: boolean; fresh?: boolean; quick?: string[] } = {}) {
+  if (busy.has(useCaseId)) {
+    if (opts.quick?.length) for (const r of opts.quick) requestQuickBuild(useCaseId, r);
+    return;
+  }
   busy.add(useCaseId);
   try {
     let uc = await prisma.useCase.findUniqueOrThrow({ where: { id: useCaseId } });
@@ -189,14 +230,24 @@ export async function runGenerate(useCaseId: string, opts: { redesign?: boolean;
     await installDesignSkills(uc.slug);
     const fresh = !!opts.fresh && uc.generateCount > 0;
     const redesign = !fresh && !!opts.redesign && uc.generateCount > 0;
+    const quick = !fresh && !redesign && !!opts.quick?.length && uc.generateCount > 0;
+    // A full build reads the whole floor, so product-map changes waiting for a quick build go in with it.
+    if (!quick) {
+      const q = quickQueue.get(useCaseId);
+      if (q) {
+        if (q.timer) clearTimeout(q.timer);
+        quickQueue.delete(useCaseId);
+      }
+    }
     if (fresh) {
       await prisma.useCase.update({ where: { id: useCaseId }, data: { generateStatus: "Setting the old app aside" } });
       await setAsideApp(uc);
     }
     const docs = await changedDocs(redesign || fresh ? { ...uc, lastGeneratedAt: null } : uc);
-    const feedback = await prisma.feedback.findMany({ where: { useCaseId, status: { in: ["new", "sent"] } } });
+    // A quick build carries only the product-map changes; feedback and ticked decisions wait for the next full one.
+    const feedback = quick ? [] : await prisma.feedback.findMany({ where: { useCaseId, status: { in: ["new", "sent"] } } });
     // Review-queue decisions the client ticked for this build (see buildQueue.ts).
-    const ticked = pendingForBuild(await prisma.reviewItem.findMany({ where: { useCaseId, includeInBuild: true, builtInVersion: 0 }, orderBy: { createdAt: "asc" } }));
+    const ticked = quick ? [] : pendingForBuild(await prisma.reviewItem.findMany({ where: { useCaseId, includeInBuild: true, builtInVersion: 0 }, orderBy: { createdAt: "asc" } }));
     const tally: RunTally = { spoke: 0 };
 
     if (process.env.BACC_FAKE_AGENT === "1" && !claudeConfigured()) {
@@ -205,23 +256,25 @@ export async function runGenerate(useCaseId: string, opts: { redesign?: boolean;
       await runSdkTurn({
         useCaseId,
         slug: uc.slug,
-        prompt: generatePrompt(
-          uc,
-          notesPath,
-          docs,
-          feedback.map((f) => ({ ...f, imagePath: path.relative(workspacePath(uc.slug), f.imagePath) })),
-          redesign,
-          fresh,
-          decisionsForPrompt(ticked),
-        ),
+        prompt: quick
+          ? quickPrompt(n, notesPath, opts.quick!)
+          : generatePrompt(
+              uc,
+              notesPath,
+              docs,
+              feedback.map((f) => ({ ...f, imagePath: path.relative(workspacePath(uc.slug), f.imagePath) })),
+              redesign,
+              fresh,
+              decisionsForPrompt(ticked),
+            ),
         // A fresh build starts a new session, so nothing from the old app's build carries over.
         resume: fresh ? "" : uc.generateSessionId,
         appendSystem: GENERATOR_RULES,
         tally,
-        maxTurns: 600,
+        maxTurns: quick ? 150 : 600,
         // Generate gets more thinking for the design work; BACC_GENERATE_MODEL can pick another model.
         model: process.env.BACC_GENERATE_MODEL || undefined,
-        effort: "high",
+        effort: quick ? "medium" : "high",
         onSession: async (id) => {
           await prisma.useCase.update({ where: { id: useCaseId }, data: { generateSessionId: id } });
         },
@@ -249,8 +302,8 @@ export async function runGenerate(useCaseId: string, opts: { redesign?: boolean;
     // Long-term memory: what was built, and the developer (and Sofia, for feedback) learn from it.
     const notes = await fs.readFile(path.join(workspacePath(uc.slug), notesPath), "utf8").catch(() => "");
     onAppGenerated({ ...uc, stage: uc.stage === "learn" ? "learn" : "build" }, notes.slice(0, 4000) || `Version ${n} of the app.`, feedback.map((f) => `${f.ticketRef}: ${f.comment}`).join("\n"));
-    // Write what Generate learned back into BMAD, through BMAD's own agents.
-    if (agentsEnabled()) {
+    // Write what Generate learned back into BMAD, through BMAD's own agents (after a full build).
+    if (agentsEnabled() && !quick) {
       await enqueue(
         useCaseId,
         "generate",
@@ -266,5 +319,8 @@ export async function runGenerate(useCaseId: string, opts: { redesign?: boolean;
   } finally {
     busy.delete(useCaseId);
     await prisma.useCase.update({ where: { id: useCaseId }, data: { generateBusy: false, generateStatus: "" } }).catch(() => {});
+    // Product-map changes made during this build go next.
+    const q = quickQueue.get(useCaseId);
+    if (q?.reasons.length && !q.timer) q.timer = setTimeout(() => void flushQuick(useCaseId), 2000);
   }
 }

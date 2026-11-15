@@ -78,7 +78,14 @@ export function classifyDoc(rel: string): Omit<DocFile, "updatedAt" | "status"> 
                 : cap(words(name));
     return { key: "ux", path: p, title, role: "supporting" };
   }
+  if (lower.startsWith("bacc/research/")) {
+    const base = name.toLowerCase();
+    const title =
+      base === "category.md" ? "Leading products (research)" : base === "industry.md" ? "Industry rules and risks (research)" : base === "ideas.md" ? "Ideas nobody does yet (research)" : `Research: ${words(name)}`;
+    return { key: "research", path: p, title, role: "supporting" };
+  }
   if (lower.startsWith("bacc/advisor/")) {
+    if (/^comparison\.md$/i.test(name)) return { key: "tests", path: p, title: "Side by side with plain Claude Code", role: "main" };
     const isMap = /agentic/i.test(name);
     return { key: isMap ? "architecture" : "brief", path: p, title: isMap ? "AI and agent map (advisor)" : `Advisor: ${words(name)}`, role: "supporting" };
   }

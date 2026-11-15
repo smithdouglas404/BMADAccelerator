@@ -1,4 +1,5 @@
 import { promises as fs } from "fs";
+import { RESEARCH_TEAM } from "./team";
 import path from "path";
 import { query, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { prisma } from "@/lib/db";
@@ -178,6 +179,8 @@ async function runSdkTurnOnce(opts: {
       permissionMode: "bypassPermissions",
       allowDangerouslySkipPermissions: true,
       disallowedTools: ["AskUserQuestion"],
+      // The advisor's research team (category, industry, innovation), sent out when the floor is written.
+      agents: RESEARCH_TEAM,
       resume: opts.resume || undefined,
       maxTurns: opts.maxTurns ?? 200,
       env: authEnv(auth),
@@ -296,6 +299,7 @@ export const START_PROMPT = `The client just finished intake for this use case. 
 
 You lead this work; BMAD is installed in this project as a tool for structured documents, reviews and the ticket tree. The client's intake is only part of the floor. Start now:
 1. Read bacc/intake.md and the uploads.
-2. Load the bacc-floor skill and write bacc/floor.md: the category and industry, the leading products, the full scaffold of everything this kind of product has, the gap questions and the ideas. Register it; that starts the first build of the app from the floor.
-3. Greet the client in one short message: say what kind of product you understood this to be, that a first full version is being built from what leading products in that category have, and that you'll fill in what's theirs together. Then ask the most important gap question, one question only.
-4. After that, use the \`bmad\` skill to decide which BMAD agent starts, and hand it the floor as the client's input: the full product, where BMAD draws out how this client differs.`;
+2. Load the bacc-floor skill and write bacc/floor.md from what you already know: the category and industry, the leading products, the full scaffold of everything this kind of product has, the gap questions and the ideas. Don't research yet; speed matters here. Register it; that starts the first build of the app from the floor, so the client sees a working product within minutes.
+3. Greet the client in one short message: say what kind of product you understood this to be, that a first full version is being built from what leading products in that category have, and that they can keep, change or remove anything on the Product map. Then ask the most important gap question, one question only.
+4. While the build runs, send your research team out in parallel with the Agent tool, in one message: \`category-researcher\`, \`industry-expert\` and \`innovation-scout\`. When they report, raise the floor from bacc/research/ (new items as [assumed], better gap questions, ideas grounded in the client's context), register it again, and tell the client in one or two sentences what the research added. The next build picks it up.
+5. After that, use the \`bmad\` skill to decide which BMAD agent starts, and hand it the floor as the client's input: the full product, where BMAD draws out how this client differs.`;

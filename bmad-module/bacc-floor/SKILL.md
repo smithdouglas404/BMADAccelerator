@@ -12,17 +12,18 @@ The client's intake is part of the floor. You fill in the rest from what you kno
 ## When
 
 1. Right after intake, before any BMAD agent starts (set_stage refuses until `bacc/floor.md` is registered).
-2. Whenever the client answers a gap question, confirms or removes something, or a BMAD document settles an item: update the item's state. The floor only rises; an item leaves only with the client's explicit "no".
+2. Whenever the client answers a gap question, confirms or removes something, or a BMAD document settles an item: update the item's state, keep its id, and register the file again. The floor only rises; an item leaves only with the client's explicit "no". The client also changes items directly on the Product map; read the file before you edit it.
 
 ## How
 
 1. **Recall first.** `search_memory` for a playbook from earlier use cases of the same category and industry ("online shop confectionery playbook"). Start from it if there is one.
 2. **Name the category and industry.** What kind of product is this (online shop, booking site, field-service app...) and in which industry (sweets and food, healthcare...)? The industry adds its own must-haves: for food, allergens and ingredient labels, shelf life, heat-safe shipping, age rules for some products.
-3. **Study the leaders.** Name at least three real leading products in the category and what each does best. Look them up if you can.
+3. **Study the leaders and the client's own material.** Name at least three real leading products in the category and what each does best: search the web (WebSearch, WebFetch) for the category's leaders and their features, and for the industry's rules (labelling, age limits, shipping, returns law). Read every upload in `bacc/uploads/` and the intake: a business case often says far more than the intake form. Save what you found, with links, in `bacc/research/floor-research.md`. Right after intake, write the floor from what you already know first and register it (that starts the first build, and speed matters), then research and raise it. When the Agent tool is available, run the three studies in parallel with your research team subagents (`category-researcher`, `industry-expert`, `innovation-scout`, each writing to `bacc/research/`): a category researcher (the leaders and what they all have), an industry expert (rules, conventions and risks for this industry), and an innovation scout (what nobody in the category does yet, grounded in the client's context).
 4. **Write the scaffold.** Everything a leading product of this kind has, grouped under `### Area` headings (at least six areas, at least 30 items). Each item is one line with a state:
    - `[confirmed]` the client said it, or a signed-off document has it;
    - `[assumed]` you added it because leading products have it (Generate builds it; the client can change it);
    - `[out]` the client explicitly said no (quote them).
+   Give each item an id in brackets after its state, `(F1)`, `(F2)`..., numbered through the whole file. `register_document` numbers any item you leave without one. An id never changes or gets reused: documents, the Product map and the app (`data-floor="F12"`) all point at it.
    A pilot limit changes behaviour, not presence: "pre-order only" keeps the basket and checkout and marks the payment step `[out]`.
 5. **Gap questions.** At least five questions, most important first, that the client hasn't answered and BMAD won't ask, each with why it matters for this product and a suggested answer, so the client can just say yes.
 6. **Ideas.** What the leaders do that this product could do better, and what nobody in the category does yet. Ground each in the client's context.
@@ -44,9 +45,9 @@ The client's intake is part of the floor. You fill in the rest from what you kno
 
 ## Scaffold
 ### Catalogue
-- [confirmed] Nine planet collections (intake)
-- [assumed] Search and filters by diet (every leading sweet shop has them)
-- [out] Payment at checkout (client: "pre-order only for the pilot")
+- [confirmed] (F1) Nine planet collections (intake)
+- [assumed] (F2) Search and filters by diet (every leading sweet shop has them)
+- [out] (F3) Payment at checkout (client: "pre-order only for the pilot")
 
 ### Product page
 - ...

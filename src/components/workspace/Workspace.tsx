@@ -12,6 +12,7 @@ import ReviewDrawer from "./ReviewDrawer";
 import UploadDropzone from "@/components/UploadDropzone";
 import DocumentCard from "@/components/DocumentCard";
 import PreviewPanel from "./PreviewPanel";
+import ProductMap, { useFloor } from "./ProductMap";
 import { Focus, Hammer, Inbox, LogOut, Maximize2, Minimize2, Paintbrush, RotateCcw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -46,7 +47,10 @@ function readiness(data: UseCaseFull) {
 
 export default function Workspace({ data, reload }: { data: UseCaseFull; reload: () => void }) {
   const [reviewOpen, setReviewOpen] = useState(false);
-  const [side, setSide] = useState<"documents" | "preview">("documents");
+  const [side, setSide] = useState<"map" | "documents" | "preview">("map");
+  // The product map reads the floor; it refreshes whenever the conversation or the app moves on.
+  const { floor, setFloor } = useFloor(data.id, `${data.messages.length}-${data.generateCount}-${data.generateBusy}`);
+  const [focusItem, setFocusItem] = useState<string | null>(null);
   const [boardHeight, setBoardHeight] = useState(260);
   const [focus, setFocus] = useState(false);
   const [notice, setNotice] = useState("");
@@ -210,6 +214,14 @@ export default function Workspace({ data, reload }: { data: UseCaseFull; reload:
           <Tabs value={side} onValueChange={(v) => setSide(v as typeof side)} className="gap-0">
             <div className="flex items-center gap-2 border-b px-3 py-2">
               <TabsList className="flex-1">
+                <TabsTrigger value="map">
+                  Product map
+                  {!!floor?.areas && (
+                    <Badge variant="secondary" className="h-4 px-1 text-[10px]">
+                      {floor.areas.flatMap((a) => a.items).filter((i) => i.state === "assumed").length} to confirm
+                    </Badge>
+                  )}
+                </TabsTrigger>
                 <TabsTrigger value="documents">Documents</TabsTrigger>
                 <TabsTrigger value="preview">
                   Preview
@@ -232,8 +244,19 @@ export default function Workspace({ data, reload }: { data: UseCaseFull; reload:
               )}
             </div>
           </Tabs>
-          <div className={cn("min-h-0 flex-1 overflow-y-auto p-3", side === "documents" ? "space-y-3" : "flex flex-col")}>
-            {side === "documents" ? (
+          <div className={cn("min-h-0 flex-1 overflow-y-auto p-3", side === "documents" ? "space-y-3" : side === "map" ? "" : "flex flex-col")}>
+            {side === "map" ? (
+              <ProductMap
+                useCaseId={data.id}
+                floor={floor}
+                focusId={focusItem}
+                onChanged={(f, building) => {
+                  setFloor(f);
+                  if (building) setNotice("Got it. A small build is updating the preview with that change.");
+                  reload();
+                }}
+              />
+            ) : side === "documents" ? (
               <>
                 <UploadDropzone useCaseId={data.id} onUploaded={reload} />
                 {data.documents.map((d) => (
@@ -241,7 +264,15 @@ export default function Workspace({ data, reload }: { data: UseCaseFull; reload:
                 ))}
               </>
             ) : (
-              <PreviewPanel data={data} reload={reload} />
+              <PreviewPanel
+                data={data}
+                reload={reload}
+                floor={floor}
+                onPick={(id) => {
+                  setFocusItem(id);
+                  setSide("map");
+                }}
+              />
             )}
           </div>
         </Card>

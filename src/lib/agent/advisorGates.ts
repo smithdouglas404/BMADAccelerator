@@ -156,23 +156,113 @@ export function conceptProblems(md: string) {
   return problems.length ? `The design concept needs fixing: ${problems.join("; ")}.` : "";
 }
 
-// The product floor: "- [assumed] ...", "- [confirmed] ...", "- [out] ..." items under "### Area" headings.
-export type FloorItem = { area: string; state: "assumed" | "confirmed" | "out"; text: string };
+// The product floor: "- [assumed] (F12) ...", "- [confirmed] (F3) ...", "- [out] (F7) ..." items under "### Area" headings.
+// Each item keeps its id (F1, F2...) for life, so documents, the product map and the app can all point at it.
+export type FloorState = "assumed" | "confirmed" | "out";
+export type FloorItem = { id: string; area: string; state: FloorState; text: string; line: number };
+
+const ITEM_RE = /^(\s*[-*]\s*)\[(assumed|confirmed|out)\]\s*(?:\((F\d+)\)\s*)?(.+)$/i;
 
 export function floorItems(md: string): FloorItem[] {
   const out: FloorItem[] = [];
   let area = "";
-  for (const line of md.split(/\r?\n/)) {
+  md.split(/\r?\n/).forEach((line, i) => {
     const h = line.match(/^###\s+(.+)/);
     if (h) {
       area = h[1].trim();
-      continue;
+      return;
     }
     if (/^##\s/.test(line)) area = "";
-    const m = line.match(/^\s*[-*]\s*\[(assumed|confirmed|out)\]\s*(.+)/i);
-    if (m && area) out.push({ area, state: m[1].toLowerCase() as FloorItem["state"], text: m[2].trim() });
-  }
+    const m = line.match(ITEM_RE);
+    if (m && area) out.push({ id: m[3] ? m[3].toUpperCase() : "", area, state: m[2].toLowerCase() as FloorState, text: m[4].trim(), line: i });
+  });
   return out;
+}
+
+// Gives every item without an id the next free one. Ids already given never change.
+export function numberFloor(md: string): string {
+  const lines = md.split(/\r?\n/);
+  const items = floorItems(md);
+  let next = Math.max(0, ...items.map((i) => Number(i.id.slice(1)) || 0)) + 1;
+  for (const it of items) {
+    if (it.id) continue;
+    lines[it.line] = lines[it.line].replace(ITEM_RE, (_a, pre, st) => `${pre}[${st.toLowerCase()}] (F${next++}) ${it.text}`);
+  }
+  return lines.join("\n");
+}
+
+// Changes one item's state (the client kept, changed or removed it). A note records their words.
+export function setFloorItem(md: string, id: string, state: FloorState, note = ""): string {
+  const lines = md.split(/\r?\n/);
+  const it = floorItems(md).find((i) => i.id === id.toUpperCase());
+  if (!it) return md;
+  const text = note.trim() ? `${it.text.replace(/\s*\(client: [^)]*\)\s*$/, "")} (client: ${note.trim().replace(/[()]/g, "")})` : it.text;
+  lines[it.line] = lines[it.line].replace(ITEM_RE, (_a, pre) => `${pre}[${state}] (${it.id}) ${text}`);
+  return lines.join("\n");
+}
+
+// Adds an item (from an idea or the client) under an area, creating the area if needed.
+export function addFloorItem(md: string, area: string, text: string, state: FloorState = "confirmed"): { md: string; id: string } {
+  const items = floorItems(md);
+  const id = `F${Math.max(0, ...items.map((i) => Number(i.id.slice(1)) || 0)) + 1}`;
+  const lines = md.split(/\r?\n/);
+  const row = `- [${state}] (${id}) ${text.trim()}`;
+  const inArea = items.filter((i) => i.area.toLowerCase() === area.trim().toLowerCase());
+  if (inArea.length) lines.splice(inArea[inArea.length - 1].line + 1, 0, row);
+  else {
+    const gap = lines.findIndex((l) => /^##\s+Gap questions/i.test(l));
+    const at = gap >= 0 ? gap : lines.length;
+    lines.splice(at, 0, `### ${area.trim()}`, row, "");
+  }
+  return { md: lines.join("\n"), id };
+}
+
+// Which floor items a BMAD document leaves out. Every item the client hasn't said no to must be
+// cited by its id (F12) in the PRD, UX and story documents; silence never removes anything.
+export function floorCoverage(floorMd: string, docMd: string): { missing: FloorItem[]; covered: number; total: number } {
+  const live = floorItems(floorMd).filter((i) => i.id && i.state !== "out");
+  const cited = new Set((docMd.match(/\bF\d+\b/g) ?? []).map((x) => x.toUpperCase()));
+  const missing = live.filter((i) => !cited.has(i.id));
+  return { missing, covered: live.length - missing.length, total: live.length };
+}
+
+// The gates whose documents must carry the whole floor.
+export const FLOOR_GATED = /\bprd\b|product requirements|\bux\b|design|experience|ticket|epic|stor(y|ies)|breakdown/i;
+
+export function coverageProblem(floorMd: string, docMd: string): string {
+  const { missing, total } = floorCoverage(floorMd, docMd);
+  if (!total || !missing.length) return "";
+  const list = missing.slice(0, 25).map((i) => `${i.id} ${i.text}`).join("; ");
+  return `This document leaves out ${missing.length} of the ${total} floor items the client hasn't said no to: ${list}${missing.length > 25 ? "; ..." : ""}. Cite each by its id (F12) where the document covers it. If the client said no, mark the item [out] in ${FLOOR_FILE} with their words; silence never removes anything.`;
+}
+
+export type FloorDoc = {
+  category: string;
+  leaders: string[];
+  areas: { name: string; items: FloorItem[] }[];
+  gaps: string[];
+  ideas: string[];
+};
+
+export function parseFloor(md: string): FloorDoc {
+  const bullets = (s: string) =>
+    s
+      .split(/\r?\n/)
+      .map((l) => l.match(/^\s*(?:[-*]|\d+\.)\s+(.+)/)?.[1]?.trim())
+      .filter((x): x is string => !!x);
+  const areas: FloorDoc["areas"] = [];
+  for (const it of floorItems(md)) {
+    let a = areas.find((x) => x.name === it.area);
+    if (!a) areas.push((a = { name: it.area, items: [] }));
+    a.items.push(it);
+  }
+  return {
+    category: section(md, "Category"),
+    leaders: bullets(section(md, "Leading products")),
+    areas,
+    gaps: bullets(section(md, "Gap questions")),
+    ideas: bullets(section(md, "Ideas")),
+  };
 }
 
 function section(md: string, name: string) {

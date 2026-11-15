@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import VoiceRecorder from "@/components/VoiceRecorder";
 import { previewUrl, type UseCaseFull } from "@/lib/types";
-import { ArrowLeft, Circle, ExternalLink, Hammer, Pencil, PenLine, Square, Undo2, X as XIcon } from "lucide-react";
+import { ArrowLeft, Circle, ExternalLink, Hammer, Map as MapIcon, Pencil, PenLine, Square, Undo2, X as XIcon } from "lucide-react";
+import type { FloorT } from "./ProductMap";
+import CompareButton from "./CompareButton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -19,12 +21,48 @@ type Shape = { tool: Tool; points: { x: number; y: number }[] };
 
 // The generated app, live, on its own URL. "Mark up" freezes the screen as a picture
 // so the person can circle, box or cross out what to change and say why.
-export default function PreviewPanel({ data, reload }: { data: UseCaseFull; reload: () => void }) {
+export default function PreviewPanel({
+  data,
+  reload,
+  floor = null,
+  onPick,
+}: {
+  data: UseCaseFull;
+  reload: () => void;
+  floor?: FloorT | null;
+  onPick?: (id: string) => void;
+}) {
   const [url, setUrl] = useState("");
   const [path, setPath] = useState("/");
   const [mode, setMode] = useState<"live" | "markup">("live");
   const [nonce, setNonce] = useState(0);
   const frameBox = useRef<HTMLDivElement>(null);
+  const frame = useRef<HTMLIFrameElement>(null);
+  // "Show what's assumed": the app marks every assumed feature on the page (bacc-floor.js in the app).
+  const [flags, setFlags] = useState(true);
+  const [flagInfo, setFlagInfo] = useState<{ ready: boolean; count: number }>({ ready: false, count: 0 });
+  const items = JSON.stringify(
+    Object.fromEntries((floor?.areas ?? []).flatMap((a) => a.items).map((i) => [i.id, { state: i.state, text: i.text }])),
+  );
+  const send = () => frame.current?.contentWindow?.postMessage({ type: "bacc-floor-show", on: flags, items: JSON.parse(items) }, "*");
+
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      if (e.source !== frame.current?.contentWindow) return;
+      const d = (e.data || {}) as { type?: string; id?: string; count?: number };
+      if (d.type === "bacc-floor-ready") {
+        setFlagInfo({ ready: true, count: 0 });
+        send();
+      } else if (d.type === "bacc-floor-count") setFlagInfo({ ready: true, count: d.count ?? 0 });
+      else if (d.type === "bacc-floor-pick" && d.id) onPick?.(d.id);
+    };
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+    // send reads the latest flags and items through the closure below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onPick, flags, items]);
+  useEffect(send, [flags, items]);
+  useEffect(() => setFlagInfo({ ready: false, count: 0 }), [nonce]);
 
   useEffect(() => setUrl(previewUrl(data.preview.port)), [data.preview.port]);
   // Reload the frame when a new version is generated.
@@ -71,7 +109,19 @@ export default function PreviewPanel({ data, reload }: { data: UseCaseFull; relo
         <Badge variant="secondary" className="font-mono text-[10px]">
           v{data.generateCount}
         </Badge>
-        <div className="ml-auto flex gap-1">
+        <div className="ml-auto flex flex-wrap gap-1">
+          {mode === "live" && <CompareButton useCaseId={data.id} disabled={!data.generateCount} />}
+          {mode === "live" && flagInfo.ready && (
+            <Button
+              size="sm"
+              variant={flags ? "secondary" : "ghost"}
+              aria-pressed={flags}
+              onClick={() => setFlags((f) => !f)}
+              title="Mark the features that were assumed for you, so you can keep, change or remove them"
+            >
+              <MapIcon /> {flags ? `${flagInfo.count} assumed here` : "Show what's assumed"}
+            </Button>
+          )}
           {mode === "live" ? (
             <Button
               size="sm"
@@ -101,7 +151,7 @@ export default function PreviewPanel({ data, reload }: { data: UseCaseFull; relo
           </form>
           <div ref={frameBox} className="min-h-72 flex-1 overflow-hidden rounded-lg border bg-white shadow-xs">
             {data.preview.running && url ? (
-              <iframe key={nonce} src={full} title="Generated app preview" className="h-full w-full" />
+              <iframe ref={frame} key={nonce} src={full} title="Generated app preview" className="h-full w-full" />
             ) : (
               <Centered>
                 <Spinner />

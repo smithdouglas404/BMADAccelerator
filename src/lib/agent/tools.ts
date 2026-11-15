@@ -24,6 +24,9 @@ import {
   FLOOR_FILE,
   FLOOR_SKILL,
   floorProblems,
+  numberFloor,
+  coverageProblem,
+  FLOOR_GATED,
   conceptProblems,
   DESIGN_CONCEPT,
   gapsProblem,
@@ -63,6 +66,27 @@ export function baccTools(useCaseId: string, slug: string, tally: RunTally) {
       () => true,
       () => false,
     );
+
+  // A document's text, or every Markdown file in a folder (an epics folder, say).
+  const readDocText = async (rel: string) => {
+    const root = workspacePath(slug);
+    const abs = path.resolve(root, rel);
+    if (!abs.startsWith(root)) return "";
+    const st = await fs.stat(abs).catch(() => null);
+    if (!st) return "";
+    if (st.isFile()) return fs.readFile(abs, "utf8").catch(() => "");
+    const parts: string[] = [];
+    const walk = async (dir: string, depth: number) => {
+      if (depth > 4) return;
+      for (const e of await fs.readdir(dir, { withFileTypes: true }).catch(() => [])) {
+        const f = path.join(dir, e.name);
+        if (e.isDirectory()) await walk(f, depth + 1);
+        else if (/\.(md|toml|ya?ml)$/i.test(e.name)) parts.push(await fs.readFile(f, "utf8").catch(() => ""));
+      }
+    };
+    await walk(abs, 0);
+    return parts.join("\n");
+  };
 
   let imagesMade = 0;
   return createSdkMcpServer({
@@ -216,6 +240,13 @@ export function baccTools(useCaseId: string, slug: string, tally: RunTally) {
         async ({ gate, summary, document_path, agent, advisor_review }) => {
           const problem = signoffReviewProblem(advisor_review);
           if (problem) return ok(`Not sent. ${problem}`);
+          // The floor is the floor: a PRD, UX or story document may not quietly drop an item the client never said no to.
+          const floorMd = await fs.readFile(workspacePath(slug, FLOOR_FILE), "utf8").catch(() => "");
+          if (floorMd && FLOOR_GATED.test(gate)) {
+            if (!document_path) return ok("Not sent. Give document_path (the file or folder being signed off) so it can be checked against the product floor.");
+            const missing = coverageProblem(floorMd, await readDocText(document_path));
+            if (missing) return ok(`Not sent. ${missing}`);
+          }
           const a = AGENTS[agent as keyof typeof AGENTS];
           await prisma.reviewItem.create({
             data: {
@@ -313,8 +344,12 @@ export function baccTools(useCaseId: string, slug: string, tally: RunTally) {
             if (problem) return ok(`${problem} Fix the file, then register it again.`);
           }
           if (rel === FLOOR_FILE) {
-            const problem = floorProblems(await fs.readFile(abs, "utf8"));
+            const md = await fs.readFile(abs, "utf8");
+            const problem = floorProblems(md);
             if (problem) return ok(`${problem} Fix the file (${FLOOR_SKILL} skill), then register it again.`);
+            // Every item gets an id (F12) it keeps for life; documents, the product map and the app point at it.
+            const numbered = numberFloor(md);
+            if (numbered !== md) await fs.writeFile(abs, numbered);
           }
           if (rel === OPTIONS_CATALOGUE) {
             const problem = catalogueProblems(await fs.readFile(abs, "utf8"), await fs.readFile(lastCatalogue, "utf8").catch(() => ""));
