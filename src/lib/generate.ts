@@ -73,20 +73,26 @@ function generatePrompt(
   docs: string[],
   feedback: { comment: string; imagePath: string; pageUrl: string }[],
   redesign: boolean,
+  fresh = false,
 ) {
-  const first = uc.generateCount === 0;
+  const first = uc.generateCount === 0 || fresh;
   const fb = feedback
     .map((f, i) => `${i + 1}. "${f.comment}" — marked-up screenshot: ${f.imagePath}${f.pageUrl ? ` (page ${f.pageUrl})` : ""}`)
     .join("\n");
-  const opening = first
-    ? "Generate the first version of the app."
+  const opening = fresh
+    ? `Build the app from scratch (version ${uc.generateCount + 1}). The client set the earlier app aside: \`app/\` is empty and there is no design direction yet. Build only from BMAD's documents, \`bacc/intake.md\` and the component list, as if no app had ever existed. Never open \`bacc/archive/\`: it holds the old app and must not shape this one.`
+    : first
+      ? "Generate the first version of the app."
     : redesign
       ? `Redesign the app (version ${uc.generateCount + 1}). Keep every feature, page, rule and piece of data that works, but treat the look as not good enough: write a fresh \`bacc/design/direction.md\` from scratch, without reusing the current palette, fonts or layout, and rebuild the whole UI to it. Also bring in any change from the inputs below.`
       : `Regenerate the app (version ${uc.generateCount + 1}). Work from the deltas: change what the new inputs below ask for and keep everything else as it is. If \`bacc/design/direction.md\` is missing, write it and bring the whole UI up to it.`;
+  const components = first
+    ? "\n\nComponent list: if `bacc/design/components.md` doesn't exist yet and the PRD does, write it first. For each screen and requirement in the PRD, look up shadcn/ui items with the shadcn MCP tools (one short word per search) and list the exact registry names with one line on why each fits, plus a \"Gaps\" section; only list items the tools returned. Register it with `mcp__bacc__register_document` (type `ux`, title \"Component list\", review true) and build from it without waiting."
+    : "";
   const stackCheck = first
     ? ""
     : "\n\nFirst check the stack: if the app's front end is not built on shadcn/ui with React and Tailwind (unless an approved 'Design system or brand' upload defines a different one), move it onto shadcn/ui in this run, whatever else the run asks. Keep the server, the data and every route and feature working, and check them all afterwards.";
-  return `${opening}${stackCheck}
+  return `${opening}${components}${stackCheck}
 
 ${docs.length ? `BMAD documents ${first || redesign ? "available now" : "changed since the last generation"}:\n${docs.map((d) => `- ${d}`).join("\n")}` : first ? "BMAD has no documents yet: build from bacc/intake.md." : "No BMAD document changed since the last generation."}
 ${fb ? `\nScreen feedback from the client since the last generation (open each screenshot with Read: the drawings show the spot they mean):\n${fb}\n` : ""}
@@ -137,7 +143,23 @@ async function commitApp(dir: string, n: number) {
   );
 }
 
-export async function runGenerate(useCaseId: string, opts: { redesign?: boolean } = {}) {
+// Start fresh: the current app, its design direction and screenshots move to bacc/archive/, out of Generate's sight.
+async function setAsideApp(uc: UseCase) {
+  await stopPreview(uc.id);
+  const stamp = `v${uc.generateCount}-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+  const archive = workspacePath(uc.slug, "bacc", "archive", stamp);
+  await fs.mkdir(archive, { recursive: true });
+  for (const [from, to] of [
+    [appDir(uc.slug), "app"],
+    [workspacePath(uc.slug, "bacc", "design", "direction.md"), "direction.md"],
+    [workspacePath(uc.slug, "bacc", "design", "shots"), "shots"],
+  ]) {
+    await fs.rename(from, path.join(archive, to)).catch(() => {});
+  }
+  await fs.mkdir(appDir(uc.slug), { recursive: true });
+}
+
+export async function runGenerate(useCaseId: string, opts: { redesign?: boolean; fresh?: boolean } = {}) {
   if (busy.has(useCaseId)) return;
   busy.add(useCaseId);
   try {
@@ -153,8 +175,13 @@ export async function runGenerate(useCaseId: string, opts: { redesign?: boolean 
     const n = uc.generateCount + 1;
     const notesPath = path.join("_bmad-output", uc.initiative || "generate", "generate", `generate-notes-${n}.md`);
     await installDesignSkills(uc.slug);
-    const redesign = !!opts.redesign && uc.generateCount > 0;
-    const docs = await changedDocs(redesign ? { ...uc, lastGeneratedAt: null } : uc);
+    const fresh = !!opts.fresh && uc.generateCount > 0;
+    const redesign = !fresh && !!opts.redesign && uc.generateCount > 0;
+    if (fresh) {
+      await prisma.useCase.update({ where: { id: useCaseId }, data: { generateStatus: "Setting the old app aside" } });
+      await setAsideApp(uc);
+    }
+    const docs = await changedDocs(redesign || fresh ? { ...uc, lastGeneratedAt: null } : uc);
     const feedback = await prisma.feedback.findMany({ where: { useCaseId, status: { in: ["new", "sent"] } } });
     const tally: RunTally = { spoke: 0 };
 
@@ -164,8 +191,9 @@ export async function runGenerate(useCaseId: string, opts: { redesign?: boolean 
       await runSdkTurn({
         useCaseId,
         slug: uc.slug,
-        prompt: generatePrompt(uc, notesPath, docs, feedback.map((f) => ({ ...f, imagePath: path.relative(workspacePath(uc.slug), f.imagePath) })), redesign),
-        resume: uc.generateSessionId,
+        prompt: generatePrompt(uc, notesPath, docs, feedback.map((f) => ({ ...f, imagePath: path.relative(workspacePath(uc.slug), f.imagePath) })), redesign, fresh),
+        // A fresh build starts a new session, so nothing from the old app's build carries over.
+        resume: fresh ? "" : uc.generateSessionId,
         appendSystem: GENERATOR_RULES,
         tally,
         maxTurns: 600,

@@ -52,13 +52,13 @@ export default function Workspace({ data, reload }: { data: UseCaseFull; reload:
     : 0;
   const [wide, setWide] = useState(false);
 
-  async function generate(redesign = false) {
+  async function generate(mode: "" | "redesign" | "fresh" = "") {
     setNotice("");
     setSide("preview");
     const r = await fetch(`/api/use-cases/${data.id}/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ redesign }),
+      body: JSON.stringify({ redesign: mode === "redesign", fresh: mode === "fresh" }),
     });
     if (!r.ok) setNotice((await r.json()).error || "Generate could not start.");
     reload();
@@ -109,10 +109,22 @@ export default function Workspace({ data, reload }: { data: UseCaseFull; reload:
             <button
               className="btn btn-ghost"
               title="Keep every feature, and rebuild the look from a fresh design direction"
-              onClick={() => generate(true)}
+              onClick={() => generate("redesign")}
               disabled={data.generateBusy}
             >
               Redesign
+            </button>
+          )}
+          {data.generateCount > 0 && (
+            <button
+              className="btn btn-ghost"
+              title="Set the current app aside and build a new one from BMAD's documents, as if it were the first time"
+              onClick={() => {
+                if (window.confirm("Start fresh? The current app is set aside (kept in the project's archive) and a new one is built from the documents.")) generate("fresh");
+              }}
+              disabled={data.generateBusy}
+            >
+              Start fresh
             </button>
           )}
           <button
