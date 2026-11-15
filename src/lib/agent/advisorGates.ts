@@ -5,11 +5,14 @@
 export const ADVICE_EXEMPT = ["concierge", "bmad", "generator"];
 
 export const ADVISOR_SKILL = "bacc-expert-advisor";
+export const AGENTIC_SKILL = "bacc-agentic-advisor";
+export const AGENTIC_MAP = "bacc/advisor/agentic-map.md";
 
 // Returns why set_stage must refuse, or "" when the handover may go ahead.
 // Once per agent per use case: the first handover to each BMAD agent waits for advice.
-export function stageGateBlock(opts: { agent: string; advised: boolean; conceptExists: boolean }) {
-  const { agent, advised, conceptExists } = opts;
+// Winston (architect) also waits for the agentic map (bacc-agentic-advisor skill).
+export function stageGateBlock(opts: { agent: string; advised: boolean; conceptExists: boolean; agenticMapExists?: boolean }) {
+  const { agent, advised, conceptExists, agenticMapExists = false } = opts;
   if (ADVICE_EXEMPT.includes(agent)) return "";
   const steps: string[] = [];
   if (!advised)
@@ -18,6 +21,10 @@ export function stageGateBlock(opts: { agent: string; advised: boolean; conceptE
     );
   if (agent === "ux" && !conceptExists)
     steps.push(`write bacc/design/concept.md, the design concept for Sally (${ADVISOR_SKILL} skill, section 2), and register it for the client's approval`);
+  if (agent === "architect" && !agenticMapExists)
+    steps.push(
+      `write ${AGENTIC_MAP}, the agentic map (load the ${AGENTIC_SKILL} skill): candidate AI agents and people in the loop traced to the documents, designed in Inngest AgentKit terms, and register it for the client's approval; ask the client its questions one at a time`,
+    );
   if (!steps.length) return "";
   return `Not handed over yet. As the client's expert advisor, first ${steps.join("; then ")}. Then call set_stage again.`;
 }

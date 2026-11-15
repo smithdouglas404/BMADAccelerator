@@ -16,6 +16,14 @@ test("Sally needs advice and the design concept", () => {
   assert.equal(stageGateBlock({ agent: "ux", advised: true, conceptExists: true }), "");
 });
 
+test("Winston needs the agentic map", () => {
+  const block = stageGateBlock({ agent: "architect", advised: true, conceptExists: true, agenticMapExists: false });
+  assert.match(block, /agentic-map\.md/);
+  assert.match(block, /AgentKit/);
+  assert.equal(stageGateBlock({ agent: "architect", advised: true, conceptExists: false, agenticMapExists: true }), "");
+  assert.equal(stageGateBlock({ agent: "pm", advised: true, conceptExists: false, agenticMapExists: false }), "");
+});
+
 test("concierge, BMad guide and Generate are never blocked", () => {
   for (const agent of ["concierge", "bmad", "generator"]) {
     assert.equal(stageGateBlock({ agent, advised: false, conceptExists: false }), "");

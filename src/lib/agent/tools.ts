@@ -9,7 +9,7 @@ import { askQuestion } from "@/lib/questions";
 import { formatHits, letta, rememberAnswer, rememberLesson, searchMemory } from "@/lib/memory";
 import { ROLES } from "@/lib/memory/lettaCore";
 import { IMAGE_LIMIT, imagesConfigured, makeImage } from "@/lib/images";
-import { adviceFileName, adviceMarkdown, signoffReviewProblem, stageGateBlock } from "./advisorGates";
+import { AGENTIC_MAP, adviceFileName, adviceMarkdown, signoffReviewProblem, stageGateBlock } from "./advisorGates";
 
 const AGENT_KEYS = Object.keys(AGENTS) as [string, ...string[]];
 const ROLE_KEYS = ROLES.map((r) => r.key) as [string, ...string[]];
@@ -103,13 +103,14 @@ export function baccTools(useCaseId: string, slug: string, tally: RunTally) {
       ),
       tool(
         "set_stage",
-        "Show which BMAD stage the work is in and which agent is working now. Handing over to a BMAD agent needs your expert advice for it first (mcp__bacc__advise), and Sally also needs bacc/design/concept.md; otherwise this refuses and says what to do.",
+        "Show which BMAD stage the work is in and which agent is working now. Handing over to a BMAD agent needs your expert advice for it first (mcp__bacc__advise), Sally also needs bacc/design/concept.md, and Winston (architect) needs bacc/advisor/agentic-map.md (bacc-agentic-advisor skill); otherwise this refuses and says what to do.",
         { stage: z.enum(STAGE_KEYS), agent: z.enum(AGENT_KEYS) },
         async ({ stage, agent }) => {
           const block = stageGateBlock({
             agent,
             advised: await advisedFor(agent),
             conceptExists: await fileExists(workspacePath(slug, "bacc", "design", "concept.md")),
+            agenticMapExists: await fileExists(workspacePath(slug, AGENTIC_MAP)),
           });
           if (block) return ok(block);
           await prisma.useCase.update({ where: { id: useCaseId }, data: { stage, activeAgent: agent } });
