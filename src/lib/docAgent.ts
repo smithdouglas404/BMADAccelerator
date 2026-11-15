@@ -6,7 +6,10 @@ import { prisma } from "@/lib/db";
 import { AGENTS, BMAD_DOC_TYPES, DOC_STAGES, ROUTABLE_AGENTS } from "@/lib/bmad";
 import { convertToText } from "@/lib/provision";
 
-export const MODEL = process.env.BACC_MODEL || "claude-opus-5-5";
+/** The BMAD role agents and Generate. Sonnet: about half Opus's price, strong enough for planning and building. */
+export const MODEL = process.env.BACC_MODEL || "claude-sonnet-5-5";
+/** The document agent only reads and tags an upload, so the low-cost model is enough. */
+export const DOC_MODEL = process.env.BACC_DOC_MODEL || "claude-haiku-5-5";
 
 const Suggestion = z.object({
   bmadType: z.enum(BMAD_DOC_TYPES.map((t) => t.key) as [string, ...string[]]),
@@ -36,7 +39,7 @@ export async function describeDocument(documentId: string) {
   const client = new Anthropic();
   const response = await client.messages
     .parse({
-    model: MODEL,
+    model: DOC_MODEL,
     max_tokens: 6000,
     output_config: { effort: "low", format: zodOutputFormat(Suggestion) },
     messages: [

@@ -102,7 +102,9 @@ services:
       MEM0_API_KEY: ${MEM0_ADMIN_API_KEY:-}
       LETTA_BASE_URL: http://letta:8283
       LETTA_API_KEY: ${LETTA_SERVER_PASSWORD:-}
-      BACC_LETTA_MODEL: ${BACC_LETTA_MODEL:-}
+      BACC_MODEL: ${BACC_MODEL:-claude-sonnet-5-5}
+      BACC_DOC_MODEL: ${BACC_DOC_MODEL:-claude-haiku-5-5}
+      BACC_LETTA_MODEL: ${BACC_LETTA_MODEL:-anthropic/claude-haiku-5-5}
       BACC_LETTA_EMBEDDING: ${BACC_LETTA_EMBEDDING:-}
     volumes:
       - workspaces:/data/workspaces

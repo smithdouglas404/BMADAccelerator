@@ -158,7 +158,8 @@ export function pickModel(handles: string[], preferred?: string): string | null 
   if (preferred && handles.includes(preferred)) return preferred;
   const claude = handles.filter((h) => /^anthropic\/claude-/.test(h));
   if (!claude.length) return null;
-  const tier = (h: string) => (/opus/.test(h) ? 3 : /sonnet/.test(h) ? 2 : /haiku/.test(h) ? 1 : 0);
+  // The role agents only recall and write short lessons, so the low-cost Haiku is preferred.
+  const tier = (h: string) => (/haiku/.test(h) ? 3 : /sonnet/.test(h) ? 2 : /opus/.test(h) ? 1 : 0);
   const version = (h: string) => {
     const m = h.replace(/-\d{8}$/, "").match(/(\d+)(?:[-.](\d+))?(?!.*\d)/);
     return m ? Number(m[1]) * 100 + Number(m[2] ?? 0) : 0;
