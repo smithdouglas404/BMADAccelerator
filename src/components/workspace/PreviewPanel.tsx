@@ -52,8 +52,13 @@ export default function PreviewPanel({ data, reload }: { data: UseCaseFull; relo
         <span className="text-muted">version {data.generateCount}</span>
         <div className="ml-auto flex gap-1">
           {mode === "live" ? (
-            <button className="btn btn-ghost text-xs" onClick={() => setMode("markup")} disabled={!data.preview.running}>
-              Mark up
+            <button
+              className="btn btn-primary text-sm"
+              onClick={() => setMode("markup")}
+              disabled={!data.preview.running}
+              title="Click or draw a box on the page, then say what you want changed"
+            >
+              ✎ Mark up: draw on the page to give feedback
             </button>
           ) : (
             <button className="btn btn-ghost text-xs" onClick={() => setMode("live")}>
