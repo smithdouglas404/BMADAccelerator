@@ -38,8 +38,11 @@ services:
       JIRA_API_TOKEN: ${JIRA_API_TOKEN:-}
     volumes:
       - workspaces:/data/workspaces
+      # The agents' session history, so conversations resume after a rebuild.
+      - claude-home:/home/node/.claude
     shm_size: "512m"
 
 volumes:
   db:
   workspaces:
+  claude-home:

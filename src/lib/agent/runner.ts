@@ -100,7 +100,22 @@ function statusFor(block: { type: string; name?: string; input?: unknown }) {
   }
 }
 
-export async function runSdkTurn(opts: {
+type TurnOpts = Parameters<typeof runSdkTurnOnce>[0];
+
+// Runs a turn, resuming the use case's Claude session. If that session can't be
+// resumed (for example its history was lost when the container was rebuilt), the
+// turn starts a fresh session instead: BMAD's files hold the real state.
+export async function runSdkTurn(opts: TurnOpts) {
+  try {
+    return await runSdkTurnOnce(opts);
+  } catch (e) {
+    if (!opts.resume || opts.tally.spoke > 0) throw e;
+    console.error("resume failed, starting a fresh session", e);
+    return runSdkTurnOnce({ ...opts, resume: "" });
+  }
+}
+
+async function runSdkTurnOnce(opts: {
   useCaseId: string;
   slug: string;
   prompt: string;

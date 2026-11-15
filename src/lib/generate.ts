@@ -145,6 +145,11 @@ export async function runGenerate(useCaseId: string) {
     await startPreview(useCaseId);
     if (feedback.length) {
       await prisma.feedback.updateMany({ where: { id: { in: feedback.map((f) => f.id) } }, data: { status: "built" } });
+      // Their cards on the board move to Done too.
+      await prisma.ticket.updateMany({
+        where: { useCaseId, kind: "feedback", ref: { in: feedback.map((f) => f.ticketRef) } },
+        data: { status: "done" },
+      });
     }
     // Write what Generate learned back into BMAD, through BMAD's own agents.
     if (agentsEnabled()) {

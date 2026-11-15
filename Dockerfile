@@ -27,6 +27,7 @@ ENV NODE_ENV=production PORT=3000 WORKSPACES_DIR=/data/workspaces HOME=/home/nod
 COPY --from=build --chown=node:node /app ./
 RUN mkdir -p /data/workspaces && chown -R node:node /data
 USER node
+RUN mkdir -p /home/node/.claude
 RUN git config --global user.name "BMAD Accelerator" && git config --global user.email "bmad@accelerator.local" \
     && git config --global init.defaultBranch main
 # 3000: the accelerator. 4100-4129: each use case's generated app.
