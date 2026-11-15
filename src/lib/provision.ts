@@ -89,6 +89,15 @@ export async function installSkills(useCaseId: string, slug: string) {
   }
 }
 
+// The accelerator's own skills (concierge, expert advisor), refreshed in every workspace before each
+// turn so a rule added later reaches use cases created before it.
+export async function syncAcceleratorSkills(slug: string) {
+  const ws = workspacePath(slug);
+  for (const name of await fs.readdir(CONCIERGE_DIR)) {
+    for (const t of await skillTargets()) await copyDir(path.join(CONCIERGE_DIR, name), path.join(ws, t, name));
+  }
+}
+
 // The design skills Generate reads, copied into workspaces made before they were added.
 export async function installDesignSkills(slug: string) {
   const ws = workspacePath(slug);

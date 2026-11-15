@@ -3,7 +3,7 @@ import path from "path";
 import { query, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { prisma } from "@/lib/db";
 import { workspacePath } from "@/lib/workspace";
-import { provisionWorkspace, shadcnLookupDir, writeIntake } from "@/lib/provision";
+import { provisionWorkspace, shadcnLookupDir, syncAcceleratorSkills, writeIntake } from "@/lib/provision";
 import { syncBoard } from "@/lib/bmadTickets";
 import { MODEL } from "@/lib/docAgent";
 import { LimitError, authEnv, authOrder, claudeConfigured, limitMessage, type Auth } from "@/lib/agent/auth";
@@ -162,6 +162,7 @@ async function runSdkTurnOnce(opts: {
   const texts: string[] = [];
   // The official shadcn MCP server (pinned in the image): component, block and chart look-ups.
   const shadcnDir = process.env.BACC_SHADCN_MCP === "0" ? "" : await shadcnLookupDir(opts.slug).catch(() => "");
+  await syncAcceleratorSkills(opts.slug).catch((e) => console.error("skill sync", e));
   const q = query({
     prompt: opts.prompt,
     options: {

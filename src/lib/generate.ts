@@ -229,7 +229,7 @@ export async function runGenerate(useCaseId: string, opts: { redesign?: boolean;
       await enqueue(
         useCaseId,
         "generate",
-        `Generate finished version ${n} of the app (it is running in the client's preview). Its notes for BMAD are in ${notesPath}. Bring them into BMAD through the owning agents' own update workflows: UI and UX notes to Sally (\`bmad-agent-ux-designer\`), new or changed requirements to John (\`bmad-agent-pm\`), technical decisions to Winston (\`bmad-agent-architect\`). Where BMAD would ask the client first, ask them, one question at a time. Tell the client in one line what you're updating.`,
+        `Generate finished version ${n} of the app (it is running in the client's preview). Its notes for BMAD are in ${notesPath}. Bring them into BMAD through the owning agents' own update workflows: UI and UX notes to Sally (\`bmad-agent-ux-designer\`), new or changed requirements to John (\`bmad-agent-pm\`), technical decisions to Winston (\`bmad-agent-architect\`). Where BMAD would ask the client first, ask them, one question at a time. Tell the client in one line what you're updating.\n\nThen, as the client's expert advisor, review the built app (bacc-expert-advisor skill, section 4): open the screenshots in bacc/design/shots/, check them against the PRD, Sally's documents, bacc/design/concept.md and bacc/design/components.md, write bacc/advisor/app-review-v${n}.md, call mcp__bacc__advise for "generator" with your top three changes, tell the client your verdict in two or three plain sentences and ask whether to build them in at the next Regenerate.`,
       );
     }
   } catch (e) {

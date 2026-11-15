@@ -9,6 +9,7 @@ import { askQuestion } from "@/lib/questions";
 import { formatHits, letta, rememberAnswer, rememberLesson, searchMemory } from "@/lib/memory";
 import { ROLES } from "@/lib/memory/lettaCore";
 import { IMAGE_LIMIT, imagesConfigured, makeImage } from "@/lib/images";
+import { adviceFileName, adviceMarkdown, signoffReviewProblem, stageGateBlock } from "./advisorGates";
 
 const AGENT_KEYS = Object.keys(AGENTS) as [string, ...string[]];
 const ROLE_KEYS = ROLES.map((r) => r.key) as [string, ...string[]];
@@ -30,6 +31,20 @@ export function baccTools(useCaseId: string, slug: string, tally: RunTally) {
     });
     await prisma.useCase.update({ where: { id: useCaseId }, data: { activeAgent: agent } });
   };
+
+  const advisorDir = workspacePath(slug, "bacc", "advisor");
+  const advisedFor = async (agent: string) => {
+    try {
+      return (await fs.readdir(advisorDir)).some((f) => f.startsWith(`${agent}-`));
+    } catch {
+      return false;
+    }
+  };
+  const fileExists = (p: string) =>
+    fs.access(p).then(
+      () => true,
+      () => false,
+    );
 
   let imagesMade = 0;
   return createSdkMcpServer({
@@ -88,11 +103,34 @@ export function baccTools(useCaseId: string, slug: string, tally: RunTally) {
       ),
       tool(
         "set_stage",
-        "Show which BMAD stage the work is in and which agent is working now.",
+        "Show which BMAD stage the work is in and which agent is working now. Handing over to a BMAD agent needs your expert advice for it first (mcp__bacc__advise), and Sally also needs bacc/design/concept.md; otherwise this refuses and says what to do.",
         { stage: z.enum(STAGE_KEYS), agent: z.enum(AGENT_KEYS) },
         async ({ stage, agent }) => {
+          const block = stageGateBlock({
+            agent,
+            advised: await advisedFor(agent),
+            conceptExists: await fileExists(workspacePath(slug, "bacc", "design", "concept.md")),
+          });
+          if (block) return ok(block);
           await prisma.useCase.update({ where: { id: useCaseId }, data: { stage, activeAgent: agent } });
           return ok();
+        },
+      ),
+      tool(
+        "advise",
+        "Record your expert advice (bacc-expert-advisor skill) for a BMAD agent before it starts, or for Generate after a build: two or three specific ideas, each with why and where it comes from (the client's words, intake, a requirement, a similar product, an earlier use case). Saved in bacc/advisor/. Offer the best ones to the client yourself with ask.",
+        {
+          for_agent: z.enum(AGENT_KEYS),
+          ideas: z
+            .array(z.object({ idea: z.string().min(10), why: z.string().min(10), source: z.string().min(3) }))
+            .min(1)
+            .max(6),
+        },
+        async ({ for_agent, ideas }) => {
+          const when = new Date();
+          await fs.mkdir(advisorDir, { recursive: true });
+          await fs.writeFile(path.join(advisorDir, adviceFileName(for_agent, when)), adviceMarkdown(for_agent, ideas, when));
+          return ok("Saved. Offer the best one or two to the client with ask, then pass what they accept to the agent as their input.");
         },
       ),
       tool(
@@ -115,21 +153,24 @@ export function baccTools(useCaseId: string, slug: string, tally: RunTally) {
       ),
       tool(
         "request_signoff",
-        "Ask the person to sign off at a BMAD gate (PRFAQ verdict, PRD validation, architecture review, ticket breakdown approval, retrospective verdict). Their decision arrives as a message.",
+        "Ask the person to sign off at a BMAD gate (PRFAQ verdict, PRD validation, architecture review, ticket breakdown approval, retrospective verdict). advisor_review is your own expert view of the document (bacc-expert-advisor skill, section 3), shown on the card. Their decision arrives as a message.",
         {
           gate: z.string().min(1),
           summary: z.string().min(1),
           document_path: z.string().default(""),
           agent: z.enum(AGENT_KEYS),
+          advisor_review: z.string().min(1),
         },
-        async ({ gate, summary, document_path, agent }) => {
+        async ({ gate, summary, document_path, agent, advisor_review }) => {
+          const problem = signoffReviewProblem(advisor_review);
+          if (problem) return ok(`Not sent. ${problem}`);
           const a = AGENTS[agent as keyof typeof AGENTS];
           await prisma.reviewItem.create({
             data: {
               useCaseId,
               kind: "signoff",
               title: `Sign off: ${gate}`,
-              detail: summary,
+              detail: `${summary}\n\nYour advisor's view: ${advisor_review.trim()}`,
               reason: "BMAD waits for your decision at this gate.",
               source: `${a.name}, ${a.role}`,
               targetId: document_path,
