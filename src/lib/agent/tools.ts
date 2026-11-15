@@ -9,7 +9,7 @@ import { askQuestion } from "@/lib/questions";
 import { formatHits, letta, rememberAnswer, rememberLesson, searchMemory } from "@/lib/memory";
 import { ROLES } from "@/lib/memory/lettaCore";
 import { IMAGE_LIMIT, imagesConfigured, makeImage } from "@/lib/images";
-import { AGENTIC_MAP, adviceFileName, adviceMarkdown, signoffReviewProblem, stageGateBlock } from "./advisorGates";
+import { AGENTIC_MAP, adviceFileName, mustReview, adviceMarkdown, signoffReviewProblem, stageGateBlock } from "./advisorGates";
 
 const AGENT_KEYS = Object.keys(AGENTS) as [string, ...string[]];
 const ROLE_KEYS = ROLES.map((r) => r.key) as [string, ...string[]];
@@ -252,6 +252,8 @@ export function baccTools(useCaseId: string, slug: string, tally: RunTally) {
           } catch {
             return ok("No file at that path yet.");
           }
+          // The design concept, component list and agentic map always go to the client for approval.
+          if (mustReview(path.relative(workspacePath(slug), abs))) args.review = true;
           const existing = await prisma.document.findFirst({ where: { useCaseId, storagePath: abs } });
           const data = {
             fileName: args.title,

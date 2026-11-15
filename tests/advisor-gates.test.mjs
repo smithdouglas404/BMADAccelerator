@@ -1,7 +1,7 @@
 // Run: node --test tests/  (Node 22 strips the TypeScript types itself.)
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { stageGateBlock, signoffReviewProblem, adviceFileName, adviceMarkdown } from "../src/lib/agent/advisorGates.ts";
+import { stageGateBlock, signoffReviewProblem, adviceFileName, adviceMarkdown, mustReview } from "../src/lib/agent/advisorGates.ts";
 
 test("handover to a BMAD agent needs advice first", () => {
   assert.match(stageGateBlock({ agent: "pm", advised: false, conceptExists: false }), /mcp__bacc__advise for "pm"/);
@@ -39,4 +39,9 @@ test("advice is written as a dated file", () => {
   const when = new Date("2026-11-15T08:00:00Z");
   assert.equal(adviceFileName("ux", when), "ux-2026-11-15T08-00-00-000Z.md");
   assert.match(adviceMarkdown("ux", [{ idea: "Star map shop", why: "shoppers pick by planet", source: "intake" }], when), /Star map shop/);
+});
+
+test("concept, component list and agentic map always need the client's approval", () => {
+  for (const p of ["bacc/design/concept.md", "./bacc/design/components.md", "bacc/advisor/agentic-map.md"]) assert.equal(mustReview(p), true, p);
+  assert.equal(mustReview("bacc/advisor/app-review-v5.md"), false);
 });

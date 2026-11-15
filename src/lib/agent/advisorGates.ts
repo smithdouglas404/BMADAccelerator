@@ -36,6 +36,13 @@ export function signoffReviewProblem(review: string) {
   return "";
 }
 
+// Advisor documents the client must approve, whatever review flag the agent passes.
+export const CLIENT_APPROVES = ["bacc/design/concept.md", "bacc/design/components.md", AGENTIC_MAP];
+export function mustReview(relPath: string) {
+  const p = relPath.replace(/\\/g, "/").replace(/^\.\//, "");
+  return CLIENT_APPROVES.includes(p);
+}
+
 export function adviceFileName(agent: string, when: Date) {
   return `${agent}-${when.toISOString().replace(/[:.]/g, "-")}.md`;
 }
