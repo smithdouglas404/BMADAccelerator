@@ -355,11 +355,13 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
       ),
       tool(
         "resolve_decision",
-        "Settle an open or assumed decision once the owner answered: approved with their answer, or changed text.",
+        "Settle an open or assumed decision once the owner answered: approved with their answer, or changed text. An approved or closed decision is never rewritten: when the owner changes or corrects it, record the new one with record_decision and name this one in replaces, so the history shows both.",
         { id: z.string(), status: z.enum(["approved", "assumed", "open"]).default("approved"), answer: z.string().default(""), text: z.string().default("") },
         async ({ id, status, answer, text }) => {
           const d = await prisma.decision.findFirst({ where: { id, useCaseId } });
           if (!d) return ok("No such decision.");
+          // A settled decision keeps its words: a correction replaces it, so "Why did this change?" shows both.
+          if (d.status !== "open" && d.status !== "assumed") return ok(`That decision is already ${d.status}. Record the new answer with record_decision and replaces: ["${d.id}"].`);
           await prisma.decision.update({ where: { id }, data: { status, answer: answer || d.answer, text: text || d.text, includeInBuild: status !== "open", resolvedAt: new Date() } });
           await recordChange(useCaseId, { node: `decision:${id}`, kind: status === "approved" ? "approved" : "changed", summary: `${status === "approved" ? "Settled" : "Updated"}: ${text || d.text}${answer ? ` (answer: ${answer})` : ""}`, before: `${d.text} (${d.status})`, after: `${text || d.text} (${status})`, by: speaker, fromTurn: true });
           if (answer) rememberAnswer(await uc(), "muse", d.text, answer);
