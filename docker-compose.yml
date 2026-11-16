@@ -134,6 +134,8 @@ services:
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
       BACC_CLAUDE_AUTH: ${BACC_CLAUDE_AUTH:-}
       LINEAR_API_KEY: ${LINEAR_API_KEY:-}
+      # TypeSafe (Jev). Best saved on Settings > Models and keys instead.
+      TYPESAFE_API_KEY: ${TYPESAFE_API_KEY:-}
       JIRA_BASE_URL: ${JIRA_BASE_URL:-}
       JIRA_EMAIL: ${JIRA_EMAIL:-}
       JIRA_API_TOKEN: ${JIRA_API_TOKEN:-}
