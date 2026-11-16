@@ -174,12 +174,14 @@ export function SpecView({ live, act, changeView, specSections }: Props) {
 type Impact = { prd: { key: string; ref: string; title: string }[]; trd: { key: string; ref: string; title: string }[]; backlog: { id: string; title: string }[]; workflows: { id: string; title: string }[]; moves: { id: string; title: string; status: string }[]; artifacts: string[]; linear: { title: string; url: string }[] }
 
 /** What a change to this section touches downstream. */
-function SpecImpact({ live, sectionKey }: { live: Live; sectionKey: string }) {
+/** What a change to a spec section (or a decision) touches. */
+export function SpecImpact({ live, sectionKey, decisionId, className }: { live: Live; sectionKey?: string; decisionId?: string; className?: string }) {
   const [impact, setImpact] = useState<Impact | null>(null)
   const stamp = live.spec.find((s) => s.key === sectionKey)?.updatedAt ?? live.updatedAt
   useEffect(() => {
-    void api<Impact>(`/api/use-cases/${live.id}/impact?section=${encodeURIComponent(sectionKey)}`, { cache: 'no-store' }).then(setImpact).catch(() => setImpact(null))
-  }, [live.id, sectionKey, stamp])
+    const q = sectionKey ? `section=${encodeURIComponent(sectionKey)}` : `decision=${encodeURIComponent(decisionId ?? '')}`
+    void api<Impact>(`/api/use-cases/${live.id}/impact?${q}`, { cache: 'no-store' }).then(setImpact).catch(() => setImpact(null))
+  }, [live.id, sectionKey, decisionId, stamp])
   const rows: [string, string[]][] = impact ? [
     ['PRD sections', impact.prd.map((s) => `${s.ref} ${s.title}`)],
     ['TRD sections', impact.trd.map((s) => `${s.ref} ${s.title}`)],
@@ -191,7 +193,7 @@ function SpecImpact({ live, sectionKey }: { live: Live; sectionKey: string }) {
   ] : []
   const total = rows.reduce((n, [, v]) => n + v.length, 0)
   return (
-    <Section title={!impact ? 'What a change here touches' : total ? `A change here touches ${total} ${total === 1 ? 'thing' : 'things'}` : 'Nothing else depends on this yet'} description="So you can see the knock-on effects before you change it." action={<Network className="size-4 text-muted-foreground" />}>
+    <Section className={className} title={!impact ? 'What a change here touches' : total ? `A change here touches ${total} ${total === 1 ? 'thing' : 'things'}` : 'Nothing else depends on this yet'} description="So you can see the knock-on effects before you change it." action={<Network className="size-4 text-muted-foreground" />}>
       {rows.filter(([, v]) => v.length).map(([k, v]) => <Row key={k} title={<>{k} <span className="font-normal text-muted-foreground">· {v.length}</span></>} detail={<>{v.slice(0, 6).join(' · ')}{v.length > 6 ? ` · and ${v.length - 6} more` : ''}</>} />)}
     </Section>
   )

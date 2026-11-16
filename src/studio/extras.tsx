@@ -3,9 +3,8 @@
 // (from styles.css, which stays byte-identical to their drop) and sit below their content; the few new
 // classes are in studio-extras.css.
 import { useEffect, useState, type ReactNode } from 'react'
-import { ArrowRight, Check, ChevronDown, CircleHelp, ExternalLink, GitBranch, History, Mic, Network, Play, Plus, RefreshCw, Sparkles, X } from 'lucide-react'
-import { SPEC_BASIS, SPEC_STATUSES } from '@/lib/studio/spec'
-import { api, ago, previewUrl, type Live } from './live'
+import { ArrowRight, Check, Mic, Play, Plus, Sparkles } from 'lucide-react'
+import { api, type Live } from './live'
 
 type Act = (fn: () => Promise<unknown>, ok?: string) => Promise<void>
 type ProductRow = { id: string; name: string; stageLabel: string; readiness: number; busy: boolean }
@@ -75,73 +74,6 @@ function inline(s: string): ReactNode[] {
   )
 }
 
-type SectionLite = { key: string; ref: string; title: string; status: string; basis: string; review: string; reviewNote: string }
-
-/** Requirements review: Keep, Revise, Challenge or Remove, the section's state, and one-at-a-time review. */
-/** The review state under the team's Accept / Revise row: how we know it, its state, the last review. */
-export function SpecReviewTools({ section, onStatus, reviewMode, setReviewMode, onNext }: { section: SectionLite; onStatus: (status: string) => void; reviewMode: boolean; setReviewMode: (v: boolean) => void; onNext: () => void }) {
-  return (
-    <div className="studio-review-meta studio-review-inline">
-      <span className={`studio-basis ${section.basis}`}>{SPEC_BASIS.find((b) => b.key === section.basis)?.label ?? section.basis}</span>
-      <label>State<select value={section.status} onChange={(e) => onStatus(e.target.value)}>{SPEC_STATUSES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}</select></label>
-      {section.review && <span className={`studio-review-chip ${section.review}`}>{section.review}{section.reviewNote ? ` · “${section.reviewNote}”` : ''}</span>}
-      <span className="studio-spacer" />
-      <button type="button" className="text-button" onClick={() => { setReviewMode(!reviewMode); if (!reviewMode) onNext() }}>{reviewMode ? 'Leave review mode' : 'Review one at a time'} <ArrowRight size={13} /></button>
-      {reviewMode && <button type="button" className="text-button" onClick={onNext}>Next section <ArrowRight size={13} /></button>}
-    </div>
-  )
-}
-
-type Impact = { prd: { key: string; ref: string; title: string }[]; trd: { key: string; ref: string; title: string }[]; backlog: { id: string; title: string }[]; workflows: { id: string; title: string }[]; moves: { id: string; title: string; status: string }[]; artifacts: string[]; linear: { title: string; url: string }[] }
-
-/** What a change to this section or decision touches downstream. */
-export function ImpactPanel({ live, sectionKey, decisionId }: { live: Live; sectionKey?: string; decisionId?: string }) {
-  const [impact, setImpact] = useState<Impact | null>(null)
-  const stamp = live.spec.find((s) => s.key === sectionKey)?.updatedAt ?? live.updatedAt
-  useEffect(() => {
-    const q = sectionKey ? `section=${encodeURIComponent(sectionKey)}` : `decision=${encodeURIComponent(decisionId ?? '')}`
-    void api<Impact>(`/api/use-cases/${live.id}/impact?${q}`, { cache: 'no-store' }).then(setImpact).catch(() => setImpact(null))
-  }, [live.id, sectionKey, decisionId, stamp])
-  if (!impact) return null
-  const rows: [string, string[]][] = [
-    ['PRD sections', impact.prd.map((s) => `${s.ref} ${s.title}`)],
-    ['TRD sections', impact.trd.map((s) => `${s.ref} ${s.title}`)],
-    ['Backlog', impact.backlog.map((b) => b.title)],
-    ['Agent workflows', impact.workflows.map((b) => b.title)],
-    ['Build moves', impact.moves.map((m) => `${m.title} (${m.status})`)],
-    ['Generated artifacts', impact.artifacts],
-    ['Linear', impact.linear.map((l) => l.title)],
-  ]
-  const total = rows.reduce((n, [, v]) => n + v.length, 0)
-  return (
-    <section className="studio-card">
-      <div className="stack-header"><div><p className="eyebrow">Change impact</p><h3>{total ? `A change here touches ${total} ${total === 1 ? 'thing' : 'things'}` : 'Nothing else depends on this yet'}</h3></div><Network size={16} /></div>
-      {total > 0 && <div className="studio-impact">{rows.filter(([, v]) => v.length).map(([label, v]) => <div key={label}><span className="eyebrow">{label} · {v.length}</span>{v.slice(0, 6).map((x) => <small key={x}>{x}</small>)}{v.length > 6 && <small>and {v.length - 6} more</small>}</div>)}</div>}
-    </section>
-  )
-}
-
-/** Spec versions: one per package, with the diff, and a restore that comes back as a new version. */
-export function VersionHistory({ live, act }: { live: Live; act: Act }) {
-  const [open, setOpen] = useState<number | null>(null)
-  const revs = [...live.specRevisions].sort((a, b) => b.version - a.version)
-  return (
-    <section className="studio-card">
-      <div className="stack-header"><div><p className="eyebrow">Spec versions · {revs.length}</p><h3>Every package keeps the spec it was built from</h3></div><History size={16} /></div>
-      {revs.length === 0 && <p className="studio-muted">The first version is saved when the first Claude Code package is assembled.</p>}
-      <div className="studio-list">
-        {revs.map((r, i) => (
-          <div key={r.id} className="studio-list-row">
-            <button type="button" className="studio-row-main" onClick={() => setOpen(open === r.version ? null : r.version)}><strong>Version {r.version}</strong><small>{r.reason} · {ago(r.createdAt)}</small><ChevronDown size={13} /></button>
-            {i > 0 && <button type="button" className="button button-quiet button-small" onClick={() => void act(() => api(`/api/use-cases/${live.id}/spec/restore`, { json: { version: r.version } }), `Spec restored to version ${r.version} — saved as a new version`)}>Restore</button>}
-            {open === r.version && <pre className="studio-diff">{r.diff || 'No changes from the version before.'}</pre>}
-          </div>
-        ))}
-      </div>
-    </section>
-  )
-}
-
 /** Explainable readiness: the factors behind the one number. */
 export function ReadinessFactors({ live }: { live: Live }) {
   return (
@@ -157,31 +89,6 @@ export function ReadinessFactors({ live }: { live: Live }) {
         ))}
       </div>
     </section>
-  )
-}
-
-/** Every decision: approve, reopen, answer, include in the next build, and see what it touches. */
-export function DecisionRegister({ live, act }: { live: Live; act: Act }) {
-  const [answer, setAnswer] = useState<Record<string, string>>({})
-  const [impactOf, setImpactOf] = useState('')
-  const patch = (id: string, body: Record<string, unknown>, ok: string) => void act(() => api(`/api/use-cases/${live.id}/decisions/${id}`, { method: 'PATCH', json: body }), ok)
-  const list = [...live.decisions].sort((a, b) => (a.status === 'approved' ? 1 : 0) - (b.status === 'approved' ? 1 : 0))
-  return (
-    <div className="studio-list studio-register">
-      {list.length === 0 && <p className="studio-muted">No decisions yet.</p>}
-      {list.map((d) => (
-        <div key={d.id} className="studio-list-row">
-          <div className="studio-row-main"><strong>{d.text}</strong><small>{d.status} · {d.capability || 'whole product'} · {ago(d.createdAt)}{d.words ? ` · you said “${d.words.slice(0, 80)}”` : ''}</small></div>
-          {d.status !== 'approved' && <textarea className="studio-input" rows={1} value={answer[d.id] ?? d.answer} onChange={(e) => setAnswer({ ...answer, [d.id]: e.target.value })} placeholder="Your answer…" />}
-          <div className="studio-review-actions">
-            {d.status !== 'approved' ? <button type="button" className="button button-primary button-small" onClick={() => patch(d.id, { status: 'approved', ...(answer[d.id] ? { answer: answer[d.id] } : {}) }, 'Decision approved and carried forward')}><Check size={13} /> Approve</button> : <button type="button" className="button button-quiet button-small" onClick={() => patch(d.id, { status: 'open' }, 'Decision reopened — Socra will ask about it')}>Reopen</button>}
-            <label className="studio-toggle"><input type="checkbox" checked={d.includeInBuild} onChange={(e) => patch(d.id, { includeInBuild: e.target.checked }, e.target.checked ? 'Included in the next build' : 'Left out of the next build')} /> include in next build</label>
-            <button type="button" className="text-button" onClick={() => setImpactOf(impactOf === d.id ? '' : d.id)}>What it touches <ArrowRight size={12} /></button>
-          </div>
-          {impactOf === d.id && <ImpactPanel live={live} decisionId={d.id} />}
-        </div>
-      ))}
-    </div>
   )
 }
 
@@ -242,22 +149,3 @@ export function ProvidersCard() {
   )
 }
 
-/** The builds Claude Code has made of this product, and the buttons that start the next one. */
-export function BuildHistory({ live, buildNow }: { live: Live; act: Act; buildNow: (opts?: { redesign?: boolean; fresh?: boolean }) => void }) {
-  const [confirmFresh, setConfirmFresh] = useState(false)
-  const open = previewUrl(live.preview.port, '/')
-  return (
-    <section className="studio-card studio-builds">
-      <div className="stack-header"><div><p className="eyebrow">Claude Code builds · {live.generateCount}</p><h3>{live.generateBusy ? live.generateStatus || 'Building the next version…' : live.generateCount ? `Version ${live.generateCount} built ${ago(live.lastGeneratedAt)}` : 'No version built yet'}</h3></div><RefreshCw size={16} /></div>
-      <div className="studio-review-actions">
-        <button type="button" className="button button-primary button-small" disabled={live.generateBusy} onClick={() => buildNow()}><Play size={13} /> {live.generateCount ? `Build version ${live.generateCount + 1}` : 'Build it now'}</button>
-        {live.generateCount > 0 && <button type="button" className="button button-quiet button-small" disabled={live.generateBusy} onClick={() => buildNow({ redesign: true })}><Sparkles size={13} /> Fresh design direction</button>}
-        {live.generateCount > 0 && !confirmFresh && <button type="button" className="text-button" disabled={live.generateBusy} onClick={() => setConfirmFresh(true)}>Start fresh from the spec <ArrowRight size={12} /></button>}
-        {confirmFresh && <span className="studio-confirm"><CircleHelp size={13} /> The current app and design are archived and never read again; your requirements stay. <button type="button" className="button button-quiet button-small" onClick={() => { setConfirmFresh(false); buildNow({ fresh: true }) }}>Start fresh</button><button type="button" className="icon-button subtle" aria-label="Cancel" onClick={() => setConfirmFresh(false)}><X size={13} /></button></span>}
-        {open && <a className="text-button" href={open} target="_blank" rel="noreferrer">Open the live product <ExternalLink size={12} /></a>}
-        {live.repoUrl && <a className="text-button" href={live.repoUrl} target="_blank" rel="noreferrer"><GitBranch size={12} /> Repository</a>}
-      </div>
-      {live.agentError && <p className="studio-muted">{live.agentError}</p>}
-    </section>
-  )
-}

@@ -6,11 +6,8 @@ import {
   Code2,
   Database,
   ExternalLink,
-  FolderGit2,
   MousePointer2,
-  PackageOpen,
   RefreshCw,
-  Settings2,
   Upload,
   UserRound,
   ArrowRight,
@@ -28,10 +25,8 @@ import {
   MoreHorizontal,
   MoveUpRight,
   Network,
-  Play,
   Plus,
   Sparkles,
-  Target,
   Timer,
   X,
   PenLine,
@@ -52,12 +47,13 @@ import { TruthGraphView, MarkChain, ObservationEffects } from './truth'
 import { AgentsView } from './agents'
 import { StoryMapView } from './storymap'
 import { BoardView } from './board'
-import { StudioMarkdown, ReadinessFactors, DecisionRegister, ObservationComposer, SyncPreview, ProvidersCard, BuildHistory } from './extras'
+import { StudioMarkdown, ReadinessFactors, ObservationComposer, SyncPreview, ProvidersCard } from './extras'
 import { PRODUCT_LINE } from '@/lib/brand'
 import { StudioFrame, StudioSidebar, StudioTopBar } from './shell'
 import { ConversationView } from './socra'
 import { OverviewView } from './overview'
 import { SpecView } from './specview'
+import { BriefView } from './brief'
 
 const viewTitles: Record<StudioView, string> = {
   review: 'Try & mark up',
@@ -327,7 +323,7 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
         {activeView === 'storymap' && <StoryMapView live={live} me={me} changeView={changeView} setToast={setToast} />}
         {activeView === 'spec' && <SpecView {...{ ...props, specSections, messages, evidence, backlog, execution }} />}
         {activeView === 'readiness' && <ReadinessView {...{ live, capabilities, readiness, overallReadiness, selected, focusCapability, changeView }} />}
-        {activeView === 'brief' && <BriefView {...{ live, act, validationScore, repositoryUrl: live.repoUrl, generatedFiles: generatedFiles.length ? generatedFiles : live.packageFiles, prototypeStatus, generatePrototype, buildNow, generationVersion, setTechnicalOpen, technicalOpen, changeView, role, setRole, setToast }} />}
+        {activeView === 'brief' && <BriefView {...{ live, act, validationScore, repositoryUrl: live.repoUrl, generatedFiles: generatedFiles.length ? generatedFiles : live.packageFiles, prototypeStatus, generatePrototype, buildNow, generationVersion, setTechnicalOpen, technicalOpen, changeView, role, setRole }} />}
         {activeView === 'pilot' && <BoardView live={live} me={me} buildNow={buildNow} changeView={changeView} setToast={setToast}><ObservationComposer live={live} act={act} /><ObservationEffects live={live} /></BoardView>}
         {activeView === 'connections' && <ConnectionsView {...{ live, act, setToast, changeView }} />}
 
@@ -463,17 +459,7 @@ function EvidenceView({ live, act, evidence, changeView, role, setRole, setToast
   return <div className="page-wrap evidence-page"><div className="page-intro"><div><p className="eyebrow">Evidence library · everything Socra is allowed to believe</p><h1>Keep the “why”<br />close to the work.</h1><p>Upload research, attach an interview, or let a conversation become evidence. Every signal stays traceable to the use case, PRFAQ, or a decision.</p></div><div className="intro-actions"><RoleSwitcher {...{ role, setRole }} /><label className="button button-primary file-button"><Upload size={15} /> Add research<input type="file" multiple accept=".md,.txt,.pdf,.docx,.csv,.json,.png,.jpg,.jpeg" onChange={addEvidence} /></label></div></div><div className="evidence-toolbar"><div><span className="eyebrow">{evidence.length} sources connected</span><strong>Confidence grows when signals agree.</strong></div><div className="evidence-filters">{([['all', 'All evidence'], ['interview', 'Interviews'], ['research', 'Research'], ['uploaded', 'Uploads']] as const).map(([k, label]) => <button key={k} className={filter === k ? 'is-active' : ''} type="button" onClick={() => setFilter(k)}>{label}</button>)}</div></div><div className="evidence-grid">{shown.length === 0 && <div className="empty-column">No sources here yet. Upload research, or let the conversation become evidence.</div>}{shown.map((item) => <article className="evidence-card" key={item.id}><div className="evidence-card-top"><span className={`evidence-type ${item.type}`}>{item.type}</span><span className={`confidence ${item.confidence}`}>{item.confidence === 'high' ? <Check size={11} /> : item.confidence === 'medium' ? <CircleHelp size={11} /> : <Timer size={11} />} {item.confidence}</span></div><h3>{item.insight}</h3><div className="evidence-source"><FileText size={13} /><span><strong>{item.source}</strong><small>{item.trace}</small></span></div><button className="text-button" type="button" onClick={() => setToast(`Trace: ${item.trace || 'connected to the product shape'}`)}>See trace <ExternalLink size={12} /></button></article>)}</div><div className="evidence-footer"><div><span className="signal-icon"><Database size={15} /></span><p><strong>Socra’s rule</strong>Research can inform the conversation, but it cannot silently become a requirement. The owner still decides what belongs.</p></div><button className="button button-quiet" type="button" onClick={() => changeView('validation')}>Use evidence to validate <ArrowRight size={14} /></button></div></div>
 }
 
-function BriefView({ live, act, buildNow, validationScore, repositoryUrl, generatedFiles, prototypeStatus, generatePrototype, generationVersion, setTechnicalOpen, technicalOpen, changeView, role, setRole, setToast }: { live: Live; act: Act; buildNow: (opts?: { redesign?: boolean; fresh?: boolean }) => void; validationScore: number; repositoryUrl: string; generatedFiles: string[]; prototypeStatus: 'idle' | 'assembling' | 'ready'; generatePrototype: () => void; setTechnicalOpen: (value: boolean) => void; technicalOpen: boolean; changeView: (view: ViewId) => void; role: 'owner' | 'engineer'; setRole: (role: 'owner' | 'engineer') => void; setToast: (value: string) => void; generationVersion: number }) {
-  const components = live.components.length ? live.components.map((c) => c.name) : ['Card', 'Tabs', 'Dialog', 'Textarea', 'DataTable', 'Sheet', 'Badge']
-  const agentRoutes = live.routes
-  const openDecisions = live.decisions.filter((d) => d.status !== 'approved').length
-  const [registerOpen, setRegisterOpen] = useState(false)
-  return <div className="page-wrap brief-page"><div className="page-intro"><div><p className="eyebrow eyebrow-with-dot"><span className="status-dot" />Ready to hand the work to Claude Code</p><h1>Assemble the brief<br /><em>without losing the why.</em></h1><p>The prototype payload is a living bundle: validated use case, PRFAQ, evidence, decisions, technical interpretation, component map, Agent Kit routes, and traceable Kanban.</p></div><div className="intro-actions"><RoleSwitcher {...{ role, setRole }} /><button className="button button-primary" type="button" onClick={() => buildNow()} disabled={live.generateBusy}><Play size={15} />{live.generateBusy ? live.generateStatus || 'Claude Code is building…' : live.preview.hasApp ? `Build version ${live.generateCount + 1} with Claude Code` : 'Build it with Claude Code'}</button><button className="button button-quiet" type="button" onClick={generatePrototype} disabled={prototypeStatus === 'assembling'}><PackageOpen size={15} />{prototypeStatus === 'assembling' ? 'Assembling ZIP…' : prototypeStatus === 'ready' ? 'Generate again + download ZIP' : 'Download Claude Code ZIP'}</button><span>{live.generateBusy ? 'Building on your Claude plan; the preview updates when it’s done' : repositoryUrl || 'Builds run on your Claude plan; the ZIP is for your own Claude Code'}</span></div></div><div className="brief-layout"><section className="brief-manifest"><div className="manifest-header"><div><p className="eyebrow">Prototype package · Claude Code</p><h2>{generatedFiles.length ? `${generatedFiles.length} files ready to ship` : 'The payload is ready to assemble'}</h2><span className="generation-count">Iteration {generationVersion || 0}</span></div><span className={`package-status ${prototypeStatus}`}><span />{prototypeStatus === 'ready' ? 'downloaded' : prototypeStatus === 'assembling' ? 'working' : 'draft'}</span></div><div className="manifest-grid"><ManifestItem icon={<Target size={15} />} title="Validated use case" detail={`${validationScore}% readiness recommendation`} /><ManifestItem icon={<FileText size={15} />} title="PRFAQ + decisions" detail={`Customer promise, ${live.decisions.length} decisions, ${openDecisions} open`} /><ManifestItem icon={<Database size={15} />} title="Evidence library" detail={`${live.evidence.length} sources: interview, research, upload, pilot traces`} /><ManifestItem icon={<Code2 size={15} />} title="Technical requirements" detail="Claude Code guardrails + production-minded boundary" /><ManifestItem icon={<Layers3 size={15} />} title="shadcn/ui component map" detail={`${components.length} suggested primitives, ready to adapt`} /><ManifestItem icon={<Bot size={15} />} title="Inngest Agent Kit routes" detail="Agent roles, routing, and human pauses" /></div><div className="file-list"><div className="eyebrow">Package contents</div>{(generatedFiles.length ? generatedFiles : ['README.md', 'PRFAQ.md', 'VALIDATED_USE_CASE.md', 'TECHNICAL_REQUIREMENTS.md', 'COMPONENT_MAP.json', 'AGENT_KIT_ROUTING.json', 'KANBAN.json', 'EVIDENCE.json', 'VISUAL_ANNOTATIONS.json', 'PRD.md', 'TRD.md', 'SPEC_TRACE.json', 'CLAUDE_CODE_PROMPT.md']).map((file) => <div key={file}><FileText size={13} /><span>{file}</span><Check size={13} /></div>)}</div></section><aside className="brief-aside"><div className="brief-side-card"><div className="stack-header"><div><p className="eyebrow">Component recommendations</p><h3>UI baseline for the thin slice</h3></div><Settings2 size={16} /></div><div className="component-pills">{components.map((component) => <span key={component}>{component}</span>)}</div><button className="text-button" type="button" onClick={() => setTechnicalOpen(!technicalOpen)}>{technicalOpen ? 'Hide mapping rationale' : 'Show mapping rationale'} <ArrowRight size={13} /></button>{technicalOpen && <div className="mapping-note">{live.components.some((c) => c.why) ? live.components.filter((c) => c.why).map((c) => `${c.name}: ${c.why}`).join(' ') : 'The component map is written from the PRD with the shadcn registry once the shape is clear. Until then the Studio’s baseline primitives stand in.'}</div>}</div><div className="brief-side-card routing-card"><div className="stack-header"><div><p className="eyebrow">Agent Kit orchestration</p><h3>Visible, not overwhelming</h3></div><RefreshCw size={16} /></div><div className="route-timeline">{agentRoutes.map((route) => <div key={route.id}><span className={`route-node ${route.state}`} /><div><strong>{route.agent}</strong><small>{route.action}</small></div><span className="route-state">{route.state}</span></div>)}</div></div><div className="human-register"><div className="stack-header"><div><p className="eyebrow">Human-in-the-loop register</p><h3>Meaning stays yours</h3></div><UserRound size={16} /></div><p>{live.decisions.length} decisions are tracked; {openDecisions} {openDecisions === 1 ? 'remains' : 'remain'} open before production hardening.</p><button className="button button-quiet full-width" type="button" onClick={() => setRegisterOpen(!registerOpen)}>Review open decision <ArrowRight size={14} /></button>{registerOpen && <DecisionRegister live={live} act={act} />}</div><button className="button button-quiet full-width" type="button" onClick={() => changeView('connections')}><FolderGit2 size={15} /> Review repository connection</button></aside></div><BuildHistory live={live} act={act} buildNow={buildNow} /></div>
-}
 
-function ManifestItem({ icon, title, detail }: { icon: React.ReactNode; title: string; detail: string }) {
-  return <div className="manifest-item"><span>{icon}</span><div><strong>{title}</strong><small>{detail}</small></div><Check size={13} /></div>
-}
 
 function ConnectionsView({ live, act, setToast, changeView }: { live: Live; act: Act; setToast: (value: string) => void; changeView: (view: ViewId) => void }) {
   const [repositoryUrl, setRepositoryUrl] = useState(live.repoUrl)
