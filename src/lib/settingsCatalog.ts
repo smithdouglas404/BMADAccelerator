@@ -32,6 +32,7 @@ export const PROVIDERS: { id: Provider; name: string; env: string; models: strin
 export const OTHER_KEYS: { env: string; name: string }[] = [
   { env: "ELEVENLABS_API_KEY", name: "ElevenLabs (voice)" },
   { env: "LINEAR_API_KEY", name: "Linear (tracker)" },
+  { env: "TYPESAFE_API_KEY", name: "TypeSafe (Jev: typed yes/no, choice and score answers)" },
   { env: "GITHUB_TOKEN", name: "GitHub (push the pilot to your repository)" },
   { env: "SMTP_URL", name: "Email sending (SMTP, for notifications: smtps://user:app-password@smtp.example.com:465)" },
 ];

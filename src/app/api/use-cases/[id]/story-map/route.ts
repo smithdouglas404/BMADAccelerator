@@ -3,7 +3,8 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { askSocra } from "@/lib/studio/actions";
 import { recordChange } from "@/lib/studio/truthlog";
-import { LINK_KINDS, LINK_LABEL, connectPrompt, liveLinks, storyNodes, suggestPrompt, unlinked, wouldCycle } from "@/lib/studio/storymap";
+import { LINK_KINDS, LINK_LABEL, connectPrompt, liveLinks, maySuggest, storyNodes, suggestPrompt, unlinked, wouldCycle } from "@/lib/studio/storymap";
+import { guessLinks } from "@/lib/jev";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -60,6 +61,24 @@ export async function POST(req: Request, { params }: Ctx) {
   }
 
   if (b.action === "suggest") {
+    // Jev (TypeSafe) judges every unlinked pair at once; code keeps the map's rules (no circles, at most
+    // three suggestions per story, never one a person dismissed). Socra is asked only when Jev can't answer.
+    const uc = await prisma.useCase.findUnique({ where: { id }, include: { moves: { orderBy: { position: "asc" } }, backlog: { orderBy: { createdAt: "asc" } }, storyLinks: true } });
+    const nodes = uc ? storyNodes(uc.moves, uc.backlog) : [];
+    const guesses = uc ? await guessLinks(id, uc.name, nodes.map((n) => ({ id: n.id, title: n.title, capability: n.capability })), uc.storyLinks) : null;
+    if (uc && guesses) {
+      const all = [...uc.storyLinks];
+      const title = new Map(nodes.map((n) => [n.id, n.title]));
+      let added = 0;
+      for (const g of guesses) {
+        if (wouldCycle(all, g.from, g.to, g.kind) || !maySuggest(all, g.from, g.to, g.kind).ok) continue;
+        const l = await prisma.storyLink.create({ data: { useCaseId: id, from: g.from, to: g.to, kind: g.kind, status: "suggested", why: g.why, by: "Jev" } });
+        all.push(l);
+        added++;
+        await recordChange(id, { node: g.from, kind: "changed", summary: `Jev suggested a link: “${title.get(g.from)}” ${LINK_LABEL[g.kind]} “${title.get(g.to)}”`, after: `${LINK_LABEL[g.kind]} “${title.get(g.to)}” (suggested)`, causes: [g.to], by: "Jev" });
+      }
+      return NextResponse.json({ ok: true, by: "jev", added }, { status: 201 });
+    }
     await askSocra(id, { label: "Story map", line: `${by} asked Socra to look for links between the stories. Its guesses will appear on the map, dashed.`, prompt: `${by} asked you to look for links on the Story map. ${suggestPrompt()}` });
     return NextResponse.json({ ok: true }, { status: 202 });
   }

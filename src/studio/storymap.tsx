@@ -38,9 +38,9 @@ export function StoryMapView({ live, me, changeView, setToast }: Props) {
   }, [key, live.id])
 
   const author = me.name ? { name: me.name, role: me.role } : { role: me.role }
-  const post = async (body: Record<string, unknown>, ok: string) => {
+  const post = async (body: Record<string, unknown>, ok: string | ((r: { by?: string; added?: number }) => string)) => {
     setBusy(true)
-    try { await api(`/api/use-cases/${live.id}/story-map`, { json: { ...body, author } }); setToast(ok); setTick((t) => t + 1) }
+    try { const r = await api<{ by?: string; added?: number }>(`/api/use-cases/${live.id}/story-map`, { json: { ...body, author } }); setToast(typeof ok === 'string' ? ok : ok(r ?? {})); setTick((t) => t + 1) }
     catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
     finally { setBusy(false) }
   }
@@ -115,7 +115,7 @@ export function StoryMapView({ live, me, changeView, setToast }: Props) {
 
   return <div className="page-wrap storymap-page">
     <div className="page-intro"><div><p className="eyebrow eyebrow-with-dot"><span className="status-dot" />Story map · how the work fits together</p><h1>See how the stories<br /><em>connect.</em></h1><p>Read left to right: a story sits after the stories it depends on. Solid lines are links a person made; dashed ones are {ASSISTANT_NAME}’s guesses for you to accept or dismiss. A story with a warm outline has no links yet. Pick two stories to connect them and {ASSISTANT_NAME} asks what firms up the link.</p></div>
-      <div className="intro-actions"><button className="button button-primary" type="button" onClick={() => { setConnecting(connecting ? null : []); setSelected('') }}><Link2 size={16} /> {connecting ? 'Cancel connecting' : 'Connect two stories'}</button>{!connecting && nodes.length > 1 && <button className="button button-quiet" type="button" disabled={busy} onClick={() => void post({ action: 'suggest' }, `${ASSISTANT_NAME} is looking for links. Its guesses appear here dashed.`)}><Sparkles size={16} /> Ask {ASSISTANT_NAME} to suggest links</button>}<span>{nodes.filter((n) => n.state !== 'idea').length} stories · {links.filter((l) => l.status === 'confirmed').length} links · {suggested.length} suggested · {nodes.filter((n) => n.state === 'idea').length} ideas</span></div></div>
+      <div className="intro-actions"><button className="button button-primary" type="button" onClick={() => { setConnecting(connecting ? null : []); setSelected('') }}><Link2 size={16} /> {connecting ? 'Cancel connecting' : 'Connect two stories'}</button>{!connecting && nodes.length > 1 && <button className="button button-quiet" type="button" disabled={busy} onClick={() => void post({ action: 'suggest' }, (r) => r.by === 'jev' ? (r.added ? `Jev suggested ${r.added} link${r.added === 1 ? '' : 's'}, drawn dashed. Accept or dismiss each one.` : 'Jev found no new links worth suggesting.') : `${ASSISTANT_NAME} is looking for links. Its guesses appear here dashed.`)}><Sparkles size={16} /> Ask {ASSISTANT_NAME} to suggest links</button>}<span>{nodes.filter((n) => n.state !== 'idea').length} stories · {links.filter((l) => l.status === 'confirmed').length} links · {suggested.length} suggested · {nodes.filter((n) => n.state === 'idea').length} ideas</span></div></div>
 
     <div className="storymap-layout">
       <section className="truth-graph-card storymap-card">
