@@ -260,3 +260,7 @@ a.studio-home-brand { color: inherit; text-decoration: none; padding-bottom: 12p
 
 /* A real customer quote is longer than the team's sample: keep it clear of the audience line. */
 .product-card { padding-bottom: 78px; }
+
+/* The generated app's address, visible on the preview card (the team's expand icon was easy to miss). */
+.studio-open-app { display: inline-flex; align-items: center; gap: 5px; margin-top: 6px; color: var(--acid); font: 500 11px 'DM Mono', monospace; text-decoration: none; }
+.studio-open-app:hover { text-decoration: underline; }
