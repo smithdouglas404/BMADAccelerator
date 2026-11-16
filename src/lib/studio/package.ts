@@ -17,6 +17,7 @@ export const PACKAGE_FILES = [
   "TECHNICAL_REQUIREMENTS.md",
   "COMPONENT_MAP.json",
   "AGENT_KIT_ROUTING.json",
+  "AGENTS.json",
   "KANBAN.json",
   "EVIDENCE.json",
   "VISUAL_ANNOTATIONS.json",
@@ -45,6 +46,8 @@ export type PackageInput = {
   evidence: { source: string; type: string; insight: string; confidence: string; trace: string }[];
   moves: { id: string; title: string; capability: string; decision: string; status: string; owner: string; hidden: string; components: string[]; routes: string[]; prompt: string }[];
   routes: { agent: string; action: string; state: string; detail: string }[];
+  // The approved agents, as the shared agent service's configuration (and its self-host file).
+  agents: { useCase: string; customer: string; name: string; agents: unknown[] };
   messages: { role: string; agent: string; content: string; createdAt: string }[];
   annotations: { target: string; note: string; shape: string; frame?: string; frameFile?: string }[];
   components: string[];
@@ -158,7 +161,7 @@ You are the implementation agent for ${input.productName}. Build the thinnest pr
 - Preserve the customer language from PRFAQ.md.
 - Build what PRD.md and TRD.md say. Confirmed and Recommended sections are requirements; Inferred ones are your starting point unless the owner removed them; Open decisions stay visible and reversible in the app; Not-yet-researched sections fall back to what the leading products in this category do. Every requirement traces through SPEC_TRACE.json (PR-/TR- ids) to the conversation and evidence it came from.
 - Use the selected shadcn/ui baseline (COMPONENT_MAP.json) for the interface.
-- Use the Agent Kit route definitions (AGENT_KIT_ROUTING.json) as the prototype orchestration baseline.
+- Use the Agent Kit route definitions (AGENT_KIT_ROUTING.json) as the prototype orchestration baseline. The approved agents run in the Studio's shared agent service (AGENTS.json: AgentKit, each with a Letta persona and Mem0 memory); the app calls them, it does not host them.
 - Keep human-in-the-loop decisions explicit and reversible.
 - Trace every implemented story to a capability in KANBAN.json.
 - Prefer a working vertical slice over broad scaffolding: every screen you add works end to end.
@@ -205,6 +208,11 @@ Repository: ${input.repositoryUrl || "Connect a repository on the Studio's Conne
       workflows: workflows.map((w) => ({ title: w.title, why: w.note, capability: w.group })),
       humanInTheLoop: open.map((d) => d.text),
       studioRoutes: input.routes,
+    }),
+    "AGENTS.json": json({
+      ...input.agents,
+      service: "Working Backwards Studio shared agent service (agent-service/): Inngest AgentKit, Letta persona, Mem0 memory",
+      selfHost: "Run agent-service/ with AGENTS_FILE pointing at this file, AGENT_SERVICE_TOKEN set to the app's token and APP_CALLBACK_URL set to the app; the app keeps AGENT_SERVICE_URL and AGENT_SERVICE_TOKEN.",
     }),
     "KANBAN.json": json(
       input.moves.map((m) => ({

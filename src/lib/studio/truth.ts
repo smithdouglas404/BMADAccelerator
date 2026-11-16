@@ -215,11 +215,11 @@ export function truthNodes(g: GraphInput): LiveTruthNode[] {
 
 const RELATION_FOR_KIND: Record<string, TruthEdgeRelation> = {
   approved: "approves", rejected: "approves", undone: "revises", changed: "revises", reviewed: "revises", interpreted: "infers",
-  observed: "supports", built: "implements", added: "shapes", said: "expresses",
+  observed: "supports", built: "implements", added: "shapes", said: "expresses", moved: "shapes", "moved back": "revises", withdrawn: "revises",
 };
 const LABEL_FOR_KIND: Record<string, string> = {
   approved: "approved it", rejected: "rejected it", undone: "undid it", changed: "changed it", reviewed: "asked for a review", interpreted: "interpreted it",
-  observed: "showed it in the pilot", built: "went into the build", added: "brought it in", said: "said it",
+  observed: "showed it in the pilot", built: "went into the build", added: "brought it in", said: "said it", moved: "moved it", "moved back": "sent it back", withdrawn: "withdrew it",
 };
 
 export function truthEdges(g: GraphInput, nodes: LiveTruthNode[]): LiveTruthEdge[] {

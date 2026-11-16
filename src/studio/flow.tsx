@@ -11,7 +11,7 @@ import { api, initials, type Live, type StudioMessage } from './live'
 type Act = (fn: () => Promise<unknown>, ok?: string) => Promise<void>
 
 /** The Studio's views: the team's ten plus a full-width place to try the product and mark it up. */
-export type StudioView = ViewId | 'review'
+export type StudioView = ViewId | 'review' | 'agents'
 
 /** The side menu in four groups, in the order work usually moves. Every one of the team's views stays. */
 export const NAV_GROUPS: { title: string; items: { id: StudioView; label: string; hint: string }[] }[] = [
@@ -42,6 +42,7 @@ export const NAV_GROUPS: { title: string; items: { id: StudioView; label: string
     items: [
       { id: 'brief', label: 'Prototype brief', hint: 'Build with Claude Code' },
       { id: 'pilot', label: 'Make it real', hint: 'Trace the build' },
+      { id: 'agents', label: 'Agents', hint: 'What runs, and why' },
       { id: 'connections', label: 'Connections', hint: 'Repository & Linear' },
     ],
   },

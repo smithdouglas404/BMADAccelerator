@@ -9,7 +9,7 @@ import { ROLES } from "@/lib/memory/lettaCore";
 import { IMAGE_LIMIT, imagesConfigured, makeImage } from "@/lib/images";
 import { SPEC_BASIS, SPEC_DEFS, SPEC_STATUSES, TRACE_TYPES, cleanTrace } from "@/lib/studio/spec";
 import { ensureSpec } from "@/lib/studio/state";
-import { nodesForIds, recordChange } from "@/lib/studio/truthlog";
+import { currentCauses, nodesForIds, recordChange } from "@/lib/studio/truthlog";
 import { VALIDATION_SIGNALS, colorFor, numberItems, overallReadiness, slugify, specialistByKey, validationScore, type Validation } from "@/lib/studio/core";
 
 const ROLE_KEYS = ROLES.map((r) => r.key) as [string, ...string[]];
@@ -278,6 +278,72 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
           if (a.status === "approved") rememberDecision(u, "muse", `${a.text}${a.words ? `\nThe owner said: "${a.words}"` : ""}`, "studio:decision");
           await recordChange(useCaseId, { node: `decision:${d.id}`, kind: a.status === "approved" ? "approved" : "added", summary: a.status === "open" ? `${speaker} raised a checkpoint only a person can decide: ${a.text}` : a.status === "assumed" ? `${speaker} assumed: ${a.text} (they can correct it)` : `Recorded as approved: ${a.text}`, after: a.text, by: speaker, fromTurn: true });
           return ok(`Recorded ${d.id}.`);
+        },
+      ),
+      tool(
+        "move_card",
+        "Move a card on the Make it real board, so nobody has to: to 'ready' once its acceptance criteria are agreed, back to 'queued' when a mark on the prototype or a person's no reopens it, to 'done' when a person said yes to it on the live preview. Builds move cards into and out of 'building' themselves. 'why' is one plain line the owner sees on the card (\"you approved it on version 4\").",
+        { id: z.string(), status: z.enum(["queued", "ready", "building", "review", "done"]), why: z.string().min(5).max(300), causes: z.array(z.string()).default([]) },
+        async ({ id, status, why, causes }) => {
+          const { moveCard } = await import("@/lib/studio/board");
+          const m = await moveCard(useCaseId, id, status, speaker === "Muse" ? "The Muse" : speaker, why, [...(await nodesForIds(useCaseId, causes)), ...currentCauses(useCaseId)]);
+          return ok(m ? `Moved to ${status}.` : "No such card.");
+        },
+      ),
+      tool(
+        "propose_agent",
+        "Propose an agent this product needs, for the shared agent service (only where an agent truly helps: workflows, messages, alerts, recommendations, insights; fixed rules stay plain code). It becomes an open checkpoint with Approve and Reject; once approved the Studio registers it and the app calls it. Every agent has a Letta persona by default (persona.enabled true, with persona text: who it is, its voice, how it treats people); set it false only when a person explicitly said no to a persona for it. Tools are actions the app takes for it; set approval true for anything about money, safety, legal, sending to a customer or hard to undo. approvals.output true when a person must check its answer before it is used (anything a customer sees).",
+        {
+          key: z.string().regex(/^[a-z][a-z0-9-]{1,47}$/),
+          name: z.string().min(2).max(80),
+          purpose: z.string().min(5),
+          instructions: z.string().min(10),
+          persona: z.object({ enabled: z.boolean().default(true), text: z.string().default("") }).default({ enabled: true, text: "" }),
+          provider: z.enum(["anthropic", "openai", "gemini"]).default("anthropic"),
+          model: z.string().default(""),
+          tools: z
+            .array(
+              z.object({
+                name: z.string().regex(/^[a-z][a-z0-9_]{1,47}$/),
+                description: z.string().min(5),
+                parameters: z.record(z.string(), z.object({ type: z.enum(["string", "number", "boolean"]), description: z.string().default(""), optional: z.boolean().default(false) })).default({}),
+                approval: z.boolean().default(false),
+              }),
+            )
+            .default([]),
+          approvals: z.object({ output: z.boolean().default(false), timeoutMinutes: z.number().int().min(1).default(1440), onTimeout: z.enum(["reject", "approve"]).default("reject") }).default({ output: false, timeoutMinutes: 1440, onTimeout: "reject" }),
+          facts: z.boolean().default(true),
+          why: z.string().min(5).describe("What in the product truth this agent traces to (a PRFAQ line, a capability, a decision or the owner's words)."),
+        },
+        async (a) => {
+          const u = await uc();
+          const personaText = a.persona.enabled ? a.persona.text.trim() || `You are ${a.name}. ${a.purpose}` : "";
+          const existing = await prisma.appAgent.findUnique({ where: { useCaseId_key: { useCaseId, key: a.key } } });
+          const tools = a.tools.map((t) => `${t.description}${t.approval ? " (waits for a person's approval)" : ""}`);
+          const d = await prisma.decision.create({
+            data: {
+              useCaseId,
+              text: `Add the ${a.name} agent: ${a.purpose.replace(/\.$/, "")}. ${a.persona.enabled ? "It has its own persona (Letta) and remembers each person." : "No persona: a plain task agent."}${tools.length ? ` It can: ${tools.join("; ")}.` : ""}${a.approvals.output ? " A person checks its answers before they are used." : ""}`,
+              status: "open",
+              capability: "",
+              words: a.why,
+              options: [
+                { label: "Add it as described (suggested)", value: "approve" },
+                { label: "Not now", value: "reject" },
+              ],
+              agent: speaker,
+              session: u.session,
+              includeInBuild: false,
+            },
+          });
+          const data = {
+            name: a.name, purpose: a.purpose, instructions: a.instructions, persona: a.persona.enabled, personaText, provider: a.provider, model: a.model,
+            tools: a.tools, approvals: a.approvals, facts: a.facts, why: a.why, decisionId: d.id,
+            ...(existing?.status === "approved" ? {} : { status: "proposed" }),
+          };
+          await prisma.appAgent.upsert({ where: { useCaseId_key: { useCaseId, key: a.key } }, create: { useCaseId, key: a.key, ...data }, update: data });
+          await recordChange(useCaseId, { node: `decision:${d.id}`, kind: "added", summary: `${speaker} proposed the ${a.name} agent`, after: a.purpose, by: speaker, fromTurn: true });
+          return ok(`Proposed as checkpoint ${d.id}. When a person approves it, the Studio registers the agent and the next build calls it.`);
         },
       ),
       tool(

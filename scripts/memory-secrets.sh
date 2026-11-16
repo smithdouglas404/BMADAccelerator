@@ -10,4 +10,5 @@ add() {
 add MEM0_ADMIN_API_KEY
 add MEM0_JWT_SECRET
 add LETTA_SERVER_PASSWORD
+add AGENT_SERVICE_ADMIN_KEY
 echo "Memory passwords are in .env."

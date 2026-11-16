@@ -1,3 +1,4 @@
+import { agentConfig } from "@/lib/agentService";
 import { promises as fs } from "fs";
 import path from "path";
 import { prisma } from "@/lib/db";
@@ -140,6 +141,12 @@ export async function packageInput(useCaseId: string, opts: { frames?: boolean; 
     evidence: uc.evidence.map((e) => ({ source: e.source, type: e.type, insight: e.insight, confidence: e.confidence, trace: e.trace })),
     moves: uc.moves.map((m) => ({ id: m.id, title: m.title, capability: m.capability, decision: m.decision, status: m.status, owner: m.owner, hidden: m.hidden, components: m.components, routes: m.routes, prompt: m.prompt })),
     routes: uc.routes.map((r) => ({ agent: r.agent, action: r.action, state: r.state, detail: r.detail })),
+    agents: {
+      useCase: uc.id,
+      customer: (uc as { customer?: string }).customer ?? "",
+      name: uc.name,
+      agents: (await prisma.appAgent.findMany({ where: { useCaseId: uc.id, status: "approved" }, orderBy: { createdAt: "asc" } })).map(agentConfig),
+    },
     messages: uc.messages.map((m) => ({ role: m.role, agent: m.agent, content: m.content, createdAt: m.createdAt.toISOString() })),
     annotations,
     components,

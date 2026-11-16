@@ -5,6 +5,7 @@ import { enqueue, agentsEnabled } from "@/lib/agent/runner";
 import { rememberDecision } from "@/lib/memory";
 import { changeImpact } from "@/lib/studio/impact";
 import { recordChange } from "@/lib/studio/truthlog";
+import { syncAgents } from "@/lib/agentService";
 
 type Ctx = { params: Promise<{ id: string; did: string }> };
 
@@ -31,6 +32,14 @@ export async function PATCH(req: Request, { params }: Ctx) {
     where: { id: did },
     data: { ...d, ...(status ? { status } : {}), ...(status === "approved" || status === "rejected" ? { resolvedAt: new Date(), builtInVersion: 0 } : {}), ...(status === "rejected" ? { includeInBuild: false } : {}) },
   });
+  // A proposed agent's checkpoint: Approve registers it with the shared agent service; Reject switches it off.
+  if (status === "approved" || status === "rejected") {
+    const agent = await prisma.appAgent.findFirst({ where: { useCaseId: id, decisionId: did } });
+    if (agent) {
+      await prisma.appAgent.update({ where: { id: agent.id }, data: { status: status === "approved" ? "approved" : "off" } });
+      void syncAgents(id).catch((e) => console.error("agent sync", e));
+    }
+  }
   const meaningChanged = (status && status !== before.status) || (d.text && d.text !== before.text) || (d.answer && d.answer !== before.answer);
   if (meaningChanged) {
     const uc = await prisma.useCase.findUniqueOrThrow({ where: { id } });

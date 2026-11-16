@@ -11,6 +11,8 @@ import { workspacePath } from "@/lib/workspace";
 import { installDesignSkills, provisionWorkspace, syncStudioSkills, writeIntake } from "@/lib/provision";
 import { appDir, assignPort, startPreview, stopPreview } from "@/lib/preview";
 import { buildTimer } from "@/lib/buildTiming";
+import { syncAgents } from "@/lib/agentService";
+import { moveCard } from "@/lib/studio/board";
 import { enqueue, runSdkTurn, agentsEnabled } from "@/lib/agent/runner";
 import type { RunTally } from "@/lib/agent/tools";
 import { writePackage } from "@/lib/studio/state";
@@ -35,7 +37,7 @@ Design:
 - Real-looking imagery wherever a leading product would have it, made with \`mcp__studio__make_image\` (a limited number per run; draw if it isn't available). Pictures show what this product really deals with. Never copy a real brand, never show real people, never fetch images from outside.
 - Every build is on shadcn/ui (React, Vite, Tailwind CSS, Google web fonts): \`npx shadcn@latest init\`, then one \`npx shadcn@latest add a b c ...\` with every component you need at once (not one command per component), themed so it looks like this product. Motion (\`motion\`, the animation library, imported from \`motion/react\`) gives the interface its life: page and list transitions, presence for dialogs and toasts, small state changes. Keep it purposeful and quick, and respect \`prefers-reduced-motion\`. The one override: an owner upload that defines its own design system or stack. Use the items in \`studio/package/COMPONENT_MAP.json\` plus whatever else the full product needs. The shadcn MCP tools (\`mcp__shadcn__*\`) find registry items and give install commands; run shadcn commands inside \`app/\`. Run \`mcp__shadcn__get_audit_checklist\` before your screenshot rounds.
 
-Agents: build agents only where \`studio/package/AGENT_KIT_ROUTING.json\` or an approved decision asks for one (workflows, messages, alerts, recommendations, insights); fixed rules stay plain code. Use Inngest AgentKit (\`@inngest/agent-kit\`) only, following \`.claude/skills/studio-agentkit/SKILL.md\` and its references. Person-in-the-loop steps wait with \`step.waitForEvent\` behind an approval screen. Keys only from the environment (\`AGENT_PROVIDER\`, \`AGENT_MODEL\`); with no key, a labelled demo mode so every flow still works.
+Agents: the product's agents live in the Studio's shared agent service, not in the app. Never install AgentKit, Letta, Mem0 or a model SDK in the app, and never put a model key in it. \`studio/package/AGENTS.json\` lists the approved agents (key, purpose, persona, tools, approvals). Copy \`.claude/skills/working-backwards-studio/assets/agent-client.ts\` into the app's server code and call agents only from the server through it (\`askAgent\`, \`waitForRun\`, \`approvals\`, \`decide\`, \`runs\`). For each agent tool, implement \`POST /api/agent-actions/<tool>\` in the app's server, checked with \`isAgentService\`, doing the action in plain code and returning JSON. Give every agent a place in the UI where its answer is used, an approval screen listing what waits for a person (Approve, Reject, a comment), and a small run history ("what the assistant did and why"). With no \`AGENT_SERVICE_URL\`, the client returns labelled demos so every flow still works. Fixed rules stay plain code; no agent for the sake of it.
 
 Running and safety (the only hard rules):
 - Build in \`app/\` only; nothing else in the project is yours to change except the build notes and \`studio/design/\`.
@@ -164,10 +166,13 @@ export async function runGenerate(useCaseId: string, opts: { redesign?: boolean;
     const decisions = await prisma.decision.findMany({ where: { useCaseId, includeInBuild: true, builtInVersion: 0, status: { in: ["approved", "assumed"] } } });
     const items = await prisma.backlogItem.findMany({ where: { useCaseId, includeInBuild: true, state: "ready" } });
 
+    // The product's approved agents are registered before the build, so the app can call them.
+    await syncAgents(useCaseId).catch((e) => console.error("agent sync", e));
     const pkg = await writePackage(useCaseId);
     const notesPath = path.join("studio", "builds", `build-notes-${n}.md`);
     await fs.mkdir(workspacePath(uc.slug, "studio", "builds"), { recursive: true });
-    await prisma.move.updateMany({ where: { useCaseId, status: "ready" }, data: { status: "building" } });
+    for (const m of await prisma.move.findMany({ where: { useCaseId, status: "ready" } }))
+      await moveCard(useCaseId, m.id, "building", "The build", `picked up by the build of version ${uc.generateCount + 1}`);
     const tally: RunTally = { spoke: 0 };
 
     if (process.env.BACC_FAKE_AGENT === "1" && !claudeConfigured()) {
@@ -224,7 +229,8 @@ export async function runGenerate(useCaseId: string, opts: { redesign?: boolean;
       causes: [...decisions.map((d) => `decision:${d.id}`), ...items.map((b) => `backlog:${b.id}`), ...feedback.map((f) => `ann:${f.id}`)],
       by: "Claude Code",
     });
-    await prisma.move.updateMany({ where: { useCaseId, status: "building" }, data: { status: "review" } });
+    for (const m of await prisma.move.findMany({ where: { useCaseId, status: "building" } }))
+      await moveCard(useCaseId, m.id, "review", "The build", `built in version ${n} and running in the preview; waiting for your yes or a mark`, [`version:${pkg.version}`]);
 
     const notes = await fs.readFile(workspacePath(uc.slug, notesPath), "utf8").catch(() => "");
     onAppGenerated(uc, notes.slice(0, 4000) || `Version ${n} of the app.`, feedback.map((f) => f.comment).join("\n"));
@@ -236,7 +242,7 @@ export async function runGenerate(useCaseId: string, opts: { redesign?: boolean;
       await enqueue(
         useCaseId,
         "build",
-        `Build finished: version ${n} is running in the owner's preview. Claude Code's notes are in ${notesPath}; its screenshots are in studio/shots/. Review the app as the owner's expert (studio-muse skill, "Builds"): open the screenshots, compare them with the three leading products named in studio/design/direction.md (anything they all have that the app lacks is a gap), move the board's cards that are now done, tell the owner your verdict in two or three sentences, and turn your top changes into recommendations. Confirm each "Assumptions made" line with the owner as an assumed decision.`,
+        `Build finished: version ${n} is running in the owner's preview. Claude Code's notes are in ${notesPath}; its screenshots are in studio/shots/. Review the app as the owner's expert (studio-muse skill, "Builds"): open the screenshots, compare them with the three leading products named in studio/design/direction.md (anything they all have that the app lacks is a gap), invite them to try what the cards in Human review describe (by name, in one line), tell the owner your verdict in two or three sentences, and turn your top changes into recommendations. Confirm each "Assumptions made" line with the owner as an assumed decision.`,
       );
     }
   } catch (e) {

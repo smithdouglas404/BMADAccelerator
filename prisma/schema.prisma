@@ -77,6 +77,10 @@ model UseCase {
   specRevisions SpecRevision[]
   members       Member[]
   truthChanges  TruthChange[]
+  appAgents     AppAgent[]
+  // The shared agent service's app token and callback secret for this product (encrypted).
+  agentToken    String    @default("")
+  agentSecret   String    @default("")
 }
 
 // The "why did this change?" timeline of the Product Truth Graph: one row per real change to a node,
@@ -202,6 +206,9 @@ model Move {
   position   Int      @default(0)
   trackerId  String   @default("")
   trackerUrl String   @default("")
+  // Who or what last moved the card, and why (the Muse, a build, a person's answer). People never have to.
+  movedBy    String   @default("")
+  moveReason String   @default("")
   updatedAt  DateTime @updatedAt
   useCase    UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
 }
@@ -414,4 +421,32 @@ model McpServer {
   useCases     String[] @default([])
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+// An agent a product needs, as configuration for the shared agent service (CLAUDE.md, "Agent memory:
+// Mem0 + Letta"). The Muse proposes it; a person approves it; the Studio registers it.
+model AppAgent {
+  id           String   @id @default(cuid())
+  useCaseId    String
+  useCase      UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+  key          String
+  name         String
+  purpose      String
+  instructions String
+  // Every agent has a Letta persona unless a person explicitly said no.
+  persona      Boolean  @default(true)
+  personaText  String   @default("")
+  provider     String   @default("anthropic")
+  model        String   @default("")
+  tools        Json     @default("[]")
+  approvals    Json     @default("{}")
+  facts        Boolean  @default(true)
+  // proposed (waiting for a person), approved (registered and running), off (rejected or switched off)
+  status       String   @default("proposed")
+  decisionId   String   @default("")
+  why          String   @default("")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([useCaseId, key])
 }

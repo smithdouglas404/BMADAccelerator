@@ -37,6 +37,7 @@
   ],
   "exclude": [
     "bmad-module",
+    "agent-service",
     "node_modules",
     "vendor",
     "workspaces"

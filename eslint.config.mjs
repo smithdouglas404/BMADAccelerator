@@ -19,6 +19,7 @@ const eslintConfig = [
       "build/**",
       "next-env.d.ts",
       "vendor/**",
+      "agent-service/**",
       "workspaces/**",
       "studio-skills/**/assets/**",
     ],

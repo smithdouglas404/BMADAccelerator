@@ -4,6 +4,7 @@ import path from "path";
 import type { UseCase } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { workspacePath } from "@/lib/workspace";
+import { agentServiceConfigured, appAgentEnv } from "@/lib/agentService";
 
 // Each use case's generated app runs on its own port, so it has its own URL.
 // Generated apps get a minimal environment, never the accelerator's secrets. The one exception is a
@@ -13,6 +14,8 @@ export function previewEnv(port: number): NodeJS.ProcessEnv {
   const env = { PORT: String(port), HOST: "0.0.0.0", HOSTNAME: "0.0.0.0" } as Record<string, string | undefined>;
   for (const k of Object.keys(process.env)) if (k.startsWith("npm_config_")) env[k] = process.env[k];
   for (const k of keep) if (process.env[k]) env[k] = process.env[k];
+  // With the shared agent service, an app's agents run there: the app gets its token (startPreview), no model key.
+  if (agentServiceConfigured()) return env as NodeJS.ProcessEnv;
   const llm = (process.env.BACC_APP_LLM || "openai").toLowerCase();
   if (llm === "openai" && process.env.OPENAI_API_KEY) env.OPENAI_API_KEY = process.env.OPENAI_API_KEY;
   if (llm === "anthropic" && process.env.ANTHROPIC_API_KEY) env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
@@ -144,7 +147,7 @@ export async function startPreview(useCaseId: string) {
     const log = createWriteStream(workspacePath(uc.slug, "studio", "preview.log"), { flags: "a" });
     log.on("error", () => {});
     log.write(`\n--- starting preview on ${port} at ${new Date().toISOString()}\n`);
-    const env = previewEnv(port);
+    const env = { ...previewEnv(port), ...(await appAgentEnv(useCaseId).catch(() => ({}))) };
     let child: ChildProcess;
     if (await exists(path.join(dir, "package.json"))) {
       const pkg = JSON.parse(await fs.readFile(path.join(dir, "package.json"), "utf8"));

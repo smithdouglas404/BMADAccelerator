@@ -71,6 +71,41 @@ services:
       SECURE: "true"
       LETTA_SERVER_PASSWORD: ${LETTA_SERVER_PASSWORD:?run scripts/memory-secrets.sh once to create the memory passwords}
 
+  # The shared agent service (CLAUDE.md, "Agent memory: Mem0 + Letta"): every product's agents run here as
+  # configuration, on Inngest AgentKit, each with a Letta persona and Mem0 memory scoped per customer and
+  # use case. Generated apps call it with their own app token and hold no model keys.
+  agents:
+    build: ./agent-service
+    restart: unless-stopped
+    depends_on:
+      db-setup:
+        condition: service_completed_successfully
+    environment:
+      AGENT_SERVICE_DATABASE_URL: postgresql://bacc:bacc@db:5432/agents
+      AGENT_SERVICE_ADMIN_KEY: ${AGENT_SERVICE_ADMIN_KEY:?run scripts/memory-secrets.sh once to create the service passwords}
+      INNGEST_DEV: "1"
+      INNGEST_BASE_URL: http://inngest:8288
+      MEM0_BASE_URL: http://mem0:8000
+      MEM0_API_KEY: ${MEM0_ADMIN_API_KEY:-}
+      LETTA_BASE_URL: http://letta:8283
+      LETTA_SERVER_PASSWORD: ${LETTA_SERVER_PASSWORD:-}
+      AGENT_SERVICE_LETTA_MODEL: ${BACC_LETTA_MODEL:-anthropic/claude-haiku-5-5}
+      # Model keys for the agents. Keys saved on the Studio's Settings page are also sent here by the Studio.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    ports:
+      # The approval page and run history: http://localhost:8300/ui
+      - "8300:8300"
+
+  # Inngest's local server: runs the agents durably, so a run waiting days for an approval survives restarts.
+  inngest:
+    image: inngest/inngest:v1.52.0
+    restart: unless-stopped
+    command: ["inngest", "dev", "-u", "http://agents:8300/api/inngest", "--no-discovery"]
+    ports:
+      - "8288:8288"
+
   app:
     build: .
     restart: unless-stopped
@@ -105,6 +140,10 @@ services:
       MEM0_API_KEY: ${MEM0_ADMIN_API_KEY:-}
       LETTA_BASE_URL: http://letta:8283
       LETTA_API_KEY: ${LETTA_SERVER_PASSWORD:-}
+      # The shared agent service. Previews reach it as http://agents:8300 too.
+      AGENT_SERVICE_URL: http://agents:8300
+      AGENT_SERVICE_PUBLIC_URL: ${AGENT_SERVICE_PUBLIC_URL:-http://localhost:8300}
+      AGENT_SERVICE_ADMIN_KEY: ${AGENT_SERVICE_ADMIN_KEY:-}
       BACC_MODEL: ${BACC_MODEL:-claude-sonnet-5-5}
       BACC_DOC_MODEL: ${BACC_DOC_MODEL:-claude-haiku-5-5}
       BACC_GENERATE_MODEL: ${BACC_GENERATE_MODEL:-}

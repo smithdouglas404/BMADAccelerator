@@ -1,0 +1,17 @@
+{
+  "name": "studio-agent-service",
+  "private": true,
+  "type": "module",
+  "description": "The Working Backwards Studio's shared agent service: Inngest AgentKit agents registered as configuration, with a Letta persona and Mem0 memory per customer and use case.",
+  "scripts": {
+    "start": "node src/server.ts",
+    "test": "node --test ../tests/agentService.test.mjs"
+  },
+  "engines": { "node": ">=22.18" },
+  "dependencies": {
+    "@inngest/agent-kit": "0.13.2",
+    "inngest": "4.26.2",
+    "pg": "8.16.3",
+    "zod": "4.1.12"
+  }
+}

@@ -19,7 +19,7 @@ export const STATEMENT_LABEL: Record<Statement, string> = {
   fact: 'said by a person', evidence: 'outside evidence', inference: 'Muse inference', recommendation: 'recommendation',
   decision: 'human decision', open: 'open question', rejected: 'rejected', generated: 'built',
 }
-const KIND_LABEL: Record<string, string> = { said: 'Said', added: 'Added', changed: 'Changed', approved: 'Approved', rejected: 'Rejected', undone: 'Undone', reviewed: 'Review asked', interpreted: 'Interpreted', observed: 'Seen in the pilot', built: 'Built' }
+const KIND_LABEL: Record<string, string> = { said: 'Said', added: 'Added', changed: 'Changed', approved: 'Approved', rejected: 'Rejected', undone: 'Undone', reviewed: 'Review asked', interpreted: 'Interpreted', observed: 'Seen in the pilot', built: 'Built', moved: 'Moved', 'moved back': 'Moved back', withdrawn: 'Withdrawn' }
 
 /** The graph for a product, refreshed whenever the product changes. */
 export function useTruth(live: Live) {

@@ -15,7 +15,7 @@ export type LiveSpec = {
 }
 export type LiveDecision = { id: string; text: string; status: 'approved' | 'assumed' | 'open' | 'rejected'; capability: string; words: string; agent: string; options: unknown; answer: string; includeInBuild: boolean; builtInVersion: number; createdAt: string }
 export type LiveBacklog = { id: string; title: string; note: string; kind: BacklogItem['kind']; group: string; source: string; recKind: string; probe: string; state: string; hidden: string; includeInBuild: boolean; builtInVersion: number; createdAt: string; trackerUrl: string }
-export type LiveMove = { id: string; title: string; capability: string; decision: string; status: string; owner: string; signal: string; hidden: string; components: string[]; routes: string[]; trackerUrl: string }
+export type LiveMove = { id: string; title: string; capability: string; decision: string; status: string; owner: string; signal: string; hidden: string; components: string[]; routes: string[]; trackerUrl: string; movedBy?: string; moveReason?: string }
 export type LiveCapability = { id: string; key: string; label: string; kicker: string; description: string; readiness: number; delta: string; signal: string; color: string; items: { id: string; text: string; state: string }[] }
 export type LiveMessage = { id: string; role: string; agent: string; content: string; accent: string; createdAt: string; author: string; authorRole: string; addressed: string; raw: string; ref: string }
 export type LiveMember = { id: string; name: string; role: string }

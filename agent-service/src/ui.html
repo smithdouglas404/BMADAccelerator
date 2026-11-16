@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Agent approvals</title>
+<style>
+  :root { --bg: #f6f5f1; --card: #fff; --ink: #1d1d1b; --muted: #6b6a64; --line: #e4e2da; --ok: #2f7d4f; --no: #a2412f; --wait: #9a6b12; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #141412; --card: #1d1d1a; --ink: #f1efe8; --muted: #a3a197; --line: #34332e; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, Segoe UI, sans-serif; }
+  main { max-width: 920px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 22px; margin: 0 0 4px; } h2 { font-size: 16px; margin: 28px 0 10px; }
+  .muted { color: var(--muted); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin: 0 0 10px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .pill { font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
+  .done, .approved { color: var(--ok); } .rejected, .failed, .expired { color: var(--no); } .waiting, .pending, .running, .queued { color: var(--wait); }
+  pre { white-space: pre-wrap; word-break: break-word; background: var(--bg); border-radius: 8px; padding: 8px 10px; margin: 8px 0; font-size: 13px; }
+  textarea, input { width: 100%; font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+  button { font: inherit; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: inherit; padding: 6px 14px; cursor: pointer; }
+  button.ok { background: var(--ok); color: #fff; border-color: var(--ok); } button.no { color: var(--no); }
+  ol { margin: 6px 0 0; padding-left: 20px; font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Agent approvals and runs</h1>
+  <p class="muted">What this app's agents are waiting on, and what each of them did. Approve or reject with a comment; the agent carries on from there.</p>
+  <div id="login" class="card" hidden>
+    <label for="tok">App token (from the Studio)</label>
+    <div class="row"><input id="tok" type="password" autocomplete="off" /><button id="go">Open</button></div>
+  </div>
+  <section id="app" hidden>
+    <h2>Waiting for a person</h2><div id="pending"></div>
+    <h2>Agents</h2><div id="agents"></div>
+    <h2>Recent runs</h2><div id="runs"></div>
+  </section>
+</main>
+<script>
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  let token = '';
+  try { token = new URLSearchParams(location.hash.slice(1)).get('token') || sessionStorage.getItem('ast') || ''; } catch {}
+  const api = (p, init = {}) => fetch(p, { ...init, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token } }).then((r) => r.json());
+  async function load() {
+    const [agents, pending, runs] = await Promise.all([api('/v1/agents'), api('/v1/approvals?status=pending'), api('/v1/runs?limit=30')]);
+    if (agents.error) { document.getElementById('login').hidden = false; document.getElementById('app').hidden = true; return; }
+    document.getElementById('login').hidden = true; document.getElementById('app').hidden = false;
+    document.getElementById('pending').innerHTML = pending.length ? pending.map((a) => `
+      <div class="card"><div class="row"><strong>${esc(a.title)}</strong><span class="pill pending">waiting</span></div>
+      <pre>${esc(a.detail)}</pre><textarea id="c-${a.id}" rows="2" placeholder="Comment (optional)"></textarea>
+      <div class="row" style="margin-top:8px"><button class="ok" data-id="${a.id}" data-d="approve">Approve</button><button class="no" data-id="${a.id}" data-d="reject">Reject</button></div></div>`).join('') : '<p class="muted">Nothing is waiting.</p>';
+    document.getElementById('agents').innerHTML = agents.map((a) => `<div class="card"><div class="row"><strong>${esc(a.name)}</strong>${a.persona ? '<span class="pill">Letta persona</span>' : ''}</div><div class="muted">${esc(a.purpose)}</div>${a.tools.length ? `<ol>${a.tools.map((t) => `<li>${esc(t.description)}${t.approval ? ' (needs approval)' : ''}</li>`).join('')}</ol>` : ''}</div>`).join('') || '<p class="muted">No agents yet.</p>';
+    document.getElementById('runs').innerHTML = runs.map((r) => `<div class="card"><div class="row"><strong>${esc(r.agent)}</strong><span class="pill ${r.status}">${r.status}</span>${r.demo ? '<span class="pill">demo</span>' : ''}<span class="muted">${new Date(r.created_at).toLocaleString()}</span></div>
+      <div class="muted">Asked: ${esc(r.input.slice(0, 300))}</div>${r.output ? `<pre>${esc(r.output)}</pre>` : ''}${r.error ? `<pre class="failed">${esc(r.error)}</pre>` : ''}
+      <ol>${(r.steps || []).map((s) => `<li>${esc(s.detail)}</li>`).join('')}</ol></div>`).join('') || '<p class="muted">No runs yet.</p>';
+  }
+  document.addEventListener('click', async (e) => {
+    const b = e.target.closest('button[data-id]');
+    if (b) { await api('/v1/approvals/' + b.dataset.id, { method: 'POST', body: JSON.stringify({ decision: b.dataset.d, comment: document.getElementById('c-' + b.dataset.id)?.value || '', by: 'Approval page' }) }); load(); }
+  });
+  document.getElementById('go').onclick = () => { token = document.getElementById('tok').value.trim(); try { sessionStorage.setItem('ast', token); } catch {} load(); };
+  load(); setInterval(load, 5000);
+</script>
+</body>
+</html>
