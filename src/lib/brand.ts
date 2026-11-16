@@ -13,3 +13,6 @@ export function brand(text: string): string {
   const article = new RegExp(`\\b[Tt]he (${OLD.source.slice(3, -3)})\\b`, "g");
   return text.replace(article, ASSISTANT_NAME).replace(OLD, ASSISTANT_NAME);
 }
+
+/** The product's name as outside assistants see it (the MCP connector, the REST API, OAuth). */
+export const PRODUCT_NAME = "Working Backwards Studio";

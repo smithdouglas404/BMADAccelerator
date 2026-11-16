@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { Check, Plug, Plus, Trash2, Upload, Wrench } from 'lucide-react'
 import { api } from './live'
 import { StudioTop } from './pages'
+import { ConnectTab } from './connect'
 
 type KeyStatus = { env: string; name: string; source: 'saved' | 'env' | 'missing'; last4: string }
 type Status = { providers: (KeyStatus & { id: string; models: string[] })[]; other: KeyStatus[]; claudePlan: boolean; roles: { env: string; label: string; note: string; providers: string[]; current: string; saved: boolean }[] }
@@ -16,11 +17,11 @@ const SOURCES = [['all', 'All'], ['studio', 'Studio'], ['ecc', 'ECC'], ['yours',
 const PAGE = 40
 
 export function SettingsPage() {
-  const [tab, setTab] = useState<'models' | 'connectors' | 'skills' | 'memory'>('models')
+  const [tab, setTab] = useState<'models' | 'connectors' | 'connect' | 'skills' | 'memory'>('models')
   const [toast, setToast] = useState('')
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get('tab')
-    if (t === 'connectors' || t === 'skills' || t === 'memory') setTab(t)
+    if (t === 'connectors' || t === 'connect' || t === 'skills' || t === 'memory') setTab(t)
   }, [])
   useEffect(() => { if (toast) { const t = window.setTimeout(() => setToast(''), 5000); return () => window.clearTimeout(t) } }, [toast])
   return (
@@ -28,9 +29,10 @@ export function SettingsPage() {
       <StudioTop active="settings" />
       <div className="page-wrap">
         <div className="page-intro"><div><p className="eyebrow">Settings</p><h1>The plumbing,<br /><em>out of the way.</em></h1><p>Models and keys, the connectors and skills Socra and Claude Code can use, and the memory that carries lessons between products.</p></div></div>
-        <div className="studio-tabs">{([['models', 'Models and keys'], ['connectors', 'Connectors (MCP)'], ['skills', 'Skills'], ['memory', 'Memory']] as const).map(([k, l]) => <button key={k} type="button" className={tab === k ? 'is-active' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
+        <div className="studio-tabs">{([['models', 'Models and keys'], ['connectors', 'Connectors (MCP)'], ['connect', 'Connect'], ['skills', 'Skills'], ['memory', 'Memory']] as const).map(([k, l]) => <button key={k} type="button" className={tab === k ? 'is-active' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
         {tab === 'models' && <Models setToast={setToast} />}
         {tab === 'connectors' && <Connectors setToast={setToast} />}
+        {tab === 'connect' && <ConnectTab setToast={setToast} />}
         {tab === 'skills' && <Skills setToast={setToast} />}
         {tab === 'memory' && <Memory />}
       </div>

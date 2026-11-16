@@ -1,0 +1,137 @@
+'use client'
+// Connecting from outside: the OAuth consent page an assistant opens, and Settings > Connect (addresses,
+// connect code, tokens for OpenAPI connectors and scripts, and the log of every call).
+import { useEffect, useState } from 'react'
+import { Check, Copy, KeyRound, Link2, ScrollText, ShieldCheck, Trash2 } from 'lucide-react'
+import { api } from './live'
+import { PRODUCT_NAME as PRODUCT } from '@/lib/brand'
+
+const ROLES = ['Product owner', 'Business analyst', 'Product engineer', 'Viewer']
+
+type Params = { client_id: string; redirect_uri: string; state: string; code_challenge: string }
+
+export function ConsentPage({ problem, clientName, params, wantsWrite, customers }: { problem: string; clientName: string; params: Params; wantsWrite: boolean; customers: string[] }) {
+  const [person, setPerson] = useState('')
+  const [role, setRole] = useState(ROLES[0])
+  const [customer, setCustomer] = useState('')
+  const [scope, setScope] = useState<'read' | 'write'>(wantsWrite ? 'write' : 'read')
+  const [code, setCode] = useState('')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const send = async (deny = false) => {
+    setBusy(true)
+    setError('')
+    try {
+      const r = await api<{ redirect: string }>('/api/oauth/approve', { json: { ...params, person, role, customer, scope: role === 'Viewer' ? 'read' : scope, connect_code: code, deny } })
+      window.location.href = r.redirect
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); setBusy(false) }
+  }
+  return (
+    <div className="studio-page">
+      <div className="page-wrap" style={{ maxWidth: 560 }}>
+        <div className="page-intro"><div><p className="eyebrow">{PRODUCT}</p><h1>Connect<br /><em>{clientName || 'an assistant'}</em></h1><p>It will work on your use cases in your name. Approving, building and withdrawing always ask you first.</p></div></div>
+        {problem ? <section className="studio-card"><p>{problem}</p></section> : (
+          <section className="studio-card">
+            <div className="studio-kv">
+              <label>Your name<input value={person} onChange={(e) => setPerson(e.target.value)} placeholder="Doug" autoComplete="name" /></label>
+              <label>Your role<select value={role} onChange={(e) => setRole(e.target.value)}>{ROLES.map((r) => <option key={r}>{r}</option>)}</select></label>
+              <label>Which customer it may see<select value={customer} onChange={(e) => setCustomer(e.target.value)}><option value="">Every customer</option>{customers.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
+              <label>What it may do<select value={role === 'Viewer' ? 'read' : scope} disabled={role === 'Viewer'} onChange={(e) => setScope(e.target.value as 'read' | 'write')}><option value="read">Look only</option><option value="write">Look and make changes (asks before approving or building)</option></select></label>
+              <label>Connect code (Settings &gt; Connect in the Studio)<input value={code} onChange={(e) => setCode(e.target.value)} placeholder="6 letters" autoComplete="one-time-code" /></label>
+              {error && <p className="studio-muted" role="alert">{error}</p>}
+              <div className="studio-review-actions"><button type="button" className="button button-primary" disabled={busy || !person.trim() || !code.trim()} onClick={() => void send()}><ShieldCheck size={14} /> Allow</button><button type="button" className="button button-quiet" disabled={busy} onClick={() => void send(true)}>Don’t allow</button></div>
+            </div>
+          </section>
+        )}
+      </div>
+    </div>
+  )
+}
+
+type Info = {
+  mcpUrl: string
+  openApiUrl: string
+  isPublic: boolean
+  tools: { name: string; title: string; write: boolean }[]
+  tokens: { id: string; name: string; prefix: string; scope: string; customer: string; person: string; role: string; viaOAuth: boolean; lastUsedAt: string | null; createdAt: string }[]
+  calls: { id: string; person: string; tool: string; via: string; outcome: string; note: string; createdAt: string }[]
+}
+
+const when = (s: string | null) => (s ? new Date(s).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'never')
+
+function CopyLine({ label, value }: { label: string; value: string }) {
+  const [done, setDone] = useState(false)
+  return (
+    <div className="studio-list-row">
+      <div className="studio-row-main"><strong>{label}</strong><small style={{ wordBreak: 'break-all' }}>{value}</small></div>
+      <button type="button" className="icon-button subtle" aria-label={`Copy ${label}`} onClick={() => void navigator.clipboard?.writeText(value).then(() => { setDone(true); window.setTimeout(() => setDone(false), 1500) })}>{done ? <Check size={13} /> : <Copy size={13} />}</button>
+    </div>
+  )
+}
+
+export function ConnectTab({ setToast }: { setToast: (s: string) => void }) {
+  const [info, setInfo] = useState<Info | null>(null)
+  const [code, setCode] = useState<{ code: string; until: string } | null>(null)
+  const [form, setForm] = useState({ name: '', scope: 'read', customer: '', person: '', role: ROLES[0] })
+  const [shown, setShown] = useState('')
+  const load = () => void api<Info>('/api/settings/connect', { cache: 'no-store' }).then(setInfo).catch((e: Error) => setToast(e.message))
+  useEffect(load, [setToast])
+  if (!info) return <p className="studio-muted">Loading…</p>
+  const makeCode = async () => setCode(await api<{ code: string; until: string }>('/api/settings/connect', { json: { action: 'code' } }))
+  const makeToken = async () => {
+    try {
+      const r = await api<{ token: string }>('/api/settings/connect', { json: { action: 'token', ...form } })
+      setShown(r.token)
+      setForm({ ...form, name: '' })
+      load()
+    } catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
+  }
+  const revoke = async (id: string) => { await api('/api/settings/connect', { json: { action: 'revoke', id } }); load() }
+  return (
+    <div className="studio-settings-grid">
+      <section className="studio-card">
+        <div className="stack-header"><div><p className="eyebrow">Connect from an assistant</p><h3>Claude, ChatGPT, Meta Muse or a script</h3></div><Link2 size={16} /></div>
+        <div className="studio-list">
+          <CopyLine label="MCP connector (Claude, ChatGPT)" value={info.mcpUrl} />
+          <CopyLine label="OpenAPI (Meta Muse, custom GPT actions, scripts)" value={info.openApiUrl} />
+        </div>
+        {!info.isPublic && <p className="studio-muted">This Studio is only reachable on this computer. Claude Desktop and Claude Code can connect here; claude.ai, ChatGPT and Meta Muse need a public address first (see the guide in docs/CONNECT.md).</p>}
+        <p className="studio-muted">{info.tools.length} tools: {info.tools.map((t) => t.title).join(' · ')}. Approving, building, withdrawing, reopening and sending a card back always show a preview and wait for a yes.</p>
+      </section>
+      <section className="studio-card">
+        <div className="stack-header"><div><p className="eyebrow">Connect code</p><h3>For signing in from an assistant</h3></div><ShieldCheck size={16} /></div>
+        <p className="studio-muted">When an assistant opens the Studio’s sign-in page, type this code there. It works once, for ten minutes.</p>
+        {code ? <p style={{ fontSize: 28, letterSpacing: '0.2em', fontWeight: 600 }}>{code.code}</p> : null}
+        <button type="button" className="button button-primary button-small" onClick={() => void makeCode()}>{code ? 'Make a new code' : 'Make a connect code'}</button>
+      </section>
+      <section className="studio-card">
+        <div className="stack-header"><div><p className="eyebrow">Who has access · {info.tokens.length}</p><h3>Connected assistants and tokens</h3></div><KeyRound size={16} /></div>
+        {info.tokens.length === 0 && <p className="studio-muted">Nothing connected yet.</p>}
+        <div className="studio-list">{info.tokens.map((t) => (
+          <div key={t.id} className="studio-list-row">
+            <div className="studio-row-main"><strong>{t.name}</strong><small>{t.person || 'no name'} · {t.role} · {t.scope === 'write' ? 'look and change' : 'look only'} · {t.customer || 'every customer'} · {t.viaOAuth ? 'signed in' : `token ${t.prefix}…`} · last used {when(t.lastUsedAt)}</small></div>
+            <button type="button" className="icon-button subtle" aria-label={`Remove access for ${t.name}`} onClick={() => void revoke(t.id)}><Trash2 size={13} /></button>
+          </div>
+        ))}</div>
+        <div className="studio-kv" style={{ marginTop: 12 }}>
+          <label>New token for (an OpenAPI connector or a script)<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Meta Muse" /></label>
+          <label>Whose name it acts in<input value={form.person} onChange={(e) => setForm({ ...form, person: e.target.value })} placeholder="Doug" /></label>
+          <label>Role<select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>{ROLES.map((r) => <option key={r}>{r}</option>)}</select></label>
+          <label>Customer<input value={form.customer} onChange={(e) => setForm({ ...form, customer: e.target.value })} placeholder="Every customer" /></label>
+          <label>What it may do<select value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value })}><option value="read">Look only</option><option value="write">Look and make changes</option></select></label>
+          <button type="button" className="button button-primary button-small" disabled={!form.name.trim()} onClick={() => void makeToken()}><KeyRound size={14} /> Make a token</button>
+          {shown && <div className="studio-card" style={{ marginTop: 8 }}><p className="studio-muted" style={{ marginTop: 0 }}>Shown once. Put it straight into the connector’s settings; never paste it into a chat.</p><CopyLine label="Token" value={shown} /><button type="button" className="button button-quiet button-small" onClick={() => setShown('')}>Done, hide it</button></div>}
+        </div>
+      </section>
+      <section className="studio-card">
+        <div className="stack-header"><div><p className="eyebrow">Every call · latest {info.calls.length}</p><h3>What assistants did</h3></div><ScrollText size={16} /></div>
+        {info.calls.length === 0 && <p className="studio-muted">No calls yet.</p>}
+        <div className="studio-list">{info.calls.map((c) => (
+          <div key={c.id} className="studio-list-row">
+            <div className="studio-row-main"><strong>{c.tool}</strong><small>{c.person || 'someone'} · {c.via === 'mcp' ? 'MCP' : 'REST'} · {c.outcome === 'ok' ? 'done' : c.outcome === 'needs-confirm' ? 'asked to confirm' : c.outcome}{c.note ? ` · ${c.note}` : ''} · {when(c.createdAt)}</small></div>
+          </div>
+        ))}</div>
+      </section>
+    </div>
+  )
+}

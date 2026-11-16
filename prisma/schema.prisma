@@ -457,3 +457,65 @@ model AppAgent {
 
   @@unique([useCaseId, key])
 }
+
+// Access from outside the Studio (Claude, ChatGPT, Meta Muse or a script) through the Studio's MCP
+// connector and REST API. Only the token's hash is kept; the token is shown once. "read" can look,
+// "write" can also change things (approve, build and withdraw still need confirm). An empty customer
+// means every customer; otherwise only that customer's use cases.
+model ApiToken {
+  id          String    @id @default(cuid())
+  name        String
+  hash        String    @unique
+  prefix      String
+  scope       String    @default("read") // read | write
+  customer    String    @default("")
+  person      String    @default("")
+  role        String    @default("Product owner")
+  clientId    String    @default("") // set when issued through OAuth
+  refreshHash String    @default("")
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([refreshHash])
+}
+
+// An app that registered itself for OAuth (Claude's custom connectors do this on their own).
+model OAuthClient {
+  id           String   @id @default(cuid())
+  clientId     String   @unique
+  name         String   @default("")
+  redirectUris String[] @default([])
+  createdAt    DateTime @default(now())
+}
+
+// A one-time sign-in code (PKCE S256), good for ten minutes.
+model OAuthCode {
+  id          String   @id @default(cuid())
+  hash        String   @unique
+  clientId    String
+  redirectUri String
+  challenge   String
+  scope       String
+  customer    String   @default("")
+  person      String   @default("")
+  role        String   @default("Product owner")
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+}
+
+// Every connector or API call: who, which tool, on which use case, and how it ended.
+model ConnectorCall {
+  id        String   @id @default(cuid())
+  tokenId   String
+  person    String   @default("")
+  tool      String
+  useCaseId String   @default("")
+  via       String   @default("mcp") // mcp | rest
+  outcome   String   @default("ok") // ok | needs-confirm | denied | error
+  note      String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}

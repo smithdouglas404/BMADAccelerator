@@ -143,6 +143,8 @@ services:
       # The shared agent service. Previews reach it as http://agents:8300 too.
       AGENT_SERVICE_URL: http://agents:8300
       AGENT_SERVICE_PUBLIC_URL: ${AGENT_SERVICE_PUBLIC_URL:-http://localhost:8300}
+      # The Studio's public address (a tunnel or your domain), for the MCP connector and OAuth. Empty = this computer only.
+      STUDIO_PUBLIC_URL: ${STUDIO_PUBLIC_URL:-}
       AGENT_SERVICE_ADMIN_KEY: ${AGENT_SERVICE_ADMIN_KEY:-}
       BACC_MODEL: ${BACC_MODEL:-claude-sonnet-5-5}
       BACC_DOC_MODEL: ${BACC_DOC_MODEL:-claude-haiku-5-5}
