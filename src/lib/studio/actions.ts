@@ -4,6 +4,7 @@ import { rememberDecision } from "@/lib/memory";
 import { bumpReadiness, clip, isAffirmative, numberedOptions, pickedNumbers, proposalFrom, specialistByKey, suggestedOption } from "./core";
 import { SESSION_EDGES, addTrace } from "./trace";
 import { recordChange } from "./truthlog";
+import { judgeYes, jevOutcome, tagJevCall } from "@/lib/jev";
 
 const NO_AGENTS = "I've kept that. Socra switches on once Claude is signed in on Settings.";
 
@@ -57,7 +58,14 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
   let picked = nums ? options.filter((x) => nums.includes(x.n)) : [];
   // A bare yes approves only what was actually proposed: the option Socra marked as its suggestion,
   // or the yes/no proposal it last made. A yes to an open question or to unmarked options is held.
-  const yes = !specialist && !picked.length && isAffirmative(content);
+  const rulesYes = !specialist && !picked.length && isAffirmative(content);
+  // What a yes would approve, if anything is on the table: Socra's marked option or its yes/no proposal.
+  // Jev (TypeSafe) judges whether a short reply agrees to it and adds nothing new; when Jev is unsettled,
+  // failing or off, the rules decide. Every call is logged beside the rules' answer (Settings > Jev).
+  const marked = !specialist && !picked.length && offered ? suggestedOption(offered.content) : null;
+  const onTable = specialist || picked.length ? "" : offered ? (options.find((x) => x.n === marked)?.label ?? "") : lastMuse ? proposalFrom(lastMuse.content) : "";
+  const judged = onTable ? await judgeYes(useCaseId, onTable, content, rulesYes) : { yes: rulesYes, callId: null };
+  const yes = judged.yes;
   const suggested = yes && offered ? suggestedOption(offered.content) : null;
   if (suggested) picked = options.filter((x) => x.n === suggested);
   const proposed = yes && !picked.length && !offered && lastMuse ? proposalFrom(lastMuse.content) : "";
@@ -81,6 +89,7 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
       },
     });
     rememberDecision(uc, "muse", `${who.said} approved: ${proposal}`, "studio:yes");
+    await tagJevCall(judged.callId, `decision:${decision.id}`);
     await recordChange(useCaseId, { node: `decision:${decision.id}`, kind: "approved", summary: `${who.said} ${picked.length ? "chose" : "approved"}: ${proposal}`, after: proposal, causes: [`msg:${msg.id}`, ...((offered ?? lastMuse) ? [`msg:${(offered ?? lastMuse)!.id}`] : [])], by: who.name || who.role });
     if (agentsEnabled())
       await enqueue(
@@ -143,6 +152,7 @@ export async function undoApproval(useCaseId: string, decisionId: string, author
   if (!d) return null;
   const who = await whoSpoke(useCaseId, author);
   await prisma.decision.delete({ where: { id: d.id } });
+  await jevOutcome(`decision:${d.id}`, "undone");
   await prisma.message.updateMany({ where: { useCaseId, ref: d.id, agent: "Decision captured" }, data: { agent: "Approval undone", accent: "#f5c88a", content: `Undone: ${d.text}. Nothing was carried forward.` } });
   await recordChange(useCaseId, { node: `decision:${d.id}`, kind: "undone", summary: `${who.said} undid the approval: ${d.text}`, before: d.text, by: who.name || who.role });
   if (agentsEnabled())

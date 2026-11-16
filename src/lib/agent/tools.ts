@@ -1,4 +1,5 @@
 import path from "path";
+import { markReadBySocra } from "@/lib/jev";
 import { LINK_KINDS, LINK_LABEL, MAX_SUGGESTED_PER_STORY, maySuggest, wouldCycle } from "@/lib/studio/storymap";
 import { tool, createSdkMcpServer } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
@@ -456,10 +457,12 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
           prd: z.array(z.enum(SPEC_DEFS.filter((d) => d.tab === "prd").map((d) => d.key) as [string, ...string[]])).default([]),
           trd: z.array(z.enum(SPEC_DEFS.filter((d) => d.tab === "trd").map((d) => d.key) as [string, ...string[]])).default([]),
           question: z.string().default(""),
+          kind: z.enum(["new_requirement", "change_request", "bug_report", "none"]).optional().describe("What the mark asks for: something new, a change to what exists, a fix, or nothing (a comment)"),
         },
         async (a) => {
           const f = await prisma.feedback.findFirst({ where: { id: a.id, useCaseId } });
           if (!f) return ok("No such annotation.");
+          if (a.kind) await markReadBySocra(f.id, a.kind === "none" ? "asks_nothing" : a.kind);
           const interpretation = { observation: f.comment, behaviour: a.behaviour, acceptance: a.acceptance, component: a.component, prd: a.prd, trd: a.trd, question: a.question };
           await prisma.feedback.update({ where: { id: f.id }, data: { interpretation } });
           await recordChange(useCaseId, {

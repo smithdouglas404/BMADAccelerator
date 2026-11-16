@@ -565,3 +565,25 @@ model StoryLink {
 
   @@unique([useCaseId, from, to, kind])
 }
+
+// Every call to TypeSafe's Jev, beside what the old method (the rules or Socra) said, so the value can
+// be measured: agreement, who was used, what people did afterwards, speed and cost. Settings > Jev.
+model JevCall {
+  id          String   @id @default(cuid())
+  useCaseId   String   @default("")
+  feature     String // approval | markup | links
+  ref         String   @default("") // decision:<id> | ann:<id> | links run
+  input       Json     @default("{}")
+  answers     Json     @default("{}")
+  jev         String   @default("") // Jev's verdict
+  old         String   @default("") // what the old method said (rules now, or Socra later)
+  used        String   @default("") // jev | old
+  outcome     String   @default("") // what a person did later: undone | accepted | dismissed
+  ms          Int      @default(0)
+  inputTokens Int      @default(0)
+  error       String   @default("")
+  createdAt   DateTime @default(now())
+
+  @@index([feature, createdAt])
+  @@index([ref])
+}

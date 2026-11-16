@@ -9,6 +9,7 @@ import { workspacePath } from "@/lib/workspace";
 import { enqueue, agentsEnabled } from "@/lib/agent/runner";
 import { rememberFeedback } from "@/lib/memory";
 import { clip } from "@/lib/studio/core";
+import { sortMark } from "@/lib/jev";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -46,12 +47,15 @@ export async function POST(req: Request, { params }: Ctx) {
   );
   const fb = await prisma.feedback.create({ data: { useCaseId: id, comment: d.comment, imagePath, pageUrl: d.pageUrl, target: d.target, shape: d.shape } });
   for (const edge of SESSION_EDGES.annotation(d.shape, d.target || "selected product surface", d.comment)) await addTrace(id, ...edge);
+  // Jev (TypeSafe) sorts the mark at once: new requirement, change or bug. Socra still reads it in full,
+  // and its own reading is logged beside Jev's (Settings > Jev).
+  const sorted = await sortMark(id, fb.id, d.target, d.comment);
   const focus = uc.focus ? await prisma.capability.findFirst({ where: { useCaseId: id, key: uc.focus } }) : null;
   const item = await prisma.backlogItem.create({
     data: {
       useCaseId: id,
       title: clip(d.comment, 140),
-      note: `Visual annotation on ${d.target || "the product"} (${d.shape})`,
+      note: `Visual annotation on ${d.target || "the product"} (${d.shape})${sorted ? ` · sorted as ${sorted.label} (Jev, ${Math.round(sorted.p * 100)}%)` : ""}`,
       kind: "capture",
       group: focus?.label ?? "Unsorted signal",
       source: d.voice ? "Screen annotation / voice" : "Screen annotation",
@@ -68,7 +72,7 @@ export async function POST(req: Request, { params }: Ctx) {
     await enqueue(
       id,
       "annotation",
-      `Vibe review: the owner ${d.shape === "circle" ? "circled a region of" : d.shape === "full-screen" ? "captured the whole screen of" : "pointed at"} ${d.target || "the live product"} (page ${d.pageUrl}) and said: "${d.comment}".${imagePath ? ` The picture is studio/annotations/annotation-${n}.png (open it with Read).` : ""} It is in the backlog (item ${item.id}), ticked for the next build. Interpret it with mcp__studio__interpret_annotation (annotation ${fb.id}): what they observed, the behaviour they want in plain words, acceptance criteria, the component change, and the PRD and TRD sections it changes, with a question if the meaning is unclear. Then update those sections (set_spec_section with an annotation trace step), and suggest a build when enough has changed.`,
+      `Vibe review: the owner ${d.shape === "circle" ? "circled a region of" : d.shape === "full-screen" ? "captured the whole screen of" : "pointed at"} ${d.target || "the live product"} (page ${d.pageUrl}) and said: "${d.comment}".${imagePath ? ` The picture is studio/annotations/annotation-${n}.png (open it with Read).` : ""} It is in the backlog (item ${item.id}), ticked for the next build. ${sorted ? `Jev sorted it as: ${sorted.label}. ` : ""}Interpret it with mcp__studio__interpret_annotation (annotation ${fb.id}), giving your own kind (new_requirement, change_request or bug_report, or none when it asks for nothing): what they observed, the behaviour they want in plain words, acceptance criteria, the component change, and the PRD and TRD sections it changes, with a question if the meaning is unclear. Then update those sections (set_spec_section with an annotation trace step), and suggest a build when enough has changed.`,
       `ann:${fb.id}`,
     );
   return NextResponse.json({ feedback: fb, item }, { status: 201 });
