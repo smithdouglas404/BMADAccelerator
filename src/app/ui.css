@@ -30,7 +30,8 @@
   --primary-foreground: #17200f;
   --secondary: #1f2620;
   --secondary-foreground: #f1f2ec;
-  --muted: #1f2620;
+  /* styles.css already uses --muted for grey text, so the shadcn surface colour has its own name. */
+  --ui-muted: #1f2620;
   --muted-foreground: #a3a99e;
   --accent: #232b24;
   --accent-foreground: #f1f2ec;
@@ -86,7 +87,7 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
+  --color-muted: var(--ui-muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
