@@ -14,7 +14,7 @@ export type LiveSpec = {
   capability: string; related: string[]; trace: Trace[]; updatedAt: string; updatedBy: string
 }
 export type LiveDecision = { id: string; text: string; status: 'approved' | 'assumed' | 'open' | 'rejected'; capability: string; words: string; agent: string; options: unknown; answer: string; includeInBuild: boolean; builtInVersion: number; createdAt: string }
-export type LiveBacklog = { id: string; title: string; note: string; kind: BacklogItem['kind']; group: string; source: string; recKind: string; probe: string; state: string; hidden: string; includeInBuild: boolean; builtInVersion: number; createdAt: string; trackerUrl: string }
+export type LiveBacklog = { id: string; title: string; note: string; kind: BacklogItem['kind']; group: string; source: string; recKind: string; probe: string; state: string; hidden: string; includeInBuild: boolean; builtInVersion: number; createdAt: string; trackerUrl: string; annotationId?: string }
 export type LiveMove = { id: string; title: string; capability: string; decision: string; status: string; owner: string; signal: string; hidden: string; components: string[]; routes: string[]; trackerUrl: string; movedBy?: string; moveReason?: string }
 export type LiveCapability = { id: string; key: string; label: string; kicker: string; description: string; readiness: number; delta: string; signal: string; color: string; items: { id: string; text: string; state: string }[] }
 export type LiveMessage = { id: string; role: string; agent: string; content: string; accent: string; createdAt: string; author: string; authorRole: string; addressed: string; raw: string; ref: string }
@@ -111,10 +111,10 @@ export function toMessages(d: Live, me?: { name?: string }): StudioMessage[] {
   }))
 }
 
-export function toBacklog(d: Live): (BacklogItem & { ownerState: string })[] {
+export function toBacklog(d: Live): (BacklogItem & { ownerState: string; annotationId: string })[] {
   return d.backlog
     .filter((b) => b.state !== 'suggested' && b.state !== 'probing')
-    .map((b) => ({ id: b.id, title: b.title, note: b.note, kind: b.kind, group: b.group || 'Unsorted signal', source: b.source, age: ago(b.createdAt), ownerState: ownerBacklogState(b) }))
+    .map((b) => ({ id: b.id, title: b.title, note: b.note, kind: b.kind, group: b.group || 'Unsorted signal', source: b.source, age: ago(b.createdAt), ownerState: ownerBacklogState(b), annotationId: b.annotationId || '' }))
 }
 
 export function toRecommendations(d: Live): RecommendationItem[] {

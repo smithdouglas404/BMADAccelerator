@@ -119,7 +119,7 @@ async function mark(src: string, p: Pick): Promise<string> {
   return c.toDataURL('image/png')
 }
 
-type Recognizer = { lang: string; interimResults: boolean; continuous: boolean; start: () => void; stop: () => void; onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal?: boolean }> }) => void) | null; onend: (() => void) | null; onerror: (() => void) | null }
+type Recognizer = { lang: string; interimResults: boolean; continuous: boolean; start: () => void; stop: () => void; onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal?: boolean }> }) => void) | null; onend: (() => void) | null; onerror: ((e: { error?: string }) => void) | null }
 
 /**
  * Voice, off until pressed: press the mic, talk as long as you like (it never stops on its own: a pause
@@ -173,7 +173,12 @@ export function useVoice(platform: boolean, onText: (text: string, raw?: string)
         setListening(false)
         void deliver(heard.current.join(' '))
       }
-      r.onerror = () => undefined
+      r.onerror = (e) => {
+        const err = e.error
+        if (err === 'not-allowed' || err === 'service-not-allowed') { wanted.current = false; setListening(false); onNote('The microphone is blocked for this page. Allow it in the browser’s address bar, then press the mic again.') }
+        else if (err === 'audio-capture') { wanted.current = false; setListening(false); onNote('No microphone was found. Plug one in or type it instead.') }
+        else if (err === 'network') { wanted.current = false; setListening(false); onNote('Voice needs a connection to the browser’s speech service. Type it instead, or try again.') }
+      }
       rec.current = r
       r.start()
     }
@@ -184,10 +189,15 @@ export function useVoice(platform: boolean, onText: (text: string, raw?: string)
     return true
   }
 
+  let denied = ''
   const recorder = async () => {
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') return false
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null)
-    if (!stream) return false
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch((e: unknown) => { denied = (e as { name?: string })?.name ?? 'denied'; return null })
+    if (!stream) {
+      if (denied === 'NotAllowedError' || denied === 'SecurityError') onNote('The microphone is blocked for this page. Allow it in the browser’s address bar (the lock or camera icon), then press the mic again.')
+      else if (denied === 'NotFoundError') onNote('No microphone was found. Plug one in or type it instead.')
+      return denied === 'NotAllowedError' || denied === 'SecurityError' || denied === 'NotFoundError'
+    }
     const mr = new MediaRecorder(stream)
     const chunks: Blob[] = []
     mr.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data) }

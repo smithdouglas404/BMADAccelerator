@@ -47,10 +47,11 @@ services:
       HISTORY_DB_PATH: /app/history/history.db
       ADMIN_API_KEY: ${MEM0_ADMIN_API_KEY:?run scripts/memory-secrets.sh once to create the memory passwords}
       JWT_SECRET: ${MEM0_JWT_SECRET:?run scripts/memory-secrets.sh once to create the memory passwords}
-      # Same models as Doug's other Mem0: OpenAI gpt-5-mini (Mem0's own default) for fact extraction,
+      # OpenAI gpt-4.1-mini for fact extraction (the server sends temperature 0.2, which gpt-5-mini rejects with a 400, so
+      # some memories were lost) and
       # text-embedding-3-small (1536 dims, pgvector's default) for embeddings.
       OPENAI_API_KEY: ${OPENAI_API_KEY:?add OPENAI_API_KEY to .env (Mem0 and Letta use it for embeddings)}
-      MEM0_DEFAULT_LLM_MODEL: ${MEM0_DEFAULT_LLM_MODEL:-gpt-5-mini}
+      MEM0_DEFAULT_LLM_MODEL: ${MEM0_DEFAULT_LLM_MODEL:-gpt-4.1-mini}
       MEM0_DEFAULT_EMBEDDER_MODEL: ${MEM0_DEFAULT_EMBEDDER_MODEL:-text-embedding-3-small}
       MEM0_TELEMETRY: "false"
     volumes:

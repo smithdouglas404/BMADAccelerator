@@ -11,7 +11,7 @@ import { IMAGE_LIMIT, imagesConfigured, makeImage } from "@/lib/images";
 import { SPEC_BASIS, SPEC_DEFS, SPEC_STATUSES, TRACE_TYPES, cleanTrace } from "@/lib/studio/spec";
 import { ensureSpec } from "@/lib/studio/state";
 import { currentCauses, nodesForIds, recordChange } from "@/lib/studio/truthlog";
-import { VALIDATION_SIGNALS, colorFor, numberItems, overallReadiness, slugify, specialistByKey, validationScore, type Validation } from "@/lib/studio/core";
+import { VALIDATION_SIGNALS, colorFor, numberItems, overallReadiness, slugify, specialistByKey, validationScore, workingName, type Validation } from "@/lib/studio/core";
 
 const ROLE_KEYS = ROLES.map((r) => r.key) as [string, ...string[]];
 const SIGNAL_KEYS = VALIDATION_SIGNALS.map((s) => s.key) as [string, ...string[]];
@@ -142,8 +142,15 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
         },
         async (a) => {
           const data = Object.fromEntries(Object.entries(a).filter(([, v]) => v.trim())) as Prisma.UseCaseUpdateInput;
+          // The name is yours to give only while it is a working name from the first words. A name the owner typed
+          // (or one already chosen) is theirs: it changes only when they rename it.
+          let kept = "";
+          if (data.name) {
+            const uc = await prisma.useCase.findUnique({ where: { id: useCaseId }, select: { name: true, description: true } });
+            if (uc && uc.name !== workingName(uc.description)) { delete data.name; kept = ` The product's name stays "${uc.name}": the owner chose it.`; }
+          }
           await prisma.useCase.update({ where: { id: useCaseId }, data });
-          return ok();
+          return ok(kept.trim() || undefined);
         },
       ),
       tool(

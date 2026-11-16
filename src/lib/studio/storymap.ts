@@ -51,6 +51,7 @@ export function liveLinks(links: StoryLinkRow[], nodes: { id: string }[]) {
  */
 export function maySuggest(all: StoryLinkRow[], from: string, to: string, kind: LinkKind): { ok: true } | { ok: false; why: string } {
   if (from === to) return { ok: false, why: "A story can't link to itself." };
+  if (wouldCycle(all, from, to, kind)) return { ok: false, why: "That would make a circle: each would wait on the other." };
   const same = (l: StoryLinkRow) => l.kind === kind && ((l.from === from && l.to === to) || (kind === "related" && l.from === to && l.to === from));
   const prior = all.find(same);
   if (prior?.status === "dismissed") return { ok: false, why: "A person dismissed this link before; don't offer it again." };
@@ -58,6 +59,29 @@ export function maySuggest(all: StoryLinkRow[], from: string, to: string, kind: 
   const count = (id: string) => all.filter((l) => l.status === "suggested" && (l.from === id || l.to === id)).length;
   if (count(from) >= MAX_SUGGESTED_PER_STORY || count(to) >= MAX_SUGGESTED_PER_STORY) return { ok: false, why: `Each story carries at most ${MAX_SUGGESTED_PER_STORY} suggested links; offer only the strongest.` };
   return { ok: true };
+}
+
+/**
+ * Whether adding "from depends on / was split from to" would close a circle: `to` already (directly or
+ * through others) waits on `from`. Related links never make a circle. Dismissed links don't count.
+ */
+export function wouldCycle(all: StoryLinkRow[], from: string, to: string, kind: string): boolean {
+  if (kind !== "depends_on" && kind !== "split_from") return false;
+  const next = new Map<string, string[]>();
+  for (const l of all) {
+    if (l.status === "dismissed" || (l.kind !== "depends_on" && l.kind !== "split_from")) continue;
+    next.set(l.from, [...(next.get(l.from) ?? []), l.to]);
+  }
+  const seen = new Set<string>();
+  const stack = [to];
+  while (stack.length) {
+    const n = stack.pop()!;
+    if (n === from) return true;
+    if (seen.has(n)) continue;
+    seen.add(n);
+    stack.push(...(next.get(n) ?? []));
+  }
+  return false;
 }
 
 /**

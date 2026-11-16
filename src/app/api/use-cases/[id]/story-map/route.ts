@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { ownerSays } from "@/lib/studio/actions";
+import { askSocra } from "@/lib/studio/actions";
 import { recordChange } from "@/lib/studio/truthlog";
-import { LINK_KINDS, LINK_LABEL, connectPrompt, liveLinks, storyNodes, suggestPrompt, unlinked } from "@/lib/studio/storymap";
+import { LINK_KINDS, LINK_LABEL, connectPrompt, liveLinks, storyNodes, suggestPrompt, unlinked, wouldCycle } from "@/lib/studio/storymap";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -47,18 +47,20 @@ export async function POST(req: Request, { params }: Ctx) {
     if (b.from === b.to) return NextResponse.json({ error: "Pick two different stories." }, { status: 400 });
     const [a, c] = [await titleOf(b.from), await titleOf(b.to)];
     if (!a || !c) return NextResponse.json({ error: "One of those stories isn't in this product." }, { status: 404 });
+    const existing = await prisma.storyLink.findMany({ where: { useCaseId: id } });
+    if (wouldCycle(existing, b.from, b.to, b.kind)) return NextResponse.json({ error: `That would make a circle: “${c}” already waits on “${a}”, so “${a}” can't also wait on “${c}”.` }, { status: 409 });
     const l = await prisma.storyLink.upsert({
       where: { useCaseId_from_to_kind: { useCaseId: id, from: b.from, to: b.to, kind: b.kind } },
       create: { useCaseId: id, from: b.from, to: b.to, kind: b.kind, status: "confirmed", by },
       update: { status: "confirmed", by },
     });
     await recordChange(id, { node: b.from, kind: "changed", summary: `${by} linked “${a}” ${LINK_LABEL[b.kind]} “${c}”`, after: `${LINK_LABEL[b.kind]} ${c}`, causes: [b.to], by });
-    if (b.ask) await ownerSays(id, connectPrompt(a, c, b.kind), { source: "Story map", author: b.author });
+    if (b.ask) await askSocra(id, { label: "Story map", line: `${by} linked “${a}” ${LINK_LABEL[b.kind]} “${c}”. Socra is asking what firms it up.`, prompt: `${by} linked two stories on the Story map. ${connectPrompt(a, c, b.kind)}`, cause: b.from });
     return NextResponse.json({ ok: true, link: l.id }, { status: 201 });
   }
 
   if (b.action === "suggest") {
-    await ownerSays(id, suggestPrompt(), { source: "Story map", author: b.author });
+    await askSocra(id, { label: "Story map", line: `${by} asked Socra to look for links between the stories. Its guesses will appear on the map, dashed.`, prompt: `${by} asked you to look for links on the Story map. ${suggestPrompt()}` });
     return NextResponse.json({ ok: true }, { status: 202 });
   }
 

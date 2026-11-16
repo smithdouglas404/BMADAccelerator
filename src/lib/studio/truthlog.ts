@@ -88,7 +88,7 @@ export async function truthView(useCaseId: string) {
   const g = await graphInput(useCaseId);
   if (!g) return null;
   const { nodes, edges } = buildTruthGraph(g);
-  return { nodes, edges, timeline: explainChanges(g.changes, nodes, edges), confidence: caseConfidence(g, nodes, edges) };
+  return { nodes, edges, timeline: explainChanges(g.changes, nodes, edges, 300), confidence: caseConfidence(g, nodes, edges) };
 }
 
 /** TRUTH_GRAPH.json for the package. */

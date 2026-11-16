@@ -119,7 +119,7 @@ export function StoryMapView({ live, me, changeView, setToast }: Props) {
 
     <div className="storymap-layout">
       <section className="truth-graph-card storymap-card">
-        <div className="truth-card-heading"><div><p className="eyebrow">{focus ? `Focus · ${node(focus)?.title ?? ''}` : area ? `Area · ${area}` : 'Every story'}</p><h2>{connecting ? (connecting.length === 0 ? 'Pick the first story' : connecting.length === 1 ? 'Now pick the second story' : 'How are they linked?') : 'The stories, left to right'}</h2></div>
+        <div className="truth-card-heading"><div><p className="eyebrow">{focus ? `Focus · ${node(focus)?.title ?? ''}` : area ? `Area · ${area}` : 'Every story'}</p><h2>{connecting ? (connecting.length === 0 ? 'Pick the story that comes first' : connecting.length === 1 ? 'Now pick the one that comes after it' : 'How are they linked?') : 'The stories, left to right'}</h2></div>
           <div className="truth-filters">
             {focus && <button type="button" className="is-active" onClick={() => setFocus('')}><X size={11} /> Leave focus</button>}
             <button type="button" className={!area ? 'is-active' : ''} onClick={() => setArea('')}>All areas</button>
@@ -147,10 +147,10 @@ export function StoryMapView({ live, me, changeView, setToast }: Props) {
 
       <aside className="truth-detail-column">
         {pair && pair.length === 2 ? <section className="truth-detail-card"><div className="truth-card-heading"><div><p className="eyebrow">Connect two stories</p><h3>How are they linked?</h3></div><GitBranch size={15} /></div>
-          <div className="sm-kinds">{(['depends_on', 'split_from', 'related'] as LinkKind[]).map((k) => <button type="button" key={k} className={kind === k ? 'is-active' : ''} onClick={() => setKind(k)}><strong>{pair[0].title}</strong> <em>{LINK_LABEL[k]}</em> <strong>{pair[1].title}</strong></button>)}</div>
-          <button type="button" className="sm-swap text-button" onClick={() => setConnecting([connecting![1], connecting![0]])}>Swap the order <ArrowRight size={12} /></button>
+          <div className="sm-kinds">{(['depends_on', 'split_from', 'related'] as LinkKind[]).map((k) => <button type="button" key={k} className={kind === k ? 'is-active' : ''} onClick={() => setKind(k)}><strong>{k === 'related' ? pair[0].title : pair[1].title}</strong> <em>{LINK_LABEL[k]}</em> <strong>{k === 'related' ? pair[1].title : pair[0].title}</strong></button>)}</div>
+          <button type="button" className="sm-swap text-button" onClick={() => setConnecting([connecting![1], connecting![0]])}>Swap which comes first <ArrowRight size={12} /></button>
           <label className="sm-ask"><input type="checkbox" checked={ask} onChange={(e) => setAsk(e.target.checked)} /> Ask {ASSISTANT_NAME} two or three questions to firm up the link</label>
-          <div className="truth-detail-actions"><button className="button button-primary button-small" type="button" disabled={busy} onClick={() => void post({ action: 'connect', from: pair[0].id, to: pair[1].id, kind, ask }, ask ? `Linked. ${ASSISTANT_NAME} is asking what firms it up in the conversation.` : 'Linked.').then(() => { setConnecting(null); if (ask) changeView('conversation') })}><Check size={13} /> Connect</button><button className="button button-quiet button-small" type="button" onClick={() => setConnecting(null)}>Cancel</button></div>
+          <div className="truth-detail-actions"><button className="button button-primary button-small" type="button" disabled={busy} onClick={() => void post({ action: 'connect', from: kind === 'related' ? pair[0].id : pair[1].id, to: kind === 'related' ? pair[1].id : pair[0].id, kind, ask }, ask ? `Linked. ${ASSISTANT_NAME} is asking what firms it up in the conversation.` : 'Linked.').then(() => { setConnecting(null); if (ask) changeView('conversation') })}><Check size={13} /> Connect</button><button className="button button-quiet button-small" type="button" onClick={() => setConnecting(null)}>Cancel</button></div>
         </section>
         : sel ? <section className="truth-detail-card"><div className="truth-card-heading"><div><p className="eyebrow">{STATE_LABEL[sel.state]}{sel.capability ? ` · ${sel.capability}` : ''}</p><h3>{sel.title}</h3></div></div>
           {sel.note && <p className="truth-detail-copy">{sel.note}</p>}

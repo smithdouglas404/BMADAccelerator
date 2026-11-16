@@ -125,6 +125,18 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
   return { approved, picked: picked.map((x) => x.n) };
 }
 
+/**
+ * A screen asks Socra something on a person's behalf (the Story map's "firm up this link", "look for
+ * links"). The conversation shows one short line saying what happened; the long request goes to Socra
+ * only, and nothing is filed in the backlog as a thought.
+ */
+export async function askSocra(useCaseId: string, o: { label: string; line: string; prompt: string; cause?: string }) {
+  await prisma.message.create({ data: { useCaseId, role: "signal", agent: o.label, accent: "#a9d8ff", content: o.line } });
+  if (agentsEnabled()) await enqueue(useCaseId, "user", o.prompt, o.cause ?? "");
+  else await prisma.message.create({ data: { useCaseId, role: "muse", agent: "Socra · Product physician", content: NO_AGENTS } });
+  await prisma.useCase.update({ where: { id: useCaseId }, data: { updatedAt: new Date() } });
+}
+
 /** Undo an approval made by a yes or a pick: as if it was never said. The decision goes; Socra hears it. */
 export async function undoApproval(useCaseId: string, decisionId: string, author?: Speaker) {
   const d = await prisma.decision.findFirst({ where: { id: decisionId, useCaseId } });

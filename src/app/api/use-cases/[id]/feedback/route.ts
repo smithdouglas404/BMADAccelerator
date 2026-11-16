@@ -60,6 +60,8 @@ export async function POST(req: Request, { params }: Ctx) {
       annotationId: fb.id,
     },
   });
+  // The mark-up shows in the conversation with its picture, as the person's own words.
+  await prisma.message.create({ data: { useCaseId: id, role: "user", agent: "You", content: `Marked up ${d.target ? d.target.replace(/^Circled /, "") : "the product"} (${d.shape === "circle" ? "circled" : d.shape === "full-screen" ? "whole screen" : "pointed at"}): ${d.comment}`, ref: `ann:${fb.id}`, raw: d.voice ? d.comment : "" } });
   rememberFeedback(uc, `A${n}`, `On ${d.target || d.pageUrl} the owner said: "${d.comment}"`);
   await recordChange(id, { node: `ann:${fb.id}`, kind: "added", summary: `${d.shape === "circle" ? "Circled" : d.shape === "full-screen" ? "Captured the whole screen of" : "Pointed at"} ${d.target ? d.target.replace(/^Circled /, "") : "the product"}: “${d.comment}”`, after: d.comment, by: "Owner" });
   if (agentsEnabled())

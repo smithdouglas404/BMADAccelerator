@@ -32,6 +32,12 @@ type CardDetail = {
 type Props = { live: Live; me: Me; buildNow: () => void; changeView: (v: StudioView) => void; setToast: (v: string) => void; children?: React.ReactNode }
 
 const ownerMark = (o: string) => (o === 'Claude Code' ? 'C' : o === 'UX agent' ? 'U' : o === 'Product owner' ? 'PO' : o.slice(0, 1).toUpperCase() || 'A')
+/** Socra writes some lines with record ids (move:…, backlog:…); show the card's name instead. */
+const plain = (text: string, live: Live) =>
+  text.replace(/\b(move|backlog|msg|decision):([a-z0-9]{8,})/gi, (all, kind: string, ref: string) => {
+    const hit = kind === 'move' ? live.moves.find((m) => m.id === ref)?.title : kind === 'backlog' ? live.backlog.find((b) => b.id === ref)?.title : undefined
+    return hit ? `“${hit}”` : kind === 'move' || kind === 'backlog' ? 'another card' : all
+  })
 const size = (b: number) => (b > 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`)
 
 export function BoardView({ live, me, buildNow, changeView, setToast, children }: Props) {
@@ -195,7 +201,7 @@ function CardPanel({ live, id, by, onClose, onMove, setToast }: { live: Live; id
 
         <section className="studio-card-section"><span className="eyebrow"><History size={11} /> What happened · {d!.history.length}</span>
           {d!.history.length === 0 ? <p className="studio-card-empty">Nothing logged yet.</p> :
-            <ol className="studio-card-history">{d!.history.map((h) => <li key={h.id}><span>{h.summary}</span><small>{ago(h.createdAt)}</small></li>)}</ol>}
+            <ol className="studio-card-history">{d!.history.map((h) => <li key={h.id}><span>{plain(h.summary, live)}</span><small>{ago(h.createdAt)}</small></li>)}</ol>}
         </section>
       </>}
     </aside>

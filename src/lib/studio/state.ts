@@ -70,8 +70,11 @@ export async function studioState(id: string) {
   const pending = await prisma.agentEvent.count({ where: { useCaseId: id, status: { in: ["queued", "running"] } } });
   // Records written before the assistant was renamed show its current name; people's own words never change.
   const b = brand;
+  // The agent service's token and callback secret never leave the server (the screens only need to know whether one exists).
+  const { agentToken, agentSecret, ...safe } = uc;
   return {
-    ...uc,
+    ...safe,
+    agentRegistered: Boolean(agentToken && agentSecret),
     messages: uc.messages.map((m) => (m.role === "user" ? m : { ...m, agent: b(m.agent), content: b(m.content) })),
     decisions: uc.decisions.map((d) => ({ ...d, agent: b(d.agent), text: d.agent ? b(d.text) : d.text })),
     backlog: uc.backlog.map((x) => ({ ...x, group: b(x.group), source: b(x.source), ...(x.recKind ? { title: b(x.title), note: b(x.note) } : {}) })),

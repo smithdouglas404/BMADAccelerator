@@ -44,3 +44,14 @@ test("stories with no links are the gaps; ideas aren't counted", () => {
   assert.deepEqual(unlinked(nodes, links), ["move:c"]);
   assert.deepEqual([...neighbourhood("move:a", links)].sort(), ["move:a", "move:b"]);
 });
+
+test("a link that would make a circle is refused; related links never do", async () => {
+  const { wouldCycle } = await import("../src/lib/studio/storymap.ts");
+  const chain = [link("b", "a", "depends_on", "confirmed"), link("c", "b", "split_from", "confirmed")];
+  assert.equal(wouldCycle(chain, "a", "c", "depends_on"), true, "a would wait on c, which waits on b, which waits on a");
+  assert.equal(wouldCycle(chain, "a", "b", "depends_on"), true);
+  assert.equal(wouldCycle(chain, "d", "a", "depends_on"), false);
+  assert.equal(wouldCycle(chain, "a", "c", "related"), false);
+  assert.equal(wouldCycle([link("b", "a", "depends_on", "dismissed")], "a", "b", "depends_on"), false, "dismissed links don't count");
+  assert.equal(maySuggest(chain, "a", "c", "depends_on").ok, false, "Socra can't suggest a circle either");
+});
