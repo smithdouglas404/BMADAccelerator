@@ -313,6 +313,8 @@ model Preferences {
   targetCodex       Boolean @default(false)
   targetCursor      Boolean @default(false)
   targetAntigravity Boolean @default(false)
+  // ECC library skills switched on for every product (per-product picks are UseCaseSkill rows).
+  eccAllProducts    String[] @default([])
 }
 
 // Visual markup on a generated screen: the drawing, the comment, and the card it became.

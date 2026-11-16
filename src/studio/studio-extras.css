@@ -173,3 +173,19 @@ button.studio-row-main svg { grid-row: 1 / span 2; grid-column: 2; color: var(--
   .studio-people-menu { right: -8px; width: min(290px, calc(100vw - 32px)); }
   .studio-checkpoint-actions { margin-left: 0; }
 }
+
+/* One skill library (Settings > Skills) */
+.studio-library { padding-top: 18px; }
+.studio-library .studio-card { margin-top: 0; }
+.studio-library-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 14px 0 6px; }
+.studio-library-search { flex: 1 1 240px; min-width: 0; padding: 9px 10px; color: var(--ink); border: 1px solid var(--line-strong); border-radius: 7px; outline: 0; background: rgba(0,0,0,.15); font: 10px 'DM Mono', monospace; }
+.studio-library-row { grid-template-columns: 1fr auto auto; }
+.studio-library-row > :nth-child(3) { grid-column: auto; }
+.studio-library-row > .studio-library-scope { grid-column: 1 / -1; }
+.studio-where { font: 9px 'DM Mono', monospace; white-space: nowrap; }
+.studio-source { display: inline-block; margin-left: 6px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 5px; color: var(--faint); font: 8px 'DM Mono', monospace; vertical-align: middle; }
+.studio-source.is-studio { color: var(--acid); border-color: var(--acid); }
+.studio-source.is-ecc { color: var(--blue); border-color: rgba(169,216,255,.35); }
+.studio-source.is-yours { color: var(--warm); border-color: var(--warm); }
+.studio-library-scope { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; flex-basis: 100%; padding: 10px 0 2px; }
+@media (max-width: 720px) { .studio-library-row { grid-template-columns: 1fr; } .studio-library-row > * { grid-column: 1 / -1; } }

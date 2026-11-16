@@ -88,6 +88,6 @@ Your side: the industry. For this product's industry and market, find what a pro
     maxTurns: 40,
     prompt: `${research}
 
-Your side: innovation (studio-reimagine sections 3 and 4: analogues, jobs to be done, first principles, the value grid, twists, the riskiest assumption). Combine the owner's context (their idea, audience, story and constraints) with what the category's leaders do and miss. Suggest 6 to 10 ideas, each: the idea in one line, who it's for, what in the owner's context it comes from, which leaders do something similar or none, and how hard it is for a pilot. No AI for its own sake: fixed rules are plain features; an AI agent only for workflows, messages, alerts, recommendations or insights. File: \`studio/research/ideas.md\`.`,
+Your side: innovation (studio-reimagine sections 4 and 5: analogues, jobs to be done, first principles, the value grid, twists, the riskiest assumption). Combine the owner's context (their idea, audience, story and constraints) with what the category's leaders do and miss. Suggest 6 to 10 ideas, each: the idea in one line, who it's for, what in the owner's context it comes from, which leaders do something similar or none, and how hard it is for a pilot. No AI for its own sake: fixed rules are plain features; an AI agent only for workflows, messages, alerts, recommendations or insights. File: \`studio/research/ideas.md\`.`,
   },
 };

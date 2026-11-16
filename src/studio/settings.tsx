@@ -9,15 +9,11 @@ import { StudioTop } from './pages'
 type KeyStatus = { env: string; name: string; source: 'saved' | 'env' | 'missing'; last4: string }
 type Status = { providers: (KeyStatus & { id: string; models: string[] })[]; other: KeyStatus[]; claudePlan: boolean; roles: { env: string; label: string; note: string; providers: string[]; current: string; saved: boolean }[] }
 type Connector = { id: string; name: string; label: string; transport: string; url: string; command: string; args: string[]; secretNames: string[]; hasSecrets: boolean; enabled: boolean; allProducts: boolean; useCases: string[] }
-type Skill = { id: string; name: string; description: string; valid: boolean; report: string; enabled: boolean }
 type Product = { id: string; name: string }
 
-const BUNDLED = [
-  ['working-backwards-studio', 'The Studio’s method: working backwards from the customer, the living PRD and TRD, the floor rule and the Claude Code package contract.'],
-  ['studio-reimagine', 'The Studio’s core theme, loaded on every turn: reimagine, rethink, reinvent and accelerate. Keep the proven floor, protect what makes the product different, and real ideation techniques for ideas that don’t exist yet.'],
-  ['studio-muse', 'How the Muse holds the conversation: implicit approvals, one question at a time, spec sections with their trace.'],
-  ['studio-agentkit', 'Inngest AgentKit, the standard harness for agents inside every generated app.'],
-]
+type LibSkill = { id: string; name: string; description: string; source: 'studio' | 'ecc' | 'yours'; origin: string; alwaysOn: boolean; core: boolean; allProducts: boolean; useCases: string[]; valid: boolean; report: string }
+const SOURCES = [['all', 'All'], ['studio', 'Studio'], ['ecc', 'ECC'], ['yours', 'Yours']] as const
+const PAGE = 40
 
 export function SettingsPage() {
   const [tab, setTab] = useState<'models' | 'connectors' | 'skills' | 'memory'>('models')
@@ -142,34 +138,66 @@ function Connectors({ setToast }: { setToast: (s: string) => void }) {
   )
 }
 
+// One skill library: the open-source ECC library, the Studio's own skills (in ECC's format) and uploads.
 function Skills({ setToast }: { setToast: (s: string) => void }) {
-  const [rows, setRows] = useState<Skill[]>([])
-  const load = () => void api<Skill[]>('/api/skills', { cache: 'no-store' }).then(setRows).catch(() => setRows([]))
-  useEffect(load, [])
+  const [rows, setRows] = useState<LibSkill[]>([])
+  const [products, setProducts] = useState<Product[]>([])
+  const [source, setSource] = useState<(typeof SOURCES)[number][0]>('all')
+  const [q, setQ] = useState('')
+  const [onOnly, setOnOnly] = useState(false)
+  const [open, setOpen] = useState<string | null>(null)
+  const [shown, setShown] = useState(PAGE)
+  const load = () => void api<LibSkill[]>('/api/skills/library', { cache: 'no-store' }).then(setRows).catch(() => setRows([]))
+  useEffect(() => { load(); void api<Product[]>('/api/use-cases', { cache: 'no-store' }).then(setProducts).catch(() => setProducts([])) }, [])
   const upload = async (file: File) => {
     const form = new FormData()
     form.append('file', file)
     const res = await fetch('/api/skills', { method: 'POST', body: form })
     const j = (await res.json().catch(() => ({}))) as { error?: string; valid?: boolean; name?: string }
-    setToast(res.ok ? (j.valid ? `${j.name} checked and ready to switch on` : `${j.name} uploaded but did not pass the check; see its report`) : j.error || 'Upload failed')
+    setToast(res.ok ? (j.valid ? `${j.name} checked and added to the library; switch it on when you want it` : `${j.name} uploaded but did not pass the check; see its report`) : j.error || 'Upload failed')
     load()
   }
+  const scope = (s: LibSkill, allProducts: boolean, useCases: string[]) =>
+    void api('/api/skills/library', { method: 'PATCH', json: { skill: s.name, allProducts, useCases } })
+      .then(() => { setToast(allProducts ? `${s.name} is on for every product` : useCases.length ? `${s.name} is on for ${useCases.length} product${useCases.length === 1 ? '' : 's'}` : `${s.name} is off`); load() })
+      .catch((e: Error) => setToast(e.message))
+  const isOn = (s: LibSkill) => s.alwaysOn || s.allProducts || s.useCases.length > 0
+  const count = (k: string) => rows.filter((r) => k === 'all' || r.source === k).length
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean)
+  const order = (r: LibSkill) => (r.source === 'studio' ? 0 : r.source === 'yours' ? 1 : isOn(r) ? 2 : 3)
+  const list = rows.filter((r) => (source === 'all' || r.source === source) && (!onOnly || isOn(r)) && words.every((w) => `${r.name} ${r.description}`.toLowerCase().includes(w))).sort((a, b) => order(a) - order(b))
+  const where = (s: LibSkill) => s.core ? 'Core · loaded on every Muse turn' : s.alwaysOn ? 'Always on' : s.allProducts ? 'On · every product' : s.useCases.length ? `On · ${s.useCases.length} product${s.useCases.length === 1 ? '' : 's'}` : 'Off'
   return (
-    <div className="studio-settings-grid">
+    <div className="studio-library">
       <section className="studio-card">
-        <div className="stack-header"><div><p className="eyebrow">Built in</p><h3>Default skills</h3></div><Check size={16} /></div>
-        <div className="studio-list">{BUNDLED.map(([n, d]) => <div key={n} className="studio-list-row"><div className="studio-row-main"><strong>{n}</strong><small>{d}</small></div><span className="connection-badge">Always on</span></div>)}</div>
-      </section>
-      <section className="studio-card">
-        <div className="stack-header"><div><p className="eyebrow">Your skills · {rows.length}</p><h3>Agent Skills (SKILL.md, .skill or .zip)</h3></div><Upload size={16} /></div>
-        <label className="button button-quiet file-button" style={{ marginTop: 12 }}><Upload size={14} /> Upload a skill<input type="file" accept=".skill,.zip,.md" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void upload(f) }} /></label>
-        <div className="studio-list">{rows.map((s) => (
-          <div key={s.id} className="studio-list-row">
-            <div className="studio-row-main"><strong>{s.name}</strong><small>{s.description || 'No description'} · {s.valid ? 'passed the check' : 'did not pass the check'}</small></div>
-            <label className="studio-toggle"><input type="checkbox" disabled={!s.valid} checked={s.enabled} onChange={(e) => void api(`/api/skills/${s.id}`, { method: 'PATCH', json: { enabled: e.target.checked } }).then(load).catch((er: Error) => setToast(er.message))} /> on</label>
-            <div className="studio-review-actions">{s.report && <details><summary className="studio-muted" style={{ marginTop: 0 }}>Check report</summary><pre className="studio-diff">{s.report}</pre></details>}<button type="button" className="icon-button subtle" aria-label="Delete skill" onClick={() => void api(`/api/skills/${s.id}`, { method: 'DELETE' }).then(load)}><Trash2 size={13} /></button></div>
+        <div className="stack-header"><div><p className="eyebrow">Skill library · {rows.length}</p><h3>ECC, the Studio’s skills and yours, in one place</h3></div><Wrench size={16} /></div>
+        <p className="studio-muted">ECC (Everything Claude Code) is the open-source skills library, MIT licensed, pinned in the Studio. The Studio’s own skills are written in the same format. Switched on, a skill goes into each product’s workspace, where the Muse, its specialists and Claude Code use it.</p>
+        <div className="studio-library-tools">
+          <div className="studio-tabs" style={{ marginTop: 0 }}>{SOURCES.map(([k, l]) => <button key={k} type="button" className={source === k ? 'is-active' : ''} onClick={() => { setSource(k); setShown(PAGE) }}>{l} · {count(k)}</button>)}</div>
+          <input className="studio-library-search" type="search" value={q} onChange={(e) => { setQ(e.target.value); setShown(PAGE) }} placeholder="Search skills, e.g. security, postgres, accessibility" aria-label="Search the skill library" />
+          <label className="studio-toggle"><input type="checkbox" checked={onOnly} onChange={(e) => setOnOnly(e.target.checked)} /> only what’s on</label>
+          <label className="button button-quiet file-button"><Upload size={14} /> Add a skill<input type="file" accept=".skill,.zip,.md" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void upload(f) }} /></label>
+        </div>
+        <div className="studio-list">{list.slice(0, shown).map((s) => (
+          <div key={s.id} className="studio-list-row studio-library-row">
+            <div className="studio-row-main"><strong>{s.name} <span className={`studio-source is-${s.source}`}>{s.source === 'ecc' ? 'ECC' : s.source === 'studio' ? 'Studio' : 'Yours'}</span></strong><small>{s.description || 'No description'}{s.source === 'yours' && !s.valid ? ' · did not pass the check' : ''}</small></div>
+            <span className={isOn(s) ? 'studio-ok studio-where' : 'studio-muted studio-where'}>{where(s)}</span>
+            <div className="studio-review-actions">
+              {s.source === 'ecc' && !s.alwaysOn && <button type="button" className="button button-quiet" onClick={() => setOpen(open === s.id ? null : s.id)}>{open === s.id ? 'Done' : 'Switch on…'}</button>}
+              {s.source === 'yours' && <label className="studio-toggle"><input type="checkbox" disabled={!s.valid} checked={s.allProducts} onChange={(e) => void api(`/api/skills/${s.id.slice(6)}`, { method: 'PATCH', json: { enabled: e.target.checked } }).then(load).catch((er: Error) => setToast(er.message))} /> on</label>}
+              {s.source === 'yours' && s.report && <details><summary className="studio-muted" style={{ marginTop: 0 }}>Check report</summary><pre className="studio-diff">{s.report}</pre></details>}
+              {s.source === 'yours' && <button type="button" className="icon-button subtle" aria-label="Delete skill" onClick={() => void api(`/api/skills/${s.id.slice(6)}`, { method: 'DELETE' }).then(load)}><Trash2 size={13} /></button>}
+            </div>
+            {open === s.id && <div className="studio-library-scope">
+              <label className="studio-toggle"><input type="radio" name={`scope-${s.id}`} checked={!s.allProducts && !s.useCases.length} onChange={() => scope(s, false, [])} /> Off</label>
+              <label className="studio-toggle"><input type="radio" name={`scope-${s.id}`} checked={s.allProducts} onChange={() => scope(s, true, [])} /> Every product</label>
+              {products.length > 0 && <span className="studio-muted">or chosen products:</span>}
+              {products.map((p) => <label key={p.id} className="studio-toggle"><input type="checkbox" checked={!s.allProducts && s.useCases.includes(p.id)} onChange={(e) => scope(s, false, e.target.checked ? [...s.useCases.filter((x) => x !== p.id), p.id] : s.useCases.filter((x) => x !== p.id))} /> {p.name}</label>)}
+            </div>}
           </div>
         ))}</div>
+        {list.length === 0 && <p className="studio-muted">No skill matches that.</p>}
+        {list.length > shown && <button type="button" className="button button-quiet" style={{ marginTop: 12 }} onClick={() => setShown(shown + PAGE * 2)}>Show more ({list.length - shown} left)</button>}
       </section>
     </div>
   )

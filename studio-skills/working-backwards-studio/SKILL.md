@@ -1,11 +1,17 @@
 ---
 name: working-backwards-studio
 description: Build, extend or run a use-case-centric product studio that turns conversation, evidence, recommendations, visual annotations, and human decisions into traceable prototype requirements and repeatable Claude Code packages. Use for UI-first product-management tools, vibe-driven requirements capture, backlog probing, visual annotation flows, Agent Kit orchestration, Claude Code generation, Git/Linear handoff, MCP data connectors, installable skills, and agent memory.
+origin: Working Backwards Studio
 ---
 
 # Agentic Working Backwards Studio (v2)
 
 Use this skill when the user wants a product owner and product engineer to move from an unfinished idea to a validated use case, prototype, and production-minded iteration without forcing the user to understand use cases, epics, stories, or agent architecture. The Studio is a product in its own right, used by many teams; this skill is its rulebook, for the people who build it and for the agents that run inside it.
+
+## When to Activate
+
+- When building, extending or running the Studio itself.
+- When an agent inside the Studio needs its rulebook: the living specification, provenance, the floor rule and the package contract.
 
 ## Core model
 

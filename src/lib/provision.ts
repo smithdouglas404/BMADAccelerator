@@ -6,6 +6,8 @@ import { promisify } from "util";
 import { prisma } from "@/lib/db";
 import { pickPartners } from "@/lib/shadcnPartners";
 import { workspacePath, WORKSPACES_DIR } from "@/lib/workspace";
+import { eccSkillsFor } from "@/lib/skillLibrary";
+import { ECC_SKILLS } from "@/lib/skills";
 
 const run = promisify(execFile);
 
@@ -30,23 +32,17 @@ async function copyDir(src: string, dest: string) {
 }
 
 
-// Skill folders a product gets: the Studio's own skills, the design skills, the ECC skills the team
-// picked for it, and every uploaded skill that is switched on.
+// Skill folders a product gets, all from the one skill library: the Studio's own skills, the design
+// skills, the ECC skills switched on for it, and every uploaded skill that is switched on.
 async function skillSources(useCaseId: string) {
   const sources: { name: string; dir: string }[] = [];
   for (const name of await fs.readdir(STUDIO_SKILLS_DIR)) sources.push({ name, dir: path.join(STUDIO_SKILLS_DIR, name) });
-  // Design skills Generate always uses: Anthropic's frontend-design and ECC's design direction.
-  for (const [name, dir] of [
-    ["frontend-design", path.join(VENDOR_DIR, "anthropic", "skills", "frontend-design")],
-    ["frontend-design-direction", path.join(VENDOR_DIR, "ecc", "skills", "frontend-design-direction")],
-  ] as const) {
-    if (await exists(dir)) sources.push({ name, dir });
-  }
-  const chosen = await prisma.useCaseSkill.findMany({ where: { useCaseId } });
-  for (const s of chosen) {
-    const dir = path.join(VENDOR_DIR, "ecc", "skills", s.skillId);
-    if (await exists(dir)) sources.push({ name: s.skillId, dir });
-  }
+  // Anthropic's frontend-design, which Generate always uses.
+  const fd = path.join(VENDOR_DIR, "anthropic", "skills", "frontend-design");
+  if (await exists(fd)) sources.push({ name: "frontend-design", dir: fd });
+  // From the ECC library: the design direction every build reads, the skills switched on for every
+  // product, and this product's own picks (Settings > Skills).
+  sources.push(...(await eccSkillsFor(useCaseId)));
   const custom = await prisma.customSkill.findMany({ where: { enabled: true, valid: true } });
   for (const c of custom) sources.push({ name: c.name, dir: c.path });
   return sources;
@@ -82,6 +78,13 @@ export async function syncStudioSkills(useCaseId: string, slug: string) {
   // Skills switched off or removed in Settings leave the workspace too.
   const off = await prisma.customSkill.findMany({ where: { OR: [{ enabled: false }, { valid: false }] } });
   for (const c of off) for (const t of targets) await fs.rm(path.join(ws, t, c.name), { recursive: true, force: true });
+  // So do ECC library skills switched off for this product.
+  const keep = new Set((await eccSkillsFor(useCaseId)).map((s) => s.name));
+  const custom = new Set((await prisma.customSkill.findMany({ select: { name: true } })).map((c) => c.name));
+  for (const id of ECC_SKILLS.map((s) => s.id)) {
+    if (keep.has(id) || custom.has(id)) continue;
+    for (const t of targets) await fs.rm(path.join(ws, t, id), { recursive: true, force: true });
+  }
   // The AgentKit library (its docs and the examples the reference names) goes with the studio-agentkit skill.
   const ak = path.join(VENDOR_DIR, "agentkit");
   if (!(await exists(ak))) return;

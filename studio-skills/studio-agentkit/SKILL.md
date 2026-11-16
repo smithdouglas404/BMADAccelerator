@@ -1,6 +1,7 @@
 ---
 name: studio-agentkit
 description: How every agentic workflow in a Studio-built pilot is designed and built with Inngest AgentKit (agents, tools, networks, routers, state, memory, MCP, human in the loop, streaming). Use when the Product Engineer shapes agentic workflows, when the Muse suggests one, and when Claude Code builds the pilot.
+origin: Working Backwards Studio
 ---
 
 # Agentic workflows with Inngest AgentKit
@@ -21,6 +22,10 @@ Map every agentic idea to AgentKit's own concepts, using its names, so the owner
 | Which model | **Model adapters** (`anthropic`, `openai`, `gemini`, any OpenAI-compatible), chosen per agent |
 | Showing progress live | **Streaming** (realtime publish, `useAgent` in the UI) |
 | Retries, limits per customer | Inngest function options (`retries`, `concurrency`, `throttle`) |
+
+## When to Activate
+
+- When the Product engineer shapes an agentic workflow, when the Muse suggests one, and when Claude Code builds a pilot that has agents.
 
 ## Ground rules
 

@@ -63,8 +63,11 @@ Keys in `.env` still work when nothing is saved there. The Muse, its specialists
 document reviews run on the owner's Claude plan (`CLAUDE_CODE_OAUTH_TOKEN`).
 
 Settings also has **Connectors** (MCP servers for all products or one, secrets encrypted and never
-sent to the browser) and **Skills** (upload `.skill`, `.zip` or `.md`; the working-backwards-studio,
-studio-muse and studio-agentkit skills ship by default).
+sent to the browser) and **Skills**: one skill library holding the open-source ECC library (Everything
+Claude Code, MIT, 314 skills pinned in `vendor/ecc`), the Studio's own skills (studio-reimagine,
+studio-muse, working-backwards-studio, studio-agentkit, written in ECC's SKILL.md format) and the ones
+you upload (`.skill`, `.zip` or `.md`). Search it, and switch any skill on for every product or for
+chosen ones; switched-on skills are copied into each product before every Muse turn and build.
 
 A generated app never gets the Studio's keys, except one model key for its own Inngest AgentKit
 agents (`BACC_APP_LLM`: `openai` by default, `anthropic`, `gemini`, or `off` for demo mode).

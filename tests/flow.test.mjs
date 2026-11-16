@@ -56,3 +56,13 @@ test("every specialist is told to read the reimagine skill", async () => {
   const src = (await import("node:fs")).readFileSync(new URL("../src/lib/agent/team.ts", import.meta.url), "utf8");
   assert.equal((src.match(/studio-reimagine\/SKILL\.md/g) || []).length, 2);
 });
+
+test("the reimagine skill facilitates first: ask how theirs differs, listen, suggest only when they can't say", async () => {
+  const fs = await import("fs/promises");
+  const md = await fs.readFile("studio-skills/studio-reimagine/SKILL.md", "utf8");
+  assert.ok(md.indexOf("## 1. Facilitate first") > 0 && md.indexOf("## 1. Facilitate first") < md.indexOf("## 3. When they say"));
+  assert.match(md, /how is this different from what others do\?/);
+  assert.match(md, /Offer what others do only when they can't say, or ask/);
+  const muse = await fs.readFile("studio-skills/studio-muse/SKILL.md", "utf8");
+  assert.match(muse, /Facilitate first \(studio-reimagine section 1/);
+});
