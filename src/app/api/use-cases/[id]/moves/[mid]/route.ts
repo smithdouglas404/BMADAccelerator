@@ -2,29 +2,74 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { moveCard, BOARD, BOARD_LABEL } from "@/lib/studio/board";
+import { recordChange } from "@/lib/studio/truthlog";
 import { agentsEnabled, enqueue } from "@/lib/agent/runner";
 
 type Ctx = { params: Promise<{ id: string; mid: string }> };
 
-const Body = z.object({ status: z.enum(BOARD), by: z.string().max(80).default(""), why: z.string().max(400).default("") });
+// One card on the Board: its full details, what happened to it, and the files attached to it.
+export async function GET(_req: Request, { params }: Ctx) {
+  const { id, mid } = await params;
+  const move = await prisma.move.findFirst({ where: { id: mid, useCaseId: id } });
+  if (!move) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const [history, files] = await Promise.all([
+    prisma.truthChange.findMany({ where: { useCaseId: id, node: `move:${mid}` }, orderBy: { createdAt: "desc" }, take: 40 }),
+    prisma.document.findMany({ where: { useCaseId: id, moveId: mid }, orderBy: { createdAt: "desc" }, select: { id: true, fileName: true, mimeType: true, sizeBytes: true, summary: true, createdAt: true } }),
+  ]);
+  return NextResponse.json({ move, history, files });
+}
 
-// A person moves a card by hand (never required: Socra and the builds move them). It is logged and the
-// Socra hears it, so a card moved back reopens the conversation about it.
+const FIELDS = ["title", "capability", "decision", "prompt", "owner", "hidden", "signal"] as const;
+const FIELD_LABEL: Record<(typeof FIELDS)[number], string> = { title: "title", capability: "area", decision: "decision", prompt: "details", owner: "owner", hidden: "kind", signal: "tag" };
+const Body = z.object({
+  status: z.enum(BOARD).optional(),
+  by: z.string().max(80).default(""),
+  why: z.string().max(400).default(""),
+  title: z.string().trim().min(1).max(200).optional(),
+  capability: z.string().max(120).optional(),
+  decision: z.string().max(600).optional(),
+  prompt: z.string().max(8000).optional(),
+  owner: z.string().max(80).optional(),
+  hidden: z.string().max(40).optional(),
+  signal: z.string().max(40).optional(),
+});
+
+// A person moves or edits a card by hand (never required: Socra and the builds move them). Every change
+// is logged with who made it, and Socra hears it, so a card moved back or reworded reopens the conversation.
 export async function PATCH(req: Request, { params }: Ctx) {
   const { id, mid } = await params;
-  const parsed = Body.safeParse(await req.json());
+  const parsed = Body.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: "Invalid" }, { status: 400 });
+  const b = parsed.data;
   const before = await prisma.move.findFirst({ where: { id: mid, useCaseId: id } });
   if (!before) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const by = parsed.data.by || "A person";
-  const why = parsed.data.why || "moved by hand";
-  const after = await moveCard(id, mid, parsed.data.status, by, why);
-  if (agentsEnabled() && before.status !== parsed.data.status)
-    await enqueue(
-      id,
-      "user",
-      `${by} moved the card “${before.title}” from ${BOARD_LABEL[before.status as keyof typeof BOARD_LABEL] ?? before.status} to ${BOARD_LABEL[parsed.data.status]} (${why}). ${BOARD.indexOf(parsed.data.status) < BOARD.indexOf(before.status as (typeof BOARD)[number]) ? "It went back: ask in one line what isn't right yet, with your suggestion, and carry the answer into the spec." : "Carry it into the product truth if it changes anything."}`,
-      `move:${mid}`,
-    );
-  return NextResponse.json(after);
+  const by = b.by || "A person";
+  const notes: string[] = [];
+
+  const edits: Partial<Record<(typeof FIELDS)[number], string>> = {};
+  for (const f of FIELDS) if (b[f] !== undefined && b[f] !== before[f]) edits[f] = b[f];
+  if (Object.keys(edits).length) {
+    await prisma.move.update({ where: { id: mid }, data: edits });
+    const what = Object.keys(edits).map((f) => FIELD_LABEL[f as (typeof FIELDS)[number]]);
+    await recordChange(id, {
+      node: `move:${mid}`,
+      kind: "changed",
+      summary: `${by} edited the ${what.join(", ")} of “${edits.title ?? before.title}”`,
+      before: Object.keys(edits).map((f) => `${FIELD_LABEL[f as (typeof FIELDS)[number]]}: ${before[f as (typeof FIELDS)[number]]}`).join("\n"),
+      after: Object.entries(edits).map(([f, v]) => `${FIELD_LABEL[f as (typeof FIELDS)[number]]}: ${v}`).join("\n"),
+      by,
+    });
+    notes.push(`${by} edited the card “${edits.title ?? before.title}” on the Board (${Object.entries(edits).map(([f, v]) => `${FIELD_LABEL[f as (typeof FIELDS)[number]]} now: “${String(v).slice(0, 400)}”`).join("; ")}). Carry what changed into the spec and acceptance criteria, and check the Story map links still hold.`);
+  }
+
+  if (b.status && b.status !== before.status) {
+    const why = b.why || "moved by hand on the Board";
+    await moveCard(id, mid, b.status, by, why);
+    const back = BOARD.indexOf(b.status) < BOARD.indexOf(before.status as (typeof BOARD)[number]);
+    notes.push(`${by} moved the card “${edits.title ?? before.title}” from ${BOARD_LABEL[before.status as keyof typeof BOARD_LABEL] ?? before.status} to ${BOARD_LABEL[b.status]} (${why}). ${back ? "It went back: ask in one line what isn't right yet, with your suggestion, and carry the answer into the spec." : "Carry it into the product truth if it changes anything."}`);
+  }
+
+  if (notes.length) await prisma.useCase.update({ where: { id }, data: { updatedAt: new Date() } });
+  if (notes.length && agentsEnabled()) await enqueue(id, "user", notes.join("\n"), `move:${mid}`);
+  return NextResponse.json(await prisma.move.findUnique({ where: { id: mid } }));
 }

@@ -305,6 +305,8 @@ model Document {
   declineNote String   @default("")
   origin      String   @default("upload") // upload | studio
   textPath    String   @default("")
+  // Set when the file was attached to a board card (move id); it is still evidence Socra reads.
+  moveId      String   @default("")
   createdAt   DateTime @default(now())
   useCase     UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
 }

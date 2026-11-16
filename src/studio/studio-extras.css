@@ -348,3 +348,58 @@ a.studio-home-brand { color: inherit; text-decoration: none; padding-bottom: 12p
 .storymap-loose-label { position: absolute; margin: 0; font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; color: var(--warm); }
 .sm-node { justify-content: flex-start; }
 .sm-node small { margin-top: auto; }
+
+/* The Board (Nov 16): five columns, drag and drop, cards open into a details panel. */
+.kanban-board.studio-board { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 1280px) { .kanban-board.studio-board { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 900px) { .kanban-board.studio-board { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 620px) { .kanban-board.studio-board { display: block; } }
+.studio-board .kanban-column { transition: border-color .15s ease, background .15s ease; }
+.studio-board .kanban-column.is-drop { border-color: var(--acid); background: rgba(215, 245, 139, .06); }
+.studio-board .kanban-cards { display: flex; flex-direction: column; gap: 8px; }
+.studio-board-card { cursor: grab; transition: border-color .15s ease, transform .15s ease, opacity .15s ease; }
+.studio-board-card:hover { border-color: rgba(215, 245, 139, .4); transform: translateY(-1px); }
+.studio-board-card:focus-visible { outline: 2px solid var(--acid); outline-offset: 2px; }
+.studio-board-card.is-dragging { opacity: .45; cursor: grabbing; }
+.studio-board-kind { margin-left: auto; font-size: .6rem; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.studio-board-arrows { display: flex; gap: 4px; margin-left: auto; }
+.studio-board-arrows .card-next { margin-left: 0; }
+.studio-board-arrows .card-next:disabled { opacity: .3; cursor: default; }
+.studio-board-new { display: flex; flex-direction: column; gap: 8px; border-color: rgba(215, 245, 139, .45); }
+.studio-board-new input { width: 100%; padding: 8px 9px; border: 1px solid var(--line-strong); border-radius: 7px; background: rgba(0,0,0,.2); color: var(--ink); font-size: .82rem; }
+.studio-board-new > div { display: flex; gap: 6px; }
+
+.studio-card-overlay { position: fixed; inset: 0; z-index: 60; display: flex; justify-content: flex-end; background: rgba(5, 7, 6, .55); backdrop-filter: blur(2px); }
+.studio-card-panel { width: min(560px, 100vw); height: 100vh; overflow-y: auto; padding: 18px 22px 40px; border-left: 1px solid var(--line-strong); background: #141815; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 14px; }
+.studio-card-head { display: flex; align-items: center; justify-content: space-between; }
+.studio-card-title { width: 100%; resize: vertical; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--ink); font-size: 1.35rem; line-height: 1.3; padding: 6px 8px; margin: 0 -8px; }
+.studio-card-title:hover, .studio-card-title:focus { border-color: var(--line-strong); background: rgba(0,0,0,.2); }
+.studio-card-status { display: flex; flex-wrap: wrap; gap: 5px; }
+.studio-card-status button { border: 1px solid var(--line); background: transparent; color: var(--muted); padding: 6px 9px; border-radius: 999px; font-size: .72rem; }
+.studio-card-status button:hover { color: var(--ink); border-color: var(--line-strong); }
+.studio-card-status button.is-active { color: var(--acid-ink); background: var(--acid); border-color: var(--acid); }
+.studio-card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.studio-card-grid label, .studio-card-field { display: flex; flex-direction: column; gap: 5px; }
+.studio-card-grid span, .studio-card-field span { font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.studio-card-grid input, .studio-card-grid select, .studio-card-field textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: rgba(0,0,0,.2); color: var(--ink); font-size: .84rem; line-height: 1.5; }
+.studio-card-field textarea { resize: vertical; }
+.studio-card-grid input:focus, .studio-card-grid select:focus, .studio-card-field textarea:focus { border-color: rgba(215, 245, 139, .5); outline: none; }
+.studio-card-actions { display: flex; gap: 8px; }
+.studio-card-section { display: flex; flex-direction: column; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line); }
+.studio-card-section .eyebrow { display: inline-flex; gap: 5px; align-items: center; }
+.studio-card-section-head { display: flex; align-items: center; justify-content: space-between; }
+.studio-card-section-head .text-button { display: inline-flex; gap: 5px; align-items: center; font-size: .74rem; }
+.studio-card-empty { margin: 0; padding: 12px; border: 1px dashed var(--line-strong); border-radius: 9px; color: var(--muted); font-size: .76rem; line-height: 1.45; }
+.studio-card-files { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.studio-card-files li { display: grid; grid-template-columns: auto 1fr auto auto; gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: .78rem; color: var(--muted); }
+.studio-card-files a { color: var(--ink); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.studio-card-files a:hover { color: var(--acid); }
+.studio-card-files small { color: var(--faint); font-size: .68rem; }
+.studio-card-files p { grid-column: 2 / -1; margin: 0; font-size: .72rem; line-height: 1.45; }
+.studio-card-dl { display: grid; place-items: center; }
+.studio-card-tags { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; }
+.studio-card-tags em { font-style: normal; font-size: .68rem; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 3px 7px; }
+.studio-card-history { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.studio-card-history li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: .76rem; color: var(--muted); line-height: 1.4; }
+.studio-card-history small { flex: none; color: var(--faint); font-size: .66rem; }
+@media (max-width: 620px) { .studio-card-grid { grid-template-columns: 1fr; } }
