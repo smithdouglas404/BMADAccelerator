@@ -2,7 +2,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import html2canvas from 'html2canvas'
 import {
-  ArrowDownRight,
   Bot,
   Code2,
   Database,
@@ -37,7 +36,6 @@ import {
   Target,
   Timer,
   Wand2,
-  Waves,
   X,
   PenLine,
 } from 'lucide-react'
@@ -51,7 +49,7 @@ import {
   type RecommendationItem,
 } from './data'
 import { downloadPrototypeZip } from './generation'
-import { api, ago, previewUrl, sessionLine, toBacklog, toCapabilities, toEvidence, toExecution, toMessages, toRecommendations, toSpec, useLive, type Live, type StudioMessage } from './live'
+import { api, ago, previewUrl, toBacklog, toCapabilities, toEvidence, toExecution, toMessages, toRecommendations, toSpec, useLive, type Live, type StudioMessage } from './live'
 import { LiveFrame, captureLive, useVoice, type Pick } from './vibe'
 import { NextMove, PeopleMenu, talkingTo, useMe, type StudioView } from './flow'
 import { TruthGraphView, MarkChain, ObservationEffects } from './truth'
@@ -62,6 +60,7 @@ import { StudioMarkdown, SpecReviewTools, ImpactPanel, VersionHistory, Readiness
 import { PRODUCT_LINE } from '@/lib/brand'
 import { StudioFrame, StudioSidebar, StudioTopBar } from './shell'
 import { ConversationView } from './socra'
+import { OverviewView } from './overview'
 
 const viewTitles: Record<StudioView, string> = {
   review: 'Try & mark up',
@@ -320,7 +319,7 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
         <NextMove live={live} changeView={changeView} />
         {!live.agentsEnabled && <div className="studio-banner"><CircleHelp size={14} /><span>Socra and Claude Code switch on once Claude is signed in. Everything you say is kept meanwhile.</span><a href="/settings">Open Settings <ArrowRight size={13} /></a></div>}
 
-        {activeView === 'overview' && <OverviewView {...{ live, product: live, selected, capabilities, readiness, overallReadiness, approvalCount, backlog, focusCapability, changeView, capture, setCapture, captureIdea, visibleBacklog, showAllBacklog, setShowAllBacklog, curate, previewMode, setPreview, toast, setToast, annotationMode, setAnnotationMode, annotationTarget, setAnnotationTarget, annotationNote, setAnnotationNote, isListening, toggleVoice, addAnnotation, captureFrame, capturedFrame, annotationShape, setAnnotationShape, onPick, messages }} />}
+        {activeView === 'overview' && <OverviewView {...{ live, act, me, selected, capabilities, readiness, overallReadiness, approvalCount, messages, backlog, focusCapability, changeView, capture, setCapture, captureIdea }} preview={<><PreviewCard live={live} mode={previewMode} setPreview={setPreview} setToast={setToast} annotationMode={annotationMode} setAnnotationMode={setAnnotationMode} onSelectTarget={setAnnotationTarget} annotationShape={annotationShape} onPick={onPick} /><AnnotationPanel {...{ annotationMode, setAnnotationMode, annotationTarget, annotationNote, setAnnotationNote, isListening, toggleVoice, addAnnotation, captureFrame, capturedFrame, annotationShape, setAnnotationShape }} /></>} />}
         {activeView === 'conversation' && <ConversationView {...{ live, act, me, talkTo, setTalkTo, voice: composerVoice, selected, capabilities, messages, draft, setDraft, sendMessage, focusCapability, setToast, changeView }} preview={<PreviewCard live={live} mode={previewMode} setPreview={setPreview} setToast={setToast} onPick={onPick} />} />}
         {activeView === 'review' && <ReviewView {...{ live, previewMode, setPreview, setToast, annotationMode, setAnnotationMode, setAnnotationTarget, annotationTarget, annotationNote, setAnnotationNote, isListening, toggleVoice, addAnnotation, captureFrame, capturedFrame, annotationShape, setAnnotationShape, onPick, changeView }} />}
         {activeView === 'validation' && <ValidationView {...{ live, validationChecks, validationScore, toggleValidation, role, setRole, recommendationState, askRecommendation, changeView, setTechnicalOpen, technicalOpen, agentRoutes, probeQuestion }} />}
@@ -382,59 +381,6 @@ type OverviewProps = {
   setAnnotationShape: (value: 'object' | 'circle' | 'full-screen') => void
 }
 
-function OverviewView(props: OverviewProps) {
-  const { live, onPick, messages, product: item, selected, capabilities: caps, readiness: currentReadiness, overallReadiness, approvalCount, backlog, focusCapability, changeView, capture, setCapture, captureIdea, visibleBacklog, showAllBacklog, setShowAllBacklog, curate, previewMode, setPreview, setToast, annotationMode, setAnnotationMode, annotationTarget, setAnnotationTarget, annotationNote, setAnnotationNote, isListening, toggleVoice, addAnnotation, captureFrame, capturedFrame, annotationShape, setAnnotationShape } = props
-  const lastMuse = [...messages].reverse().find((m) => m.role === 'muse')
-  const lastUser = [...messages].reverse().find((m) => m.role === 'user')
-  const clipText = (t: string, n = 240) => (t.length > n ? `${t.slice(0, n).trimEnd()}…` : t)
-  return (
-    <div className="page-wrap">
-      <section className="hero-grid">
-        <div className="hero-copy">
-          <div className="eyebrow eyebrow-with-dot"><span className="status-dot" /> {sessionLine(live.session)}</div>
-          <h1>Make the product <em>legible</em><br />before you make it real.</h1>
-          <p className="hero-lede">{item.name} is the product you’re shaping. Socra is holding the conversation. This is the current shape of the work — not a backlog pretending to be a strategy.</p>
-          <div className="hero-actions"><button className="button button-primary" type="button" onClick={() => changeView('conversation')}>Continue with Socra <ArrowRight size={16} /></button><button className="button button-quiet" type="button" onClick={() => changeView('product')}><FileText size={16} /> Open living PRFAQ</button></div>
-        </div>
-        <div className="product-card">
-          <div className="product-card-header"><span className="eyebrow">The product in one breath</span><button className="icon-button subtle" type="button" aria-label="More product actions" onClick={() => changeView('product')}><MoreHorizontal size={16} /></button></div>
-          <div className="product-wordmark"><span className="wordmark-orbit" />{item.name}</div>
-          <p>{item.statement || item.description}</p>
-          <div className="product-card-meta"><span>{item.audience || 'Audience still being named'}</span><span className="meta-divider" /><span>Updated {ago(item.updatedAt)}</span></div>
-          {(() => { const q = (item.customerQuote || 'The customer’s own words land here once Socra hears them.').replace(/[“”]/g, '').trim(); return <div className="quote-line" title={q}><span>“</span>{q.length > 90 ? `${q.slice(0, 88).replace(/\s+\S*$/, '')}…` : q}</div> })()}
-        </div>
-      </section>
-
-      <section className="section-block readiness-section">
-        <div className="section-heading"><div><p className="eyebrow">Floor → ceiling readiness</p><h2>Where the product can stand today</h2></div><button className="text-button" type="button" onClick={() => changeView('readiness')}>See the full ceiling <ArrowRight size={15} /></button></div>
-        <div className="readiness-board">
-          <div className="readiness-overview"><div className="readiness-ring" style={{ '--progress': `${overallReadiness * 3.6}deg` } as React.CSSProperties}><div><strong>{overallReadiness}%</strong><small>ready for a<br />thin-slice pilot</small></div></div><div className="readiness-note"><span className="signal-icon"><Sparkles size={15} /></span><p><strong>The honest read</strong>{selected.signal}</p><button type="button" onClick={() => focusCapability(selected)}>Work this conversation <ArrowRight size={13} /></button></div></div>
-          <div className="capability-list">{caps.length === 0 && <div className="empty-column">Socra is laying the floor: the capabilities appear here in a moment.</div>}{caps.map((capability) => <CapabilityRow key={capability.id} capability={capability} readiness={currentReadiness[capability.id] ?? capability.readiness} onFocus={focusCapability} />)}</div>
-        </div>
-      </section>
-
-      <section className="section-block workspace-section">
-        <div className="section-heading"><div><p className="eyebrow">The active move</p><h2>What Socra is helping you see</h2></div><div className="section-heading-meta"><span className="agent-status"><span className="live-pulse" /> {live.agentBusy ? live.agentStatus || 'Socra is thinking' : 'Socra is listening'}</span><button className="text-button" type="button" onClick={() => changeView('conversation')}>Open conversation <ArrowRight size={15} /></button></div></div>
-        <div className="workspace-grid">
-          <div className="conversation-preview">
-            <div className="conversation-preview-header"><div className="agent-avatar"><Waves size={17} /></div><div><strong>Socra · Product physician</strong><span>Guiding the {selected.label.toLowerCase()} conversation</span></div><span className="live-label">LIVE</span></div>
-            <div className="mini-message muse-message"><span className="message-line" />{clipText(lastMuse?.text ?? `Socra is reading what you said about ${item.name} and laying out everything a product like it needs.`)}</div>
-            <div className="mini-message user-message"><span className="you-label">YOU</span>{clipText(lastUser?.text ?? item.description)}</div>
-            <div className="conversation-preview-footer"><span><Check size={14} /> {approvalCount} decisions carried forward</span><button className="button button-small" type="button" onClick={() => changeView('conversation')}>Keep going <ArrowRight size={14} /></button></div>
-          </div>
-          <PreviewCard live={live} mode={previewMode} setPreview={setPreview} setToast={setToast} annotationMode={annotationMode} setAnnotationMode={setAnnotationMode} onSelectTarget={setAnnotationTarget} annotationShape={annotationShape} onPick={onPick} />
-        </div>
-        <AnnotationPanel {...{ annotationMode, setAnnotationMode, annotationTarget, annotationNote, setAnnotationNote, isListening, toggleVoice, addAnnotation, captureFrame, capturedFrame, annotationShape, setAnnotationShape }} />
-      </section>
-
-      <section className="section-block backlog-section">
-        <div className="section-heading"><div><p className="eyebrow">Ambient backlog · {backlog.length} signals</p><h2>Everything you thought of. Not everything you need to do.</h2></div><button className="text-button" type="button" onClick={() => changeView('product')}>Open curation <ArrowRight size={15} /></button></div>
-        <BacklogPanel {...{ capture, setCapture, captureIdea, visibleBacklog, showAllBacklog, setShowAllBacklog, curate }} />
-      </section>
-    </div>
-  )
-}
-
 type ReviewProps = globalThis.Pick<OverviewProps, 'live' | 'previewMode' | 'setPreview' | 'setToast' | 'annotationMode' | 'setAnnotationMode' | 'setAnnotationTarget' | 'annotationTarget' | 'annotationNote' | 'setAnnotationNote' | 'isListening' | 'toggleVoice' | 'addAnnotation' | 'captureFrame' | 'capturedFrame' | 'annotationShape' | 'setAnnotationShape' | 'onPick'> & { changeView: (view: StudioView) => void }
 
 /** The live product, full width: click or circle what should change, say why, and it goes to Socra. */
@@ -443,9 +389,6 @@ function ReviewView({ live, previewMode, setPreview, setToast, annotationMode, s
   return <div className="page-wrap studio-review-page"><div className="page-intro"><div><p className="eyebrow eyebrow-with-dot"><span className="status-dot" />Vibe review</p><h1>Try it. Point at <em>what’s wrong.</em></h1><p>Use the product as a customer would. Press Annotate, click or circle the part you mean, and say what should change. Socra turns it into the next build.</p></div><div className="intro-actions"><button className="button button-primary" type="button" onClick={() => setAnnotationMode(!annotationMode)}><MousePointer2 size={16} /> {annotationMode ? 'Stop annotating' : 'Annotate'}</button><span>{live.feedback.length} {live.feedback.length === 1 ? 'mark' : 'marks'} so far</span></div></div><section className="section-block"><PreviewCard live={live} mode={previewMode} setPreview={setPreview} setToast={setToast} annotationMode={annotationMode} setAnnotationMode={setAnnotationMode} onSelectTarget={setAnnotationTarget} annotationShape={annotationShape} onPick={onPick} tall /><AnnotationPanel {...{ annotationMode, setAnnotationMode, annotationTarget, annotationNote, setAnnotationNote, isListening, toggleVoice, addAnnotation, captureFrame, capturedFrame, annotationShape, setAnnotationShape }} /></section>{marks.length > 0 && <section className="section-block"><div className="section-heading"><div><p className="eyebrow">Your marks</p><h2>What you asked to change</h2></div><button className="text-button" type="button" onClick={() => changeView('brief')}>Build the next version <ArrowRight size={15} /></button></div><div className="studio-list">{marks.map((f) => <div className="studio-list-row" key={f.id}><span className="studio-row-main"><strong>{f.comment}</strong><small>{f.target} · {ago(f.createdAt)}</small></span><span className="studio-review-chip">{f.status}</span><MarkChain mark={f} /></div>)}</div></section>}</div>
 }
 
-function CapabilityRow({ capability, readiness, onFocus }: { capability: Capability; readiness: number; onFocus: (capability: Capability) => void }) {
-  return <button className="capability-row" type="button" onClick={() => onFocus(capability)}><span className="capability-color" style={{ background: capability.color }} /><span className="capability-copy"><strong>{capability.label}</strong><small>{capability.kicker}</small></span><span className="capability-track"><span style={{ width: `${readiness}%`, background: capability.color }} /></span><span className="capability-number">{readiness}%</span><span className="capability-delta">{capability.delta}</span><ArrowDownRight size={15} className="capability-arrow" /></button>
-}
 
 function PreviewCard({ live, mode, setPreview, setToast, annotationMode = false, setAnnotationMode, onSelectTarget, annotationShape = 'object', onPick, tall = false }: { live: Live; mode: 'home' | 'thread'; setPreview: (mode: 'home' | 'thread') => void; setToast: (value: string) => void; annotationMode?: boolean; setAnnotationMode?: (value: boolean) => void; onSelectTarget?: (value: string) => void; annotationShape?: AnnotationShape; onPick?: (p: Pick) => void; tall?: boolean }) {
   const held = live.backlog.filter((b) => b.kind === 'capture' && b.state !== 'suggested' && b.state !== 'probing').slice(-1)[0]
@@ -471,9 +414,6 @@ function ProductView({ live, act, selected, capabilities: caps, backlog, visible
   return <div className="page-wrap product-page"><div className="page-intro"><div><p className="eyebrow">The living product shape</p><h1>Keep the dream visible<br />as it becomes specific.</h1><p>The PRFAQ is not a document at the end of the process. It is the shared surface where the original voice, approved decisions, and open questions can sit together.</p></div><div className="intro-actions"><button className="button button-primary" type="button" onClick={() => changeView('conversation')}>Keep shaping <ArrowRight size={16} /></button><span>{approvalCount} approvals carried forward</span></div></div><div className="product-shape-grid"><section className="prfaq-card"><div className="prfaq-toolbar"><div className="doc-title"><span className="doc-icon"><FileText size={16} /></span><span><strong>PRFAQ / {live.slug}-v0.{live.packageCount}</strong><small>living · last touched {ago(live.prfaqUpdatedAt ?? live.updatedAt)}</small></span></div><div className="toolbar-actions"><span className="locked-chip"><Check size={12} /> working truth</span>{editing ? <><button className="button button-primary button-small" type="button" onClick={savePrfaq}><Check size={13} /> Save</button><button className="button button-quiet button-small" type="button" onClick={() => setEditing(false)}>Cancel</button></> : <button className="icon-button subtle" type="button" onClick={() => { setPrfaqDraft(live.prfaq); setEditing(true) }} aria-label="Edit the PRFAQ" title="Edit in your own words"><MoreHorizontal size={16} /></button>}</div></div><div className="prfaq-content"><div className="doc-kicker">{live.audience ? `FOR ${live.audience.toUpperCase()}` : 'FOR THE CUSTOMER THE MUSE IS STILL NAMING'}</div><h2>{live.statement || live.name}</h2><p className="doc-lede">{live.description}</p><div className="doc-divider" />{editing ? <textarea className="spec-editor" value={prfaqDraft} onChange={(event) => setPrfaqDraft(event.target.value)} rows={18} /> : live.prfaq ? <StudioMarkdown text={live.prfaq} /> : <div className="doc-section"><div className="doc-section-label"><span>01</span><strong>Why customers care</strong></div><div><p>Socra writes the press release and FAQ from your conversation. It appears here as soon as there is enough to say honestly.</p>{live.customerQuote && <div className="quote-callout"><span>“</span><p>{live.customerQuote.replace(/[“”]/g, '')}</p></div>}</div></div>}<div className="doc-section"><div className="doc-section-label"><span>{live.prfaq ? '··' : '02'}</span><strong>Decisions captured</strong></div><div className="decision-list">{decisions.length === 0 && <div className="open-question"><CircleHelp size={14} /><span>No decisions yet. A plain “yes” to Socra carries its proposal forward.</span><small>open with Socra</small></div>}{decisions.map((d) => <div key={d.id} className={d.status === 'approved' ? '' : 'open-question'}>{d.status === 'approved' ? <Check size={14} /> : <CircleHelp size={14} />}<span>{d.text}</span><small>{d.status === 'approved' ? 'approved' : d.status === 'assumed' ? 'assumed · say no to change it' : 'open with Socra'} · {ago(d.createdAt)}</small></div>)}</div></div></div></section><aside className="product-shape-aside"><div className="shape-summary"><div className="aside-block-header"><span className="eyebrow">Shape signal</span><Sparkles size={15} /></div><strong>{waiting ? `${waiting} ${waiting === 1 ? 'thought is' : 'thoughts are'} waiting to find a home.` : 'Every thought you have had has a home.'}</strong><p>{selected.signal}</p><button className="button button-small" type="button" onClick={() => changeView('conversation')}>Ask Socra <ArrowRight size={14} /></button></div><div className="curation-card"><div className="curation-header"><div><p className="eyebrow">Curated backlog</p><h3>{backlog.length} signals, held gently</h3></div><Filter size={15} /></div><BacklogList items={visibleBacklog} curate={curate} /><button className="text-button center-button" type="button" onClick={() => setShowAllBacklog(!showAllBacklog)}>{showAllBacklog ? 'Show fewer signals' : 'See every signal'} <ArrowRight size={14} /></button></div><div className="capture-card"><div><span className="capture-orb"><Mic size={15} /></span><div><strong>Catch the next thought</strong><small>It does not need to be useful yet.</small></div></div><div className="capture-input"><input id="ambient-capture" value={capture} onChange={(event) => setCapture(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') captureIdea() }} placeholder="I keep thinking about…" /><button type="button" onClick={captureIdea} aria-label="Add thought"><Plus size={16} /></button></div></div></aside></div></div>
 }
 
-function BacklogPanel({ capture, setCapture, captureIdea, visibleBacklog, showAllBacklog, setShowAllBacklog, curate }: { capture: string; setCapture: (value: string) => void; captureIdea: () => void; visibleBacklog: BacklogItem[]; showAllBacklog: boolean; setShowAllBacklog: (value: boolean) => void; curate: (id: string, kind: BacklogItem['kind'] | 'edit' | 'withdraw') => void }) {
-  return <div className="backlog-panel"><div className="backlog-capture"><span className="capture-orb"><Mic size={15} /></span><div className="capture-copy"><strong>Catch the thought before it becomes a task</strong><small>Phone, voice, or a half-sentence is enough.</small></div><div className="capture-input"><input id="ambient-capture" value={capture} onChange={(event) => setCapture(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') captureIdea() }} placeholder="I keep thinking about…" /><button type="button" onClick={captureIdea} aria-label="Add ambient thought"><Plus size={16} /></button></div></div><div className="backlog-list"><BacklogList items={visibleBacklog} curate={curate} /></div><button className="backlog-more" type="button" onClick={() => setShowAllBacklog(!showAllBacklog)}>{showAllBacklog ? 'Show fewer signals' : `See all ${visibleBacklog.length < 4 ? 'signals' : 'captured thoughts'}`} <ArrowRight size={14} /></button></div>
-}
 
 function BacklogList({ items, curate }: { items: BacklogItem[]; curate: (id: string, kind: BacklogItem['kind'] | 'edit' | 'withdraw') => void }) {
   return <div className="backlog-items">{items.map((item) => <div className="backlog-item" key={item.id}><div className={`backlog-kind ${item.kind}`}><span>{item.kind === 'capture' ? <Lightbulb size={14} /> : item.kind === 'epic' ? <Layers3 size={14} /> : <Timer size={14} />}</span></div><div className="backlog-item-copy"><div><strong>{item.title}</strong><span className="backlog-age">{item.age}</span></div><p>{item.note}</p>{(item as BacklogItem & { annotationId?: string }).annotationId && <a className="studio-markup-thumb" href={`/api/feedback/${(item as BacklogItem & { annotationId?: string }).annotationId}/image`} target="_blank" rel="noreferrer"><img src={`/api/feedback/${(item as BacklogItem & { annotationId?: string }).annotationId}/image`} alt="The marked-up screen" loading="lazy" /></a>}<div className="backlog-tags"><span>{(item as BacklogItem & { ownerState?: string }).ownerState ?? kindLabels[item.kind]}</span><span>{item.group}</span><span>{item.source}</span></div></div><div className="backlog-actions"><button type="button" onClick={() => curate(item.id, 'epic')} title="Group as capability"><Layers3 size={14} /></button><button type="button" onClick={() => curate(item.id, 'distraction')} title="Park for later"><Timer size={14} /></button><button type="button" onClick={() => curate(item.id, 'edit')} title="Change it"><PenLine size={14} /></button><button type="button" onClick={() => curate(item.id, 'withdraw')} title="Withdraw (kept in history)"><X size={14} /></button></div></div>)}</div>

@@ -3,10 +3,11 @@
 // Socra's visible specialists, numbered option chips, checkpoints with Approve and Reject, and the side
 // menu's four groups. Built from the team's classes; the few new ones are in studio-extras.css.
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, Check, Compass, Layers3, PenTool, Scale, ShieldCheck, Sparkles, Undo2, UserRound, Users, Waves, Wrench, X } from 'lucide-react'
+import { ArrowRight, Check, Compass, Layers3, PenTool, Scale, ShieldCheck, Undo2, UserRound, Users, Waves, Wrench, X } from 'lucide-react'
 import { ROLES, SPECIALISTS, numberedOptions } from '@/lib/studio/core'
 import type { ViewId } from './data'
 import { api, initials, type Live, type StudioMessage } from './live'
+import { NextMoveBar } from './overview'
 
 type Act = (fn: () => Promise<unknown>, ok?: string) => Promise<void>
 
@@ -136,7 +137,7 @@ export function nextMove(live: Live): { text: string; view: StudioView; cta: str
 export function NextMove({ live, changeView }: { live: Live; changeView: (v: StudioView) => void }) {
   const m = nextMove(live)
   if (!m) return null
-  return <div className="studio-banner studio-next"><Sparkles size={14} /><span><strong>Next best move</strong> {m.text}</span><button type="button" onClick={() => changeView(m.view)}>{m.cta} <ArrowRight size={13} /></button></div>
+  return <NextMoveBar text={m.text} cta={m.cta} onGo={() => changeView(m.view)} />
 }
 
 const SPECIALIST_ICON: Record<string, React.ReactNode> = { 'business-analyst': <Scale size={13} />, architect: <Layers3 size={13} />, engineer: <Wrench size={13} />, ux: <PenTool size={13} />, domain: <Compass size={13} /> }
