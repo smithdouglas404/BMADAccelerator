@@ -5,7 +5,7 @@ export type ViewId = "overview" | "conversation" | "validation" | "product" | "e
 
 export const VIEWS: { id: ViewId; label: string; hint: string; title: string }[] = [
   { id: "overview", label: "Whole product", hint: "See the shape", title: "Whole product" },
-  { id: "conversation", label: "Work with Muse", hint: "Move the idea", title: "Work with Muse" },
+  { id: "conversation", label: "Work with Socra", hint: "Move the idea", title: "Work with Socra" },
   { id: "validation", label: "Validate use case", hint: "Test the proof", title: "Validate use case" },
   { id: "product", label: "Product shape", hint: "Living PRFAQ", title: "Product shape" },
   { id: "evidence", label: "Evidence & signals", hint: "Keep the why", title: "Evidence & signals" },
@@ -37,7 +37,7 @@ export function validationScore(v: Validation): number {
 
 /** The agent route the Studio shows (AgentKit-style routing, run on the owner's Claude plan). */
 export const ROUTE_AGENTS = [
-  { agent: "Muse / Interviewer", action: "Elicit product intent" },
+  { agent: "Socra / Interviewer", action: "Elicit product intent" },
   { agent: "Use Case Validator", action: "Test the proof point" },
   { agent: "UX / Component Mapper", action: "Suggest the product surface" },
   { agent: "Product Engineer", action: "Shape the pilot boundary" },
@@ -82,7 +82,7 @@ const YES_NO_Q = /^(should|shall|do you want|would you like|want me to|can|could
 const SUGGEST = /\b(i(?: would|'d)? (?:suggest|recommend|propose)|my (suggestion|recommendation) (is|would be)|i'd go with|suggested?:|recommended?:)\s*/i;
 
 /**
- * What a bare yes approves: a proposal the Muse actually made. That is a yes/no question it asked
+ * What a bare yes approves: a proposal Socra actually made. That is a yes/no question it asked
  * ("Should claimants upload photos?") or a suggestion it named ("I'd suggest photo upload first").
  * An open question ("How does yours differ?"), an either/or question, or plain talk has nothing to
  * approve, so this returns "" and the yes is held instead.
@@ -147,7 +147,7 @@ export function numberItems(items: { id?: string; text: string; state?: string }
 
 /**
  * Readiness never goes down on its own: the floor is the minimum. A capability's ceiling moves with
- * what the owner confirmed and with the Muse's honest read; a "yes" carries it forward a little.
+ * what the owner confirmed and with Socra's honest read; a "yes" carries it forward a little.
  */
 export function bumpReadiness(current: number, approved: boolean): number {
   return Math.max(0, Math.min(100, current + (approved ? 4 : 1)));
@@ -192,9 +192,9 @@ export const recKindLabels: Record<string, string> = {
 export const ROLES = ["Product owner", "Business analyst", "Product engineer", "UX/UI designer", "Architect", "Subject-matter expert", "Stakeholder"] as const;
 
 /**
- * The Muse's specialists. The Muse leads; it brings these in visibly, and anyone on the product can
+ * Socra's specialists. Socra leads; it brings these in visibly, and anyone on the product can
  * address one directly. `agent` is the team member that does the work (src/lib/agent/team.ts).
- * The domain expert is named for the product's field ("Claims expert") by the Muse.
+ * The domain expert is named for the product's field ("Claims expert") by Socra.
  */
 export const SPECIALISTS = [
   { key: "business-analyst", name: "Business analyst", agent: "business-analyst", focus: "requirements, flows, rules and acceptance" },
@@ -206,7 +206,7 @@ export const SPECIALISTS = [
 export type SpecialistKey = (typeof SPECIALISTS)[number]["key"];
 export const specialistByKey = (k: string) => SPECIALISTS.find((s) => s.key === k);
 
-/** A working name from the owner's first words, until the Muse names the product. */
+/** A working name from the owner's first words, until Socra names the product. */
 export function workingName(description: string): string {
   const words = description
     .split(/[:.,;!?\n]|\s[-–—]\s/)[0]
@@ -219,7 +219,7 @@ export function workingName(description: string): string {
   return name || "New product";
 }
 
-/** The numbered choices in a Muse message ("1. Calm entry", "2) Dashboard first"), in order. */
+/** The numbered choices in a Socra message ("1. Calm entry", "2) Dashboard first"), in order. */
 export function numberedOptions(text: string): { n: number; label: string }[] {
   const out: { n: number; label: string }[] = [];
   for (const line of text.split(/\n/)) {

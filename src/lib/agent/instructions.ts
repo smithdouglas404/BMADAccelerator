@@ -2,10 +2,10 @@ import { promises as fs } from "fs";
 import path from "path";
 
 /**
- * The Studio's core skills, loaded into the Muse's instructions on every turn (not left for the model to
+ * The Studio's core skills, loaded into Socra's instructions on every turn (not left for the model to
  * find): studio-reimagine is the central theme (reimagine, rethink, reinvent, accelerate), studio-muse is
  * how the conversation works. Every specialist is told to read studio-reimagine too (src/lib/agent/team.ts).
- * A missing core skill stops the turn rather than letting the Muse run without its stance.
+ * A missing core skill stops the turn rather than letting Socra run without its stance.
  */
 export const CORE_SKILLS = ["studio-reimagine", "studio-muse"] as const;
 

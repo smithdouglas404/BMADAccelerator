@@ -60,7 +60,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
   const data: Record<string, unknown> = {};
   if (kind) {
     data.kind = kind;
-    data.group = kind === "distraction" ? "Parked by Muse" : (group ?? item.group);
+    data.group = kind === "distraction" ? "Parked by Socra" : (group ?? item.group);
     if (kind === "distraction") data.state = "held";
   }
   if (includeInBuild !== undefined) {

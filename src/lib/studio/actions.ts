@@ -5,9 +5,9 @@ import { bumpReadiness, clip, isAffirmative, numberedOptions, pickedNumbers, pro
 import { SESSION_EDGES, addTrace } from "./trace";
 import { recordChange } from "./truthlog";
 
-const NO_AGENTS = "I've kept that. The Muse switches on once Claude is signed in on Settings.";
+const NO_AGENTS = "I've kept that. Socra switches on once Claude is signed in on Settings.";
 
-/** Opens a product for the Muse the first time it is looked at (or after an upgrade reset). */
+/** Opens a product for Socra the first time it is looked at (or after an upgrade reset). */
 export async function ensureStarted(useCaseId: string) {
   if (!agentsEnabled()) return;
   const { count } = await prisma.useCase.updateMany({ where: { id: useCaseId, started: false }, data: { started: true } });
@@ -29,9 +29,9 @@ async function whoSpoke(useCaseId: string, author?: Speaker) {
 /**
  * Someone on the product said something. "Every time you talk is requirements. Every time you say yes,
  * it's automatically an approval." A plain yes (typed or spoken) becomes an approved decision of the
- * Muse's last proposal; a number ("2", "2 and 5") picks from the Muse's numbered options; anything else is
+ * Socra's last proposal; a number ("2", "2 and 5") picks from Socra's numbered options; anything else is
  * held in the backlog in their words. A message addressed to a specialist goes to that specialist.
- * Either way the Muse hears it and carries it into the product truth. Every approval can be undone.
+ * Either way Socra hears it and carries it into the product truth. Every approval can be undone.
  */
 export async function ownerSays(useCaseId: string, content: string, opts: SayOpts | string = {}) {
   const o: SayOpts = typeof opts === "string" ? { source: opts } : opts;
@@ -41,7 +41,7 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
   const specialist = o.to ? specialistByKey(o.to) : undefined;
   const focus = uc.focus ? await prisma.capability.findFirst({ where: { useCaseId, key: uc.focus } }) : null;
   const msg = await prisma.message.create({ data: { useCaseId, role: "user", agent: "You", content, author: who.name, authorRole: who.role, addressed: specialist?.key ?? "", raw: o.raw && o.raw !== content ? o.raw : "" } });
-  // What a yes or a number answers: the Muse's (or a specialist's) words since anyone last spoke.
+  // What a yes or a number answers: Socra's (or a specialist's) words since anyone last spoke.
   const lastUser = await prisma.message.findFirst({ where: { useCaseId, role: "user", createdAt: { lt: msg.createdAt } }, orderBy: { createdAt: "desc" } });
   const since = await prisma.message.findMany({
     where: { useCaseId, createdAt: { lt: msg.createdAt, ...(lastUser ? { gt: lastUser.createdAt } : {}) }, OR: [{ role: "muse" }, { role: "agent", addressed: { not: "" } }] },
@@ -55,7 +55,7 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
   const options = offered ? numberedOptions(offered.content) : [];
   const nums = options.length ? pickedNumbers(content) : null;
   let picked = nums ? options.filter((x) => nums.includes(x.n)) : [];
-  // A bare yes approves only what was actually proposed: the option the Muse marked as its suggestion,
+  // A bare yes approves only what was actually proposed: the option Socra marked as its suggestion,
   // or the yes/no proposal it last made. A yes to an open question or to unmarked options is held.
   const yes = !specialist && !picked.length && isAffirmative(content);
   const suggested = yes && offered ? suggestedOption(offered.content) : null;
@@ -77,7 +77,7 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
         agent: "Decision captured",
         accent: "#d7f58b",
         ref: decision.id,
-        content: `${picked.length ? "Chosen" : "Approved"}: ${proposal}. The Muse is carrying it into the product truth${focus ? ` and moving the ${focus.label.toLowerCase()} ceiling forward` : ""}.`,
+        content: `${picked.length ? "Chosen" : "Approved"}: ${proposal}. Socra is carrying it into the product truth${focus ? ` and moving the ${focus.label.toLowerCase()} ceiling forward` : ""}.`,
       },
     });
     rememberDecision(uc, "muse", `${who.said} approved: ${proposal}`, "studio:yes");
@@ -91,7 +91,7 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
       );
   } else if (unclearYes) {
     // A bare yes with nothing single on the table to approve: it answers the last question. Nothing is
-    // approved and nothing is held (a lone "yes" is not a requirement); the Muse reads it in context.
+    // approved and nothing is held (a lone "yes" is not a requirement); Socra reads it in context.
     if (agentsEnabled())
       await enqueue(
         useCaseId,
@@ -108,7 +108,7 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
     await prisma.message.create({
       data: specialist
         ? { useCaseId, role: "signal", agent: `Asked the ${specialist.name.toLowerCase()}`, accent: "#a9d8ff", content: `The ${specialist.name.toLowerCase()} is looking at it and will answer here. Your words are kept in the backlog too.` }
-        : { useCaseId, role: "signal", agent: "Thought held for curation", accent: "#f5c88a", content: "The Muse has kept your original language intact and placed this in the backlog to find its right home." },
+        : { useCaseId, role: "signal", agent: "Thought held for curation", accent: "#f5c88a", content: "Socra has kept your original language intact and placed this in the backlog to find its right home." },
     });
     if (agentsEnabled())
       await enqueue(
@@ -120,12 +120,12 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
         `msg:${msg.id}`,
       );
   }
-  if (!agentsEnabled()) await prisma.message.create({ data: { useCaseId, role: "muse", agent: "Muse · Product physician", content: NO_AGENTS } });
+  if (!agentsEnabled()) await prisma.message.create({ data: { useCaseId, role: "muse", agent: "Socra · Product physician", content: NO_AGENTS } });
   await prisma.useCase.update({ where: { id: useCaseId }, data: { updatedAt: new Date() } });
   return { approved, picked: picked.map((x) => x.n) };
 }
 
-/** Undo an approval made by a yes or a pick: as if it was never said. The decision goes; the Muse hears it. */
+/** Undo an approval made by a yes or a pick: as if it was never said. The decision goes; Socra hears it. */
 export async function undoApproval(useCaseId: string, decisionId: string, author?: Speaker) {
   const d = await prisma.decision.findFirst({ where: { id: decisionId, useCaseId } });
   if (!d) return null;
@@ -138,7 +138,7 @@ export async function undoApproval(useCaseId: string, decisionId: string, author
   return d;
 }
 
-/** A thought caught away from the desk (phone, voice, the sidebar). Held, then curated by the Muse. */
+/** A thought caught away from the desk (phone, voice, the sidebar). Held, then curated by Socra. */
 export async function captureThought(useCaseId: string, text: string, source = "Phone / voice") {
   const item = await prisma.backlogItem.create({
     data: { useCaseId, title: clip(text, 140), note: text.length > 140 ? text : "Ambient capture · ready for a home", kind: "capture", group: "Unsorted signal", source, state: "held" },
@@ -149,7 +149,7 @@ export async function captureThought(useCaseId: string, text: string, source = "
   return item;
 }
 
-/** The owner pulled a recommendation forward: it is ready for facilitation and the Muse asks its probing question. */
+/** The owner pulled a recommendation forward: it is ready for facilitation and Socra asks its probing question. */
 export async function pullForward(useCaseId: string, itemId: string) {
   const item = await prisma.backlogItem.update({ where: { id: itemId }, data: { state: "probing" } });
   await addTrace(useCaseId, ...SESSION_EDGES.recommendation(item.title));
@@ -168,12 +168,12 @@ export async function pullForward(useCaseId: string, itemId: string) {
     );
   else
     await prisma.message.create({
-      data: { useCaseId, role: "muse", agent: "Muse · Suggested consideration", accent: "#f5c88a", content: `${item.title}. ${item.probe || "What would you like to do with this?"}` },
+      data: { useCaseId, role: "muse", agent: "Socra · Suggested consideration", accent: "#f5c88a", content: `${item.title}. ${item.probe || "What would you like to do with this?"}` },
     });
   return item;
 }
 
-/** The Muse moves its lens to a capability, as the owner asked. */
+/** Socra moves its lens to a capability, as the owner asked. */
 export async function focusCapability(useCaseId: string, key: string) {
   const cap = await prisma.capability.findFirst({ where: { useCaseId, key } });
   if (!cap) return null;
@@ -182,7 +182,7 @@ export async function focusCapability(useCaseId: string, key: string) {
     data: {
       useCaseId,
       role: "muse",
-      agent: "Muse · Product physician",
+      agent: "Socra · Product physician",
       accent: cap.color,
       content: `Let's work on ${cap.label.toLowerCase()}. ${cap.signal}`.trim(),
     },

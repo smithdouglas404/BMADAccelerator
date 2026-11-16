@@ -10,7 +10,7 @@ The central product principle is that the **use case remains the source object**
 ## Proposed application structure
 
 1. **Product truth** — use case, customer, promise, journey, evidence, and research.
-2. **Conversation** — Muse questions, voice input, open decisions, implicit approvals, and probing.
+2. **Conversation** — Socra questions, voice input, open decisions, implicit approvals, and probing.
 3. **Living PRD** — product sections, completeness, confidence, evidence, acceptance criteria, and human approval.
 4. **Living TRD** — architecture, data, integrations, agents, security, operations, testing, and technical risks.
 5. **Backlog** — curated capabilities, epics, stories, tasks, recommendations, and distractions.
@@ -44,7 +44,7 @@ The PRD should be a real, visible workspace rather than a static generated docum
 
 Each section should display its current content, completeness status, confidence, supporting evidence, related conversation, visual annotations, backlog items, open questions, and last update source.
 
-The Product Owner should not have to complete a form. A Muse question should update the appropriate section while exposing the inference trail. For example, an answer to “What should happen if the user captures an idea but does not have time to organize it?” may update the user flow, functional requirements, edge cases, backlog, acceptance criteria, and readiness score.
+The Product Owner should not have to complete a form. A Socra question should update the appropriate section while exposing the inference trail. For example, an answer to “What should happen if the user captures an idea but does not have time to organize it?” may update the user flow, functional requirements, edge cases, backlog, acceptance criteria, and readiness score.
 
 ## Living TRD workspace
 
@@ -94,7 +94,7 @@ Example:
 ```text
 “Users need to capture thoughts without interrupting their activity.”
   → voice annotation
-  → Muse companion capability
+  → Socra companion capability
   → PR-014
   → TR-009
   → capture → transcribe → probe workflow

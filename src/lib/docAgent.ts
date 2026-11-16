@@ -7,7 +7,7 @@ import { convertToText } from "@/lib/provision";
 import { query, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { authEnv, authOrder, claudeConfigured, type Auth } from "@/lib/agent/auth";
 
-/** The Muse, its team and Claude Code. Sonnet: about half Opus's price, strong enough for planning and building. */
+/** Socra, its team and Claude Code. Sonnet: about half Opus's price, strong enough for planning and building. */
 export const agentModel = () => process.env.BACC_MODEL || "claude-sonnet-5-5";
 /** The document agent only reads and tags an upload, so the low-cost model is enough. */
 export const docModel = () => process.env.BACC_DOC_MODEL || "claude-haiku-5-5";
@@ -27,13 +27,13 @@ const MAX_CHARS = 400_000;
 
 // The document agent: reads an upload and turns it into evidence. It suggests what kind of source it is,
 // a one-line description, a short summary and tags, and the product signals it shows, each with a
-// confidence and what it traces to. Evidence informs the Muse; it never silently becomes a requirement.
+// confidence and what it traces to. Evidence informs Socra; it never silently becomes a requirement.
 export async function describeDocument(documentId: string) {
   const doc = await prisma.document.findUniqueOrThrow({ where: { id: documentId } });
   const textPath = doc.textPath || (await convertToText(doc.storagePath));
   if (textPath && !doc.textPath) await prisma.document.update({ where: { id: doc.id }, data: { textPath } });
   const noSummary = (why: string) => prisma.document.update({ where: { id: doc.id }, data: { summary: `No summary yet: ${why}` } });
-  if (!textPath) return noSummary("this file type couldn't be read as text. The Muse can still open it.");
+  if (!textPath) return noSummary("this file type couldn't be read as text. Socra can still open it.");
   if (!claudeConfigured()) return noSummary("Claude isn't signed in, so the document agent can't run.");
 
   let text = await fs.readFile(textPath, "utf8");

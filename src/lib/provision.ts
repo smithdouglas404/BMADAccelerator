@@ -14,7 +14,7 @@ const run = promisify(execFile);
 // Pinned copies of the design skills, the ECC skills library and the AgentKit docs live in vendor/
 // (scripts/fetch-vendor.sh).
 export const VENDOR_DIR = process.env.BACC_VENDOR_DIR || path.join(process.cwd(), "vendor");
-// The Studio's own skills: the Muse, the Studio rulebook (working-backwards-studio) and AgentKit.
+// The Studio's own skills: Socra, the Studio rulebook (working-backwards-studio) and AgentKit.
 export const STUDIO_SKILLS_DIR = path.join(process.cwd(), "studio-skills");
 export const CUSTOM_SKILLS_DIR = path.join(WORKSPACES_DIR, "_custom-skills");
 
@@ -198,7 +198,7 @@ export async function convertToText(file: string) {
   }
 }
 
-// studio/intake.md: the owner's own first words and what they brought, for the Muse to read as input.
+// studio/intake.md: the owner's own first words and what they brought, for Socra to read as input.
 export async function writeIntake(useCaseId: string) {
   const uc = await prisma.useCase.findUniqueOrThrow({
     where: { id: useCaseId },

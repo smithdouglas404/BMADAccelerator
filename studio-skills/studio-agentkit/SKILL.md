@@ -1,6 +1,6 @@
 ---
 name: studio-agentkit
-description: How every agentic workflow in a Studio-built pilot is designed and built with Inngest AgentKit (agents, tools, networks, routers, state, memory, MCP, human in the loop, streaming). Use when the Product Engineer shapes agentic workflows, when the Muse suggests one, and when Claude Code builds the pilot.
+description: How every agentic workflow in a Studio-built pilot is designed and built with Inngest AgentKit (agents, tools, networks, routers, state, memory, MCP, human in the loop, streaming). Use when the Product Engineer shapes agentic workflows, when Socra suggests one, and when Claude Code builds the pilot.
 origin: Working Backwards Studio
 ---
 
@@ -25,7 +25,7 @@ Map every agentic idea to AgentKit's own concepts, using its names, so the owner
 
 ## When to Activate
 
-- When the Product engineer shapes an agentic workflow, when the Muse suggests one, and when Claude Code builds a pilot that has agents.
+- When the Product engineer shapes an agentic workflow, when Socra suggests one, and when Claude Code builds a pilot that has agents.
 
 ## Ground rules
 
@@ -38,6 +38,6 @@ Map every agentic idea to AgentKit's own concepts, using its names, so the owner
 
 ## In the Studio
 
-- The Product Engineer records each workflow as a recommendation of kind "workflow" with its AgentKit shape in the note, and each person-in-the-loop point as kind "hitl"; the owner pulls them forward and the Muse asks about them.
+- The Product Engineer records each workflow as a recommendation of kind "workflow" with its AgentKit shape in the note, and each person-in-the-loop point as kind "hitl"; the owner pulls them forward and Socra asks about them.
 - What the owner accepts goes into the package's `AGENT_KIT_ROUTING.json` and `TECHNICAL_REQUIREMENTS.md`, and Claude Code builds it.
 - After a build, check: does each accepted workflow exist, built with AgentKit; does every person-in-the-loop step actually wait and show the person what to approve; does the demo mode say it is a demo; is progress visible while an agent works.

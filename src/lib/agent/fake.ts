@@ -4,19 +4,19 @@ import { prisma } from "@/lib/db";
 import { colorFor, workingName } from "@/lib/studio/core";
 import type { RunTally } from "./tools";
 
-// A scripted stand-in for the Muse, used only by automated tests and the sandbox check
-// (BACC_FAKE_AGENT=1 with no Claude sign-in). It drives the same screens the real Muse does:
+// A scripted stand-in for Socra, used only by automated tests and the sandbox check
+// (BACC_FAKE_AGENT=1 with no Claude sign-in). It drives the same screens the real Socra does:
 // product, PRFAQ, capabilities, decisions, recommendations, evidence, validation, moves and routes.
 export async function fakeAgentTurn(uc: UseCase, prompt: string, tally: RunTally) {
   const say = async (content: string, accent = "") => {
     tally.spoke++;
-    await prisma.message.create({ data: { useCaseId: uc.id, role: "muse", agent: "Muse · Product physician", content, accent } });
+    await prisma.message.create({ data: { useCaseId: uc.id, role: "muse", agent: "Socra · Product physician", content, accent } });
   };
   const specialist = async (key: string, agent: string, content: string) =>
     prisma.message.create({ data: { useCaseId: uc.id, role: "agent", agent: `${agent} · Specialist`, addressed: key, content } });
   if (prompt.includes("[opening]")) {
     const k = kindOf(uc.description);
-    // The Muse names the product from what was said (the working name came from the first words).
+    // Socra names the product from what was said (the working name came from the first words).
     const name = uc.name === workingName(uc.description) ? k.name : uc.name;
     await prisma.useCase.update({
       where: { id: uc.id },
@@ -46,10 +46,10 @@ export async function fakeAgentTurn(uc: UseCase, prompt: string, tally: RunTally
       });
     }
     await prisma.backlogItem.createMany({
-      data: k.recs.map(([title, note, recKind, probe], i) => ({ useCaseId: uc.id, title, note, kind: "epic", group: k.caps[i % k.caps.length][1], source: "Muse recommendation", recKind, probe, state: "suggested" })),
+      data: k.recs.map(([title, note, recKind, probe], i) => ({ useCaseId: uc.id, title, note, kind: "epic", group: k.caps[i % k.caps.length][1], source: "Socra recommendation", recKind, probe, state: "suggested" })),
     });
     await prisma.evidence.create({ data: { useCaseId: uc.id, source: "Owner's first description", type: "conversation", insight: uc.description.slice(0, 200) || "The owner described the product.", confidence: "medium", trace: "Product promise" } });
-    await prisma.decision.create({ data: { useCaseId: uc.id, text: "The pilot calls no outside systems yet: those steps end in labelled demos", status: "assumed", capability: k.caps[2][1], agent: "Muse" } });
+    await prisma.decision.create({ data: { useCaseId: uc.id, text: "The pilot calls no outside systems yet: those steps end in labelled demos", status: "assumed", capability: k.caps[2][1], agent: "Socra" } });
     // A checkpoint only the people on the product can clear.
     await prisma.decision.create({ data: { useCaseId: uc.id, text: k.checkpoint, status: "open", capability: k.caps[1][1], agent: "Business analyst", includeInBuild: false, options: [{ label: "Yes, as suggested", value: "yes" }, { label: "Not for the pilot", value: "no" }] } });
     await prisma.move.createMany({
@@ -70,10 +70,10 @@ export async function fakeAgentTurn(uc: UseCase, prompt: string, tally: RunTally
     for (const [key, content, completeness] of spec)
       await prisma.specSection.updateMany({
         where: { useCaseId: uc.id, key },
-        data: { content, completeness, basis: "inferred", status: "exploring", confidence: "medium", source: "Muse inference", trace: [{ label: "Inference", detail: `What the leading ${k.category.toLowerCase()} products have`, type: "inference" }] },
+        data: { content, completeness, basis: "inferred", status: "exploring", confidence: "medium", source: "Socra inference", trace: [{ label: "Inference", detail: `What the leading ${k.category.toLowerCase()} products have`, type: "inference" }] },
       });
-    for (const [key] of spec) await recordChange(uc.id, { node: `spec:${key}`, kind: "added", summary: `The Muse wrote this from what the leading ${k.category.toLowerCase()} products have (inferred, not confirmed)`, by: "Muse", fromTurn: true });
-    await prisma.agentRoute.updateMany({ where: { useCaseId: uc.id, agent: "Muse / Interviewer" }, data: { state: "complete", detail: "Floor and PRFAQ written" } });
+    for (const [key] of spec) await recordChange(uc.id, { node: `spec:${key}`, kind: "added", summary: `Socra wrote this from what the leading ${k.category.toLowerCase()} products have (inferred, not confirmed)`, by: "Socra", fromTurn: true });
+    await prisma.agentRoute.updateMany({ where: { useCaseId: uc.id, agent: "Socra / Interviewer" }, data: { state: "complete", detail: "Floor and PRFAQ written" } });
     await prisma.agentRoute.updateMany({ where: { useCaseId: uc.id, agent: "Use Case Validator" }, data: { state: "active", detail: "Testing the proof point" } });
     await prisma.agentRoute.updateMany({ where: { useCaseId: uc.id, agent: "UX / Component Mapper" }, data: { state: "ready" } });
     const { runGenerate } = await import("@/lib/generate");
@@ -90,12 +90,12 @@ export async function fakeAgentTurn(uc: UseCase, prompt: string, tally: RunTally
     if (f) {
       const interpretation = { observation: f.comment, behaviour: `What they pointed at should change: ${f.comment.replace(/\.$/, "")}.`, acceptance: [`Given the screen ${f.target || "they marked"}, when someone uses it, then it reflects: ${f.comment.replace(/\.$/, "")}`], component: f.target || "the marked surface", prd: ["prd-flows"], trd: [] as string[], question: "" };
       await prisma.feedback.update({ where: { id: f.id }, data: { interpretation } });
-      await recordChange(uc.id, { node: `ann:${f.id}`, kind: "interpreted", summary: `The Muse read the mark: ${interpretation.behaviour}`, after: interpretation.acceptance.join("\n"), by: "Muse" });
+      await recordChange(uc.id, { node: `ann:${f.id}`, kind: "interpreted", summary: `Socra read the mark: ${interpretation.behaviour}`, after: interpretation.acceptance.join("\n"), by: "Socra" });
       const s = await prisma.specSection.findFirst({ where: { useCaseId: uc.id, key: "prd-flows" } });
       if (s) {
         const content = `${s.content}\n- ${f.comment}`.trim();
         await prisma.specSection.update({ where: { id: s.id }, data: { content, related: [...new Set([...s.related, f.id])], trace: [...((s.trace ?? []) as object[]), { label: "Annotation", detail: f.comment, type: "annotation" }].slice(-12) } });
-        await recordChange(uc.id, { node: "spec:prd-flows", kind: "changed", summary: "The Muse carried the mark into the primary customer flow", before: s.content, after: content, causes: [`ann:${f.id}`], by: "Muse", fromTurn: true });
+        await recordChange(uc.id, { node: "spec:prd-flows", kind: "changed", summary: "Socra carried the mark into the primary customer flow", before: s.content, after: content, causes: [`ann:${f.id}`], by: "Socra", fromTurn: true });
       }
     }
     await say("I've read your mark and carried it into the primary flow. It goes into the next build.", uc.focus);
@@ -107,7 +107,7 @@ export async function fakeAgentTurn(uc: UseCase, prompt: string, tally: RunTally
     if (s) {
       const content = `${s.content}\n- Seen in the pilot: ${pilot[2]}`.trim();
       await prisma.specSection.update({ where: { id: s.id }, data: { content, completeness: Math.max(s.completeness, 30), basis: s.basis === "not-researched" ? "inferred" : s.basis, related: [...new Set([...s.related, pilot[1]])], trace: [...((s.trace ?? []) as object[]), { label: "Evidence", detail: pilot[2], type: "evidence" }].slice(-12) } });
-      await recordChange(uc.id, { node: "spec:prd-acceptance", kind: "changed", summary: "The pilot changed the acceptance criteria", before: s.content, after: content, by: "Muse", fromTurn: true });
+      await recordChange(uc.id, { node: "spec:prd-acceptance", kind: "changed", summary: "The pilot changed the acceptance criteria", before: s.content, after: content, by: "Socra", fromTurn: true });
     }
     await say("That pilot observation now shapes the acceptance criteria.", uc.focus);
     return;
@@ -128,7 +128,7 @@ export async function fakeAgentTurn(uc: UseCase, prompt: string, tally: RunTally
     if (s) {
       const content = `${s.content}\n- ${words}`.trim();
       await prisma.specSection.update({ where: { id: s.id }, data: { content, completeness: Math.max(s.completeness, 25), basis: s.basis === "not-researched" ? "inferred" : s.basis, trace: [...((s.trace ?? []) as object[]), { label: "Conversation", detail: words, type: "conversation" }].slice(-12) } });
-      await recordChange(uc.id, { node: "spec:prd-use-case", kind: "changed", summary: "The Muse carried what was said into the validated use case", before: s.content, after: content, by: "Muse", fromTurn: true });
+      await recordChange(uc.id, { node: "spec:prd-use-case", kind: "changed", summary: "Socra carried what was said into the validated use case", before: s.content, after: content, by: "Socra", fromTurn: true });
     }
   }
   await say("Got it. I've carried that into the product. What should feel different the first time someone uses it?", uc.focus);
@@ -137,7 +137,7 @@ export async function fakeAgentTurn(uc: UseCase, prompt: string, tally: RunTally
 type Cap = readonly [string, string, string, number, readonly string[]];
 type Kind = { name: string; expert: string; expertNote: string; checkpoint: string; options: readonly [string, string, string]; category: string; article: string; promise: string; audience: string; audienceOne: string; useCase: string; flow: string; question: string; caps: readonly Cap[]; recs: readonly (readonly [string, string, string, string])[]; components: readonly (readonly [string, string])[] };
 
-// A few category floors for the stand-in only; the real Muse infers the category from anything described.
+// A few category floors for the stand-in only; the real Socra infers the category from anything described.
 function kindOf(text: string): Kind {
   const t = text.toLowerCase();
   if (/claim|insur|adjust/.test(t))

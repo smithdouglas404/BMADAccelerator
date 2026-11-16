@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { recordChange } from "./truthlog";
 
-// The Make it real board moves itself: the Muse moves a card as the conversation settles it, a build
+// The Make it real board moves itself: Socra moves a card as the conversation settles it, a build
 // picks up what is ready and hands it back for review, and a person's yes or mark finishes it or sends
 // it back. Every move says who or what made it and why, and lands in "Why did this change?".
 

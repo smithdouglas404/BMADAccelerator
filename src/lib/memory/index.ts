@@ -29,7 +29,7 @@ const nameOf = (agent: string) => {
   const r = roleFor(agent);
   return r ? `${r.name} (${r.title})` : agent;
 };
-// Every memory belongs to one of the Studio's roles; anything else is the Muse's.
+// Every memory belongs to one of the Studio's roles; anything else is Socra's.
 const ownerKey = (agent: string) => (roleFor(agent) ? agent : "muse");
 
 function scope(agent: string, uc: UseCaseRef): MemoryScope {

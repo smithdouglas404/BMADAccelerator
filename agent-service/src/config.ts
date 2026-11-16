@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-// What an agent is, as configuration. The Muse (or the product engineer) proposes it, a person approves
+// What an agent is, as configuration. Socra (or the product engineer) proposes it, a person approves
 // it, and the Studio registers it here. Nothing in this file calls a model or the network.
 
 const slug = z.string().regex(/^[a-z][a-z0-9-]{1,47}$/, "lowercase letters, digits and dashes");

@@ -4,7 +4,7 @@ import { cleanSpeech } from "@/lib/docAgent";
 
 const Body = z.object({ text: z.string().max(40000) });
 
-// Turns what someone said (any length) into clean natural language before it goes to the Muse.
+// Turns what someone said (any length) into clean natural language before it goes to Socra.
 export async function POST(req: Request) {
   const parsed = Body.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success || !parsed.data.text.trim()) return NextResponse.json({ error: "Nothing was heard." }, { status: 400 });

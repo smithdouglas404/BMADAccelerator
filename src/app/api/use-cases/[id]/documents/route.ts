@@ -16,7 +16,7 @@ const MAX_BYTES = 200 * 1024 * 1024; // 200 MB per file
 // Research and evidence: interviews, PDFs, competitive research, screenshots, documents, design
 // references, analytics exports, customer feedback. Each upload is stored in studio/uploads/, shown as
 // evidence straight away, read by the document agent (claims, contradictions, questions, potential
-// requirements, confidence) and handed to the Muse. Research never silently becomes a requirement.
+// requirements, confidence) and handed to Socra. Research never silently becomes a requirement.
 export async function POST(req: Request, { params }: Ctx) {
   const { id } = await params;
   const uc = await prisma.useCase.findUnique({ where: { id } });
@@ -38,7 +38,7 @@ export async function POST(req: Request, { params }: Ctx) {
       data: { useCaseId: id, fileName: safeName, mimeType: file.type || "application/octet-stream", sizeBytes: file.size, storagePath, kind, status: "approved", approved: true },
     });
     await prisma.evidence.create({
-      data: { useCaseId: id, documentId: doc.id, source: safeName, type: ["interview", "research"].includes(kind) ? kind : "uploaded", insight: "New source uploaded — the Muse will extract the product signal next.", confidence: "open", trace: "Awaiting synthesis" },
+      data: { useCaseId: id, documentId: doc.id, source: safeName, type: ["interview", "research"].includes(kind) ? kind : "uploaded", insight: "New source uploaded — Socra will extract the product signal next.", confidence: "open", trace: "Awaiting synthesis" },
     });
     created.push(doc);
     await recordChange(id, { node: `doc:${doc.id}`, kind: "added", summary: `${safeName} was added to the evidence library`, by: "Owner" });

@@ -1,4 +1,4 @@
-// MCP adapters: data sources and tools a team plugs into the Studio (Settings > Connectors). The Muse,
+// MCP adapters: data sources and tools a team plugs into the Studio (Settings > Connectors). Socra,
 // its helpers and Generate get every connector switched on for the product, beside the Studio's own
 // tools and the shadcn registry. Secrets (headers or environment values) are stored encrypted.
 import type { McpServerConfig } from "@anthropic-ai/claude-agent-sdk";

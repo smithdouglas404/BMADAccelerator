@@ -27,9 +27,9 @@ const itemSchema = z.object({
   state: z.enum(["confirmed", "assumed", "out"]).default("assumed"),
 });
 
-// What the Muse and its team can do in the Studio. Everything the owner sees comes through here.
+// What Socra and its team can do in the Studio. Everything the owner sees comes through here.
 export function studioTools(useCaseId: string, slug: string, tally: RunTally, opts: { speaker?: string } = {}) {
-  const speaker = opts.speaker ?? "Muse";
+  const speaker = opts.speaker ?? "Socra";
   const uc = () => prisma.useCase.findUniqueOrThrow({ where: { id: useCaseId } });
   const capKey = async (c: string) => {
     if (!c) return "";
@@ -91,11 +91,11 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
       ),
       tool(
         "say",
-        "Show a message to the owner in the conversation, in the Muse's voice. The only way the owner sees anything you write. Plain product language, one or two questions at most, never jargon (no epics, stories or agent names unless they ask).",
+        "Show a message to the owner in the conversation, in Socra's voice. The only way the owner sees anything you write. Plain product language, one or two questions at most, never jargon (no epics, stories or agent names unless they ask).",
         { text: z.string().min(1), capability: z.string().default("").describe("The capability this is about (key or label), if any") },
         async ({ text, capability }) => {
           tally.spoke++;
-          await prisma.message.create({ data: { useCaseId, role: "muse", agent: speaker === "Muse" ? "Muse · Product physician" : speaker, content: text, accent: await capKey(capability) } });
+          await prisma.message.create({ data: { useCaseId, role: "muse", agent: speaker === "Socra" ? "Socra · Product physician" : speaker, content: text, accent: await capKey(capability) } });
           return ok();
         },
       ),
@@ -110,7 +110,7 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
       ),
       tool(
         "share_finding",
-        "A specialist speaks in the conversation, visibly, in their own name: what they found or recommend, in two to four plain sentences, and at most one question (with a suggested answer) for the people on the product. Use it when a specialist finishes (the Muse may share for a research specialist), or to answer someone who addressed a specialist directly. Numbered options are fine when there are real choices. specialist: business-analyst, architect, engineer, ux or domain; for domain give the field's name in 'title' (for example \"Claims expert\").",
+        "A specialist speaks in the conversation, visibly, in their own name: what they found or recommend, in two to four plain sentences, and at most one question (with a suggested answer) for the people on the product. Use it when a specialist finishes (Socra may share for a research specialist), or to answer someone who addressed a specialist directly. Numbered options are fine when there are real choices. specialist: business-analyst, architect, engineer, ux or domain; for domain give the field's name in 'title' (for example \"Claims expert\").",
         {
           specialist: z.enum(["business-analyst", "architect", "engineer", "ux", "domain"]),
           title: z.string().max(60).default(""),
@@ -251,7 +251,7 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
       ),
       tool(
         "focus",
-        "Move the lens: the capability the conversation is now holding. The Whole product and Work with Muse views follow it.",
+        "Move the lens: the capability the conversation is now holding. The Whole product and Work with Socra views follow it.",
         { capability: z.string().min(1) },
         async ({ capability }) => {
           const key = await capKey(capability);
@@ -286,7 +286,7 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
         { id: z.string(), status: z.enum(["queued", "ready", "building", "review", "done"]), why: z.string().min(5).max(300), causes: z.array(z.string()).default([]) },
         async ({ id, status, why, causes }) => {
           const { moveCard } = await import("@/lib/studio/board");
-          const m = await moveCard(useCaseId, id, status, speaker === "Muse" ? "The Muse" : speaker, why, [...(await nodesForIds(useCaseId, causes)), ...currentCauses(useCaseId)]);
+          const m = await moveCard(useCaseId, id, status, speaker === "Socra" ? "Socra" : speaker, why, [...(await nodesForIds(useCaseId, causes)), ...currentCauses(useCaseId)]);
           return ok(m ? `Moved to ${status}.` : "No such card.");
         },
       ),
@@ -361,14 +361,14 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
       ),
       tool(
         "recommend",
-        "Put a recommendation in the backlog: something the owner may not know to consider. kind 'consider' (a capability or best practice), 'workflow' (an agentic workflow candidate: only for workflows, messages, alerts, recommendations or insights; fixed rules stay plain code), or 'hitl' (a decision a person must keep). 'prompt' is the probing question the Muse asks when the owner pulls it forward. It never becomes a requirement silently.",
+        "Put a recommendation in the backlog: something the owner may not know to consider. kind 'consider' (a capability or best practice), 'workflow' (an agentic workflow candidate: only for workflows, messages, alerts, recommendations or insights; fixed rules stay plain code), or 'hitl' (a decision a person must keep). 'prompt' is the probing question Socra asks when the owner pulls it forward. It never becomes a requirement silently.",
         { title: z.string().min(3), reason: z.string().min(3), prompt: z.string().min(5), capability: z.string().default(""), kind: z.enum(["consider", "workflow", "hitl"]) },
         async (a) => {
           const group = (await capLabel(a.capability)) || "Unsorted signal";
           const dup = await prisma.backlogItem.findFirst({ where: { useCaseId, title: a.title } });
           if (dup) return ok(`Already in the backlog as ${dup.id}.`);
           const b = await prisma.backlogItem.create({
-            data: { useCaseId, title: a.title, note: a.reason, kind: "epic", group, source: "Muse recommendation", recKind: a.kind, probe: a.prompt, state: "suggested", hidden: a.kind === "workflow" ? "workflow" : "capability" },
+            data: { useCaseId, title: a.title, note: a.reason, kind: "epic", group, source: "Socra recommendation", recKind: a.kind, probe: a.prompt, state: "suggested", hidden: a.kind === "workflow" ? "workflow" : "capability" },
           });
           await recordChange(useCaseId, { node: `backlog:${b.id}`, kind: "added", summary: `${speaker} recommended: ${a.title}`, after: a.reason, by: speaker, fromTurn: true });
           return ok(`Recommended ${b.id}.`);
@@ -400,7 +400,7 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
         async (a) => {
           const b = await prisma.backlogItem.findFirst({ where: { id: a.id, useCaseId } });
           if (!b) return ok("No such item.");
-          const group = a.kind === "distraction" ? "Parked by Muse" : (await capLabel(a.capability)) || b.group;
+          const group = a.kind === "distraction" ? "Parked by Socra" : (await capLabel(a.capability)) || b.group;
           await prisma.backlogItem.update({
             where: { id: b.id },
             data: {
@@ -504,7 +504,7 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
       ),
       tool(
         "set_route",
-        "Show where an agent is on the agent route: 'Muse / Interviewer', 'Use Case Validator', 'UX / Component Mapper' or 'Product Engineer'; state complete | active | ready | waiting; detail one line.",
+        "Show where an agent is on the agent route: 'Socra / Interviewer', 'Use Case Validator', 'UX / Component Mapper' or 'Product Engineer'; state complete | active | ready | waiting; detail one line.",
         { agent: z.string().min(2), state: z.enum(["complete", "active", "ready", "waiting"]), detail: z.string().default(""), action: z.string().default("") },
         async ({ agent, state, detail, action }) => {
           await prisma.agentRoute.upsert({

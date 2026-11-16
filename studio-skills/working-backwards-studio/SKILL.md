@@ -22,7 +22,7 @@ Treat the **use case** as the central object. Keep these artifacts attached to i
 - open questions and human-in-the-loop decisions
 - hidden requirement classifications (capability, epic, story, task, workflow candidate)
 - the capability floor: everything a leading product of this kind has, each item confirmed, assumed or out
-- Muse recommendations and probing history
+- Socra recommendations and probing history
 - UI/component suggestions
 - visual annotations and captured frames
 - AgentKit routes and technical interpretation
@@ -50,10 +50,10 @@ Show product meaning first. Reveal technical interpretations progressively for P
 
 ## The living specification
 
-The PRD and TRD are living documents, never forms. A Muse answer updates the sections it bears on and shows the inference trail. Each section carries:
+The PRD and TRD are living documents, never forms. A Socra answer updates the sections it bears on and shows the inference trail. Each section carries:
 - basis: Confirmed (the owner said so), Recommended, Inferred, Open decision, Not yet researched;
 - state: draft, exploring, evidence-backed, owner-approved, engineer-reviewed, ready for prototype, ready for pilot, production-ready;
-- review: Keep, Revise, Challenge or Remove. Keep confirms it; Revise and Challenge go back to the Muse; Remove keeps the evidence and the conversation and can be undone;
+- review: Keep, Revise, Challenge or Remove. Keep confirms it; Revise and Challenge go back to Socra; Remove keeps the evidence and the conversation and can be undone;
 - a trace: conversation, evidence, annotation, inference, backlog and execution steps.
 Every package snapshots the spec as a version with a diff; any version can be restored as a new one. A change to a decision or section shows its impact on PRD and TRD sections, backlog, agent workflows, build moves, generated artifacts and Linear records. Readiness is explainable: the overall number comes with the factors behind it. Pilot feedback (observations, metrics, interviews, "this felt wrong because…") flows back into the spec as evidence.
 
@@ -77,7 +77,7 @@ The owner can only give part of the floor. The Studio fills in the rest: it name
 
 ## MCP adapters (connected data)
 
-Teams plug data sources and tools into the Studio as MCP servers (HTTP, SSE or stdio), switched on for every product or only the products that pick them. Headers and environment values are secrets: stored encrypted, never shown again, never sent to the browser. The Muse, its helpers and Claude Code get the connectors for the product beside the Studio's own tools. What an agent takes from a connector is evidence: quote it with its source. Connector names are short, lower-case, and never `studio` or `shadcn` (reserved).
+Teams plug data sources and tools into the Studio as MCP servers (HTTP, SSE or stdio), switched on for every product or only the products that pick them. Headers and environment values are secrets: stored encrypted, never shown again, never sent to the browser. Socra, its helpers and Claude Code get the connectors for the product beside the Studio's own tools. What an agent takes from a connector is evidence: quote it with its source. Connector names are short, lower-case, and never `studio` or `shadcn` (reserved).
 
 ## Installable skills
 
@@ -85,7 +85,7 @@ Skills use the Agent Skills format: a folder with a `SKILL.md` (front matter `na
 
 ## Agent memory
 
-The Studio remembers across products with self-hosted, open-source Mem0 (the long-term archive: decisions, answers, annotations, builds, lessons) and Letta (one working mind per Studio role: Muse, Use Case Validator, UX / Component Mapper, Product Engineer, each with its top lessons). Before each agent turn, recall what earlier products taught; after decisions and builds, save general lessons. One owner's details are private to their product: lessons are general ("claims tools: ask about payout limits early"), never another owner's names, prices or plans.
+The Studio remembers across products with self-hosted, open-source Mem0 (the long-term archive: decisions, answers, annotations, builds, lessons) and Letta (one working mind per Studio role: Socra, Use Case Validator, UX / Component Mapper, Product Engineer, each with its top lessons). Before each agent turn, recall what earlier products taught; after decisions and builds, save general lessons. One owner's details are private to their product: lessons are general ("claims tools: ask about payout limits early"), never another owner's names, prices or plans.
 
 ## Many teams, one product
 

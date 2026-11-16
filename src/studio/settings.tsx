@@ -27,7 +27,7 @@ export function SettingsPage() {
     <div className="studio-page">
       <StudioTop active="settings" />
       <div className="page-wrap">
-        <div className="page-intro"><div><p className="eyebrow">Settings</p><h1>The plumbing,<br /><em>out of the way.</em></h1><p>Models and keys, the connectors and skills the Muse and Claude Code can use, and the memory that carries lessons between products.</p></div></div>
+        <div className="page-intro"><div><p className="eyebrow">Settings</p><h1>The plumbing,<br /><em>out of the way.</em></h1><p>Models and keys, the connectors and skills Socra and Claude Code can use, and the memory that carries lessons between products.</p></div></div>
         <div className="studio-tabs">{([['models', 'Models and keys'], ['connectors', 'Connectors (MCP)'], ['skills', 'Skills'], ['memory', 'Memory']] as const).map(([k, l]) => <button key={k} type="button" className={tab === k ? 'is-active' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
         {tab === 'models' && <Models setToast={setToast} />}
         {tab === 'connectors' && <Connectors setToast={setToast} />}
@@ -69,8 +69,8 @@ function Models({ setToast }: { setToast: (s: string) => void }) {
   return (
     <div className="studio-settings-grid">
       <section className="studio-card">
-        <div className="stack-header"><div><p className="eyebrow">Claude plan</p><h3>{s.claudePlan ? 'Signed in: the Muse and Claude Code run on your plan' : 'Not signed in yet'}</h3></div>{s.claudePlan ? <Check size={16} /> : <Plug size={16} />}</div>
-        <p className="studio-muted">{s.claudePlan ? 'Nothing to do here.' : 'Claude is signed in once, during setup on this computer. Until then everything you say is kept and the Muse catches up when it starts.'}</p>
+        <div className="stack-header"><div><p className="eyebrow">Claude plan</p><h3>{s.claudePlan ? 'Signed in: Socra and Claude Code run on your plan' : 'Not signed in yet'}</h3></div>{s.claudePlan ? <Check size={16} /> : <Plug size={16} />}</div>
+        <p className="studio-muted">{s.claudePlan ? 'Nothing to do here.' : 'Claude is signed in once, during setup on this computer. Until then everything you say is kept and Socra catches up when it starts.'}</p>
       </section>
       <section className="studio-card">
         <div className="stack-header"><div><p className="eyebrow">Models</p><h3>Which model does each job</h3></div><Wrench size={16} /></div>
@@ -97,7 +97,7 @@ function Connectors({ setToast }: { setToast: (s: string) => void }) {
     try {
       await api('/api/connectors', { json: { name: form.name, label: form.label, transport: form.transport, url: form.url, command: form.command, args: form.args.split(/\s+/).filter(Boolean), secrets: form.secretKey ? { [form.secretKey]: form.secretValue } : {}, allProducts: form.allProducts, useCases: form.useCases } })
       setForm(EMPTY)
-      setToast('Connector added. The Muse and Claude Code can use it from the next run.')
+      setToast('Connector added. Socra and Claude Code can use it from the next run.')
       load()
     } catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
   }
@@ -166,12 +166,12 @@ function Skills({ setToast }: { setToast: (s: string) => void }) {
   const words = q.toLowerCase().split(/\s+/).filter(Boolean)
   const order = (r: LibSkill) => (r.source === 'studio' ? 0 : r.source === 'yours' ? 1 : isOn(r) ? 2 : 3)
   const list = rows.filter((r) => (source === 'all' || r.source === source) && (!onOnly || isOn(r)) && words.every((w) => `${r.name} ${r.description}`.toLowerCase().includes(w))).sort((a, b) => order(a) - order(b))
-  const where = (s: LibSkill) => s.core ? 'Core · loaded on every Muse turn' : s.alwaysOn ? 'Always on' : s.allProducts ? 'On · every product' : s.useCases.length ? `On · ${s.useCases.length} product${s.useCases.length === 1 ? '' : 's'}` : 'Off'
+  const where = (s: LibSkill) => s.core ? 'Core · loaded on every Socra turn' : s.alwaysOn ? 'Always on' : s.allProducts ? 'On · every product' : s.useCases.length ? `On · ${s.useCases.length} product${s.useCases.length === 1 ? '' : 's'}` : 'Off'
   return (
     <div className="studio-library">
       <section className="studio-card">
         <div className="stack-header"><div><p className="eyebrow">Skill library · {rows.length}</p><h3>ECC, the Studio’s skills and yours, in one place</h3></div><Wrench size={16} /></div>
-        <p className="studio-muted">ECC (Everything Claude Code) is the open-source skills library, MIT licensed, pinned in the Studio. The Studio’s own skills are written in the same format. Switched on, a skill goes into each product’s workspace, where the Muse, its specialists and Claude Code use it.</p>
+        <p className="studio-muted">ECC (Everything Claude Code) is the open-source skills library, MIT licensed, pinned in the Studio. The Studio’s own skills are written in the same format. Switched on, a skill goes into each product’s workspace, where Socra, its specialists and Claude Code use it.</p>
         <div className="studio-library-tools">
           <div className="studio-tabs" style={{ marginTop: 0 }}>{SOURCES.map(([k, l]) => <button key={k} type="button" className={source === k ? 'is-active' : ''} onClick={() => { setSource(k); setShown(PAGE) }}>{l} · {count(k)}</button>)}</div>
           <input className="studio-library-search" type="search" value={q} onChange={(e) => { setQ(e.target.value); setShown(PAGE) }} placeholder="Search skills, e.g. security, postgres, accessibility" aria-label="Search the skill library" />

@@ -16,7 +16,7 @@ const Body = z.object({
   raw: z.string().max(40000).optional(),
 });
 
-// Someone on the product talks to the Muse (or one of its specialists). A plain yes or a numbered pick
+// Someone on the product talks to Socra (or one of its specialists). A plain yes or a numbered pick
 // is an approval; anything else is held in the backlog.
 export async function POST(req: Request, { params }: Ctx) {
   const { id } = await params;

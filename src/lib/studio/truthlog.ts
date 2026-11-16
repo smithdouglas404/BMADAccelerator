@@ -3,7 +3,7 @@ import { buildTruthGraph, explainChanges, caseConfidence, exportGraph, type Grap
 
 // Writes the "why did this change?" timeline and reads the Product Truth Graph for a product.
 
-/** What caused the Muse turn now running for each product (msg:…, ann:…, evidence:…). */
+/** What caused Socra turn now running for each product (msg:…, ann:…, evidence:…). */
 const turnCauses = new Map<string, string[]>();
 export function setTurnCauses(useCaseId: string, causes: string[]) {
   if (causes.length) turnCauses.set(useCaseId, [...new Set(causes)]);
@@ -16,8 +16,8 @@ export function currentCauses(useCaseId: string) {
 const clip = (s: string, n = 600) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 /**
- * Logs one real change to a node. `causes` are other node ids; the running Muse turn's causes are added
- * when `fromTurn` is set (changes the Muse or its team make while answering something).
+ * Logs one real change to a node. `causes` are other node ids; the running Socra turn's causes are added
+ * when `fromTurn` is set (changes Socra or its team make while answering something).
  */
 export async function recordChange(
   useCaseId: string,

@@ -40,13 +40,13 @@ export async function GET() {
 }
 
 const CreateBody = z.object({
-  // Optional: the Muse names the product from what they said; until then it has a working name.
+  // Optional: Socra names the product from what they said; until then it has a working name.
   name: z.string().trim().max(120).default(""),
   description: z.string().max(20000).default(""),
   author: z.object({ name: z.string().max(80).default(""), role: z.string().max(60).default("Product owner") }).optional(),
 });
 
-// A new product: the owner's own words. The Muse opens it straight away.
+// A new product: the owner's own words. Socra opens it straight away.
 export async function POST(req: Request) {
   const parsed = CreateBody.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: "Say a few words about the product." }, { status: 400 });
@@ -69,7 +69,7 @@ export async function POST(req: Request) {
   return NextResponse.json(uc, { status: 201 });
 }
 
-// Uploads are added right after creation; the client calls this to open the product for the Muse.
+// Uploads are added right after creation; the client calls this to open the product for Socra.
 export async function PUT(req: Request) {
   const { id } = (await req.json().catch(() => ({}))) as { id?: string };
   if (!id) return NextResponse.json({ error: "Missing product" }, { status: 400 });

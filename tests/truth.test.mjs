@@ -28,19 +28,19 @@ test("one node per real record, every statement labelled", () => {
   const g = empty();
   g.messages = [
     { id: "m1", role: "user", agent: "You", content: "Adjusters must approve payouts over 10k", author: "Dana", authorRole: "Product owner", addressed: "", ref: "", createdAt: t(1) },
-    { id: "m2", role: "muse", agent: "Muse · Product physician", content: "Who approves today?\n\n1. A manager\n2. A second adjuster", author: "", authorRole: "", addressed: "", ref: "", createdAt: t(2) },
+    { id: "m2", role: "muse", agent: "Socra · Product physician", content: "Who approves today?\n\n1. A manager\n2. A second adjuster", author: "", authorRole: "", addressed: "", ref: "", createdAt: t(2) },
     { id: "m3", role: "user", agent: "You", content: "2", author: "Dana", authorRole: "Product owner", addressed: "", ref: "", createdAt: t(3) },
     { id: "m4", role: "signal", agent: "Decision captured", content: "Chosen", author: "", authorRole: "", addressed: "", ref: "d1", createdAt: t(3) },
   ];
   g.decisions = [
     { id: "d1", text: "2. A second adjuster", status: "approved", capability: "", words: "2", agent: "Dana", answer: "", createdAt: t(3) },
     { id: "d2", text: "Fraud flags go to a person", status: "open", capability: "", words: "", agent: "Business analyst", answer: "", createdAt: t(4) },
-    { id: "d3", text: "Pilot calls no outside systems", status: "assumed", capability: "", words: "", agent: "Muse", answer: "", createdAt: t(4) },
-    { id: "d4", text: "Auto-approve everything", status: "rejected", capability: "", words: "", agent: "Muse", answer: "No", createdAt: t(5) },
+    { id: "d3", text: "Pilot calls no outside systems", status: "assumed", capability: "", words: "", agent: "Socra", answer: "", createdAt: t(4) },
+    { id: "d4", text: "Auto-approve everything", status: "rejected", capability: "", words: "", agent: "Socra", answer: "No", createdAt: t(5) },
   ];
   g.evidence = [{ id: "e1", source: "Interview", type: "interview", insight: "Payout delays come from missing documents", confidence: "high", trace: "", documentId: "", createdAt: t(2) }];
   g.backlog = [
-    { id: "b1", title: "Missing-document chaser", note: "notify the claimant", kind: "epic", group: "", source: "Muse recommendation", recKind: "workflow", state: "suggested", annotationId: "", createdAt: t(2) },
+    { id: "b1", title: "Missing-document chaser", note: "notify the claimant", kind: "epic", group: "", source: "Socra recommendation", recKind: "workflow", state: "suggested", annotationId: "", createdAt: t(2) },
     { id: "b2", title: "Gamified badges", note: "", kind: "distraction", group: "", source: "Working session", recKind: "", state: "held", annotationId: "", createdAt: t(2) },
   ];
   g.spec = [spec("prd-problem", "prd", { content: "Payouts stall", basis: "inferred", completeness: 60, related: ["e1"] }), spec("trd-hitl", "trd", { content: "Second approver", basis: "confirmed", status: "owner-approved", completeness: 80, related: ["d1"] })];
@@ -85,7 +85,7 @@ test("why did this change: the chain of causes goes back through the graph", () 
   g.spec = [spec("prd-flows", "prd", { content: "Capture keeps drafts", basis: "inferred", completeness: 50 })];
   g.changes = [
     { id: "c1", node: "ann:f1", kind: "added", summary: "Pointed at the voice button", before: "", after: "", causes: ["msg:m1"], by: "Dana", createdAt: t(3) },
-    { id: "c2", node: "spec:prd-flows", kind: "changed", summary: "The Muse carried the mark into the flow", before: "", after: "Capture keeps drafts", causes: ["ann:f1"], by: "Muse", createdAt: t(4) },
+    { id: "c2", node: "spec:prd-flows", kind: "changed", summary: "Socra carried the mark into the flow", before: "", after: "Capture keeps drafts", causes: ["ann:f1"], by: "Socra", createdAt: t(4) },
   ];
   const { nodes, edges } = buildTruthGraph(g);
   const [latest] = explainChanges(g.changes, nodes, edges);

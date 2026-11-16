@@ -48,7 +48,7 @@ export type Role = {
 export const ROLES: Role[] = [
   {
     env: "BACC_MODEL",
-    label: "The Muse and its team",
+    label: "Socra and its team",
     note: "Runs on your Claude plan first; the Anthropic key is the backup. Claude models only.",
     providers: ["anthropic"],
     fallback: "claude-sonnet-5-5",
@@ -56,7 +56,7 @@ export const ROLES: Role[] = [
   {
     env: "BACC_GENERATE_MODEL",
     label: "Claude Code (builds the pilot)",
-    note: "Same as the Muse unless you pick one. Claude models only.",
+    note: "Same as Socra unless you pick one. Claude models only.",
     providers: ["anthropic"],
     fallback: "",
   },

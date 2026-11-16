@@ -18,7 +18,7 @@ const Body = z.object({
   includeInBuild: z.boolean().optional(),
 });
 
-// The owner answers, approves, corrects or reopens a decision. A change tells the Muse what it touches.
+// The owner answers, approves, corrects or reopens a decision. A change tells Socra what it touches.
 export async function PATCH(req: Request, { params }: Ctx) {
   const { id, did } = await params;
   const parsed = Body.safeParse(await req.json());

@@ -15,13 +15,13 @@ import { fakeAgentTurn } from "./fake";
 import { recallForTurn, startMemoryJobs } from "@/lib/memory";
 import { withContext } from "@/lib/memory/lettaCore";
 
-// One Muse turn at a time per product. Queued events (messages, captures, pulled-forward
+// One Socra turn at a time per product. Queued events (messages, captures, pulled-forward
 // recommendations, annotations, build notes) are combined into the next turn, in order.
 const running = new Set<string>();
 
 // `cause` is the Product Truth Graph node the turn answers (msg:…, ann:…, evidence:…), so every change the
-// Muse makes in that turn records why.
-/** Studio updates (a build finished, research came back) are marked as such, so the Muse never answers them as if a person spoke. */
+// Socra makes in that turn records why.
+/** Studio updates (a build finished, research came back) are marked as such, so Socra never answers them as if a person spoke. */
 export function framed(e: { kind: string; prompt: string }) {
   if (e.kind === "user") return e.prompt;
   return `[Studio update, not a message from anyone on the product. Don't mention it as an update or event, and don't tell them nothing arrived: say only what it means for the product, or say nothing if it changes nothing they need to know.]\n\n${e.prompt}`;
@@ -196,7 +196,7 @@ async function runSdkTurnOnce(opts: {
       permissionMode: "bypassPermissions",
       allowDangerouslySkipPermissions: true,
       disallowedTools: ["AskUserQuestion"],
-      // The Muse's team: validator, UX / component mapper, product engineer and the research team.
+      // Socra's team: validator, UX / component mapper, product engineer and the research team.
       agents: STUDIO_TEAM,
       resume: opts.resume || undefined,
       maxTurns: opts.maxTurns ?? 200,
@@ -273,14 +273,14 @@ async function runTurn(useCaseId: string, prompt: string) {
         await prisma.useCase.update({ where: { id: useCaseId }, data: { agentStatus: s } });
       },
     });
-    // Safety net: if the Muse wrote to the owner without using `say`, show its last words.
+    // Safety net: if Socra wrote to the owner without using `say`, show its last words.
     if (!tally.spoke && texts.length) {
-      await prisma.message.create({ data: { useCaseId, role: "muse", agent: "Muse · Product physician", content: texts[texts.length - 1] } });
+      await prisma.message.create({ data: { useCaseId, role: "muse", agent: "Socra · Product physician", content: texts[texts.length - 1] } });
     }
   }
 }
 
-// The Muse's first turn for a product: it opens the studio.
+// Socra's first turn for a product: it opens the studio.
 export const START_PROMPT = `[opening] The owner just described a new product. Their own words, documents and choices are in studio/intake.md; their uploads, with text versions, are in studio/uploads/.
 
 Open the studio now, as your skill's "The opening" section says: name the category, write the product in one breath, the capability floor (four to eight capabilities, at least 30 items, everything the leading products of this kind have), the first PRFAQ, the evidence and validation you already have, and five to eight recommendations; start the first build; send your whole team out in parallel; then greet the owner in one short message with the single most important question and your suggested answer. Speed matters: the owner should see their product's shape within a minute and a working first version within minutes.`;

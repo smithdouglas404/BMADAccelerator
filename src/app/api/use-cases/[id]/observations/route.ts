@@ -16,7 +16,7 @@ const LABEL: Record<(typeof KINDS)[number], string> = {
 };
 
 // The validation and pilot loop: what real use showed. It becomes evidence and goes back into the PRD
-// and TRD through the Muse, instead of sitting as disconnected feedback.
+// and TRD through Socra, instead of sitting as disconnected feedback.
 export async function POST(req: Request, { params }: Ctx) {
   const { id } = await params;
   const parsed = z.object({ kind: z.enum(KINDS).default("observation"), text: z.string().trim().min(2).max(8000) }).safeParse(await req.json());

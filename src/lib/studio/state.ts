@@ -1,4 +1,5 @@
 import { agentConfig } from "@/lib/agentService";
+import { brand } from "@/lib/brand";
 import { promises as fs } from "fs";
 import path from "path";
 import { prisma } from "@/lib/db";
@@ -67,8 +68,15 @@ export async function studioState(id: string) {
   const pkgDir = workspacePath(uc.slug, "studio", "package");
   const packageFiles = (await fs.readdir(pkgDir).catch(() => [] as string[])).sort();
   const pending = await prisma.agentEvent.count({ where: { useCaseId: id, status: { in: ["queued", "running"] } } });
+  // Records written before the assistant was renamed show its current name; people's own words never change.
+  const b = brand;
   return {
     ...uc,
+    messages: uc.messages.map((m) => (m.role === "user" ? m : { ...m, agent: b(m.agent), content: b(m.content) })),
+    decisions: uc.decisions.map((d) => ({ ...d, agent: b(d.agent), text: d.agent ? b(d.text) : d.text })),
+    backlog: uc.backlog.map((x) => ({ ...x, group: b(x.group), source: b(x.source), ...(x.recKind ? { title: b(x.title), note: b(x.note) } : {}) })),
+    routes: uc.routes.map((r) => ({ ...r, agent: b(r.agent), detail: b(r.detail) })),
+    moves: uc.moves.map((m) => ({ ...m, movedBy: b(m.movedBy), moveReason: b(m.moveReason) })),
     validation,
     validationScore: validationScore(validation),
     overallReadiness: overallReadiness(uc.capabilities),

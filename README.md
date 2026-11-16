@@ -2,7 +2,7 @@
 
 Takes any product from a few spoken or typed lines (plus whatever decks, business cases and
 spreadsheets you have) to a validated use case, a living PRD and TRD, a working prototype built by
-Claude Code, and a pilot. The Muse leads the conversation; its specialists (business analyst,
+Claude Code, and a pilot. Socra leads the conversation; its specialists (business analyst,
 solution architect, product engineer, UX/UI designer and a domain expert for the product's field)
 join in visibly, and several people can work on one product, each in their own role.
 
@@ -37,14 +37,14 @@ Checks before pushing: `npx tsc --noEmit`, `npm run lint`, `npm test`, `npm run 
 ## How a product moves
 
 1. **New product:** one box, typed or spoken, plus any documents (decks, business cases,
-   spreadsheets, PDFs, notes, screenshots). The Muse names it, works out what kind of product it is,
+   spreadsheets, PDFs, notes, screenshots). Socra names it, works out what kind of product it is,
    lays out everything the leading products of that kind have (the floor, marked inferred or
    recommended, never silently approved), starts a first version and asks the one question that
    matters most, with numbered options.
-2. **Work with Muse:** answer with a number, a yes, or your own words, typed or by voice (press the
+2. **Work with Socra:** answer with a number, a yes, or your own words, typed or by voice (press the
    mic, talk as long as you like, press again; it's cleaned into written language). A yes or a number
    is an approval at once, with Undo. Anything else is held in the backlog in your words. Click a
-   specialist in the Muse's team to ask them directly. Checkpoints (what only a person may decide)
+   specialist in Socra's team to ask them directly. Checkpoints (what only a person may decide)
    wait with Approve and Reject and a comment.
 3. **Prove it:** validation signals, evidence from uploads and research, and one honest readiness
    number made of named factors.
@@ -59,7 +59,7 @@ The next-best-move banner at the top always says what is worth doing next.
 
 **Settings > Models and keys** holds the Anthropic, OpenAI, Gemini, ElevenLabs and Linear keys and
 the model for each job. Keys are stored encrypted and shown only by their last four characters.
-Keys in `.env` still work when nothing is saved there. The Muse, its specialists, Claude Code and
+Keys in `.env` still work when nothing is saved there. Socra, its specialists, Claude Code and
 document reviews run on the owner's Claude plan (`CLAUDE_CODE_OAUTH_TOKEN`).
 
 Settings also has **Connectors** (MCP servers for all products or one, secrets encrypted and never
@@ -67,7 +67,7 @@ sent to the browser) and **Skills**: one skill library holding the open-source E
 Claude Code, MIT, 314 skills pinned in `vendor/ecc`), the Studio's own skills (studio-reimagine,
 studio-muse, working-backwards-studio, studio-agentkit, written in ECC's SKILL.md format) and the ones
 you upload (`.skill`, `.zip` or `.md`). Search it, and switch any skill on for every product or for
-chosen ones; switched-on skills are copied into each product before every Muse turn and build.
+chosen ones; switched-on skills are copied into each product before every Socra turn and build.
 
 A generated app never gets the Studio's keys, except one model key for its own Inngest AgentKit
 agents (`BACC_APP_LLM`: `openai` by default, `anthropic`, `gemini`, or `off` for demo mode).
@@ -81,6 +81,6 @@ If either service is down, the Studio works as before.
 
 ## Testing without keys
 
-`BACC_FAKE_AGENT=1` swaps the Muse and its team for a scripted stand-in, so every screen can be
+`BACC_FAKE_AGENT=1` swaps Socra and its team for a scripted stand-in, so every screen can be
 exercised without a Claude sign-in. `docs/ACCEPTANCE.md` lists every requirement from the design
 team and from Doug, word for word, with where it lives.

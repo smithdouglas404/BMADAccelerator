@@ -1,12 +1,12 @@
 # Acceptance checklist: Living PRD/TRD strategy
 
-Every line below is copied word for word from the design team's `docs/LIVING_SPEC_PRODUCT_STRATEGY.md`. Each one is an acceptance test for the Studio. **Status:** Done (in the code now, checked in the sandbox with the stand-in Muse; runs with the real Muse are checked on the Mac install), Next round (planned, with the reason given).
+Every line below is copied word for word from the design team's `docs/LIVING_SPEC_PRODUCT_STRATEGY.md`. Each one is an acceptance test for the Studio. **Status:** Done (in the code now, checked in the sandbox with the stand-in Socra; runs with the real Socra are checked on the Mac install), Next round (planned, with the reason given).
 
 ## Executive summary
 
 | # | Their words | How the Studio meets it | Status |
 |---|---|---|---|
-| E1 | "move from an unfinished idea to a validated use case, a production-minded prototype, and repeated implementation iterations without requiring the user to understand whether the system is creating a use case, capability, epic, story, task, agent workflow, or human-in-the-loop checkpoint." | The Muse speaks product language only. Kinds such as epic, workflow and hitl are hidden fields, shown only in the Product engineer lens. | Done |
+| E1 | "move from an unfinished idea to a validated use case, a production-minded prototype, and repeated implementation iterations without requiring the user to understand whether the system is creating a use case, capability, epic, story, task, agent workflow, or human-in-the-loop checkpoint." | Socra speaks product language only. Kinds such as epic, workflow and hitl are hidden fields, shown only in the Product engineer lens. | Done |
 | E2 | "the **use case remains the source object**. Conversation, evidence, inferred requirements, visual annotations, backlog items, technical implications, generated code prompts, pilot feedback, and external work-management records should all remain traceable to it." | Every record (message, evidence, spec section, annotation, backlog item, tech note, package, feedback, Linear/Git id) belongs to one product in the database | Done (data model) |
 
 ## Proposed application structure (all 9 views)
@@ -14,7 +14,7 @@ Every line below is copied word for word from the design team's `docs/LIVING_SPE
 | # | Their words | Where it lives | Status |
 |---|---|---|---|
 | V1 | "**Product truth** — use case, customer, promise, journey, evidence, and research." | Whole product, Validate use case and Evidence & signals views | Done |
-| V2 | "**Conversation** — Muse questions, voice input, open decisions, implicit approvals, and probing." | Work with Muse view; a plain "yes" becomes an approved decision; voice by browser speech or ElevenLabs | Done (the "yes" logic is done) |
+| V2 | "**Conversation** — Socra questions, voice input, open decisions, implicit approvals, and probing." | Work with Socra view; a plain "yes" becomes an approved decision; voice by browser speech or ElevenLabs | Done (the "yes" logic is done) |
 | V3 | "**Living PRD** — product sections, completeness, confidence, evidence, acceptance criteria, and human approval." | Living specification view, PRD tab, on real data | Done |
 | V4 | "**Living TRD** — architecture, data, integrations, agents, security, operations, testing, and technical risks." | Living specification view, TRD tab | Done |
 | V5 | "**Backlog** — curated capabilities, epics, stories, tasks, recommendations, and distractions." | Product shape view (curated backlog); recommendations wait as suggestions until pulled forward | Done |
@@ -23,7 +23,7 @@ Every line below is copied word for word from the design team's `docs/LIVING_SPE
 | V8 | "**Pilot and execution** — Kanban, validation observations, pilot metrics, and production readiness." | Make it real board, pilot observations, Pilot readiness view | Done |
 | V9 | "**Connections** — Git, Linear, and future generation providers such as Cursor, Devin, or Antigravity." | Connections view: Git push and Linear sync are live; MCP connectors and skills are in Settings | Done (Git/Linear); Next round: Cursor, Devin and Antigravity, shown as "coming" because they have no build connection yet |
 | V10 | "The user should be able to move between these views non-linearly." | Sidebar jumps to any view at any time; nothing is gated | Done |
-| V11 | "The system should ask questions in natural product language while creating structured artifacts behind the scenes." | Muse skill rules plus its tools (set_spec_section, set_capability, record_decision and others) | Done |
+| V11 | "The system should ask questions in natural product language while creating structured artifacts behind the scenes." | Socra skill rules plus its tools (set_spec_section, set_capability, record_decision and others) | Done |
 
 ## Living PRD workspace (all 16 sections)
 
@@ -46,7 +46,7 @@ Every line below is copied word for word from the design team's `docs/LIVING_SPE
 | P15 | "Rollout assumptions" | Done |
 | P16 | "Risks and dependencies" | Done |
 | P17 | "Each section should display its current content, completeness status, confidence, supporting evidence, related conversation, visual annotations, backlog items, open questions, and last update source." | Done (provenance rail shows each) |
-| P18 | "The Product Owner should not have to complete a form. A Muse question should update the appropriate section while exposing the inference trail." | Done (the Muse writes sections with a trace) |
+| P18 | "The Product Owner should not have to complete a form. A Socra question should update the appropriate section while exposing the inference trail." | Done (Socra writes sections with a trace) |
 | P19 | "an answer to 'What should happen if the user captures an idea but does not have time to organize it?' may update the user flow, functional requirements, edge cases, backlog, acceptance criteria, and readiness score." | Done (one answer can update many sections; readiness is recalculated) |
 
 All 16 sections have permanent ids PR-001 to PR-016 (code: `PRD_SECTIONS` in `src/lib/studio/spec.ts`, Done).
@@ -97,7 +97,7 @@ All 21 sections have permanent ids TR-001 to TR-021 (`TRD_SECTIONS`, Done).
 | # | Their words | Status |
 |---|---|---|
 | C1 | "Requirement → originating conversation → evidence or research → visual annotation → capability → backlog item → execution item → generated code prompt" | Done (each section has a trace; each link opens its view) |
-| C2 | The example chain: "'Users need to capture thoughts without interrupting their activity.' → voice annotation → Muse companion capability → PR-014 → TR-009 → capture → transcribe → probe workflow → Claude Code implementation task → pilot validation metric" | Done (PR/TR ids and SPEC_TRACE.json in the package) |
+| C2 | The example chain: "'Users need to capture thoughts without interrupting their activity.' → voice annotation → Socra companion capability → PR-014 → TR-009 → capture → transcribe → probe workflow → Claude Code implementation task → pilot validation metric" | Done (PR/TR ids and SPEC_TRACE.json in the package) |
 
 ## Additional capabilities to add (all 7)
 
@@ -109,7 +109,7 @@ All 21 sections have permanent ids TR-001 to TR-021 (`TRD_SECTIONS`, Done).
 | A4 | "**Change impact analysis** — When a decision changes, show affected PRD sections, TRD sections, backlog items, agent workflows, generated artifacts, and external Linear records." | Impact panel on a decision or section | Done |
 | A5 | "**Research and evidence ingestion** — Support interviews, PDFs, competitive research, screenshots, existing documents, design references, analytics exports, and customer feedback. Extract claims, evidence, contradictions, questions, potential requirements, and confidence levels." | Document agent turns uploads into evidence with confidence | Done (claims, evidence and confidence are done; contradictions, questions and potential requirements are being added) |
 | A6 | "**Spec diffs and version history** — Every generation should create a versioned snapshot and explain changes such as added requirements, changed primary actors, new human approvals, removed scope, or updated technical constraints." | `SpecRevision` per package plus `specDiff`; SPEC_DIFF.md | Done (logic); Done (screen) |
-| A7 | "**Validation and pilot loop** — Accept pilot observations, annotated screenshots, voice feedback, metrics, interview notes, and 'this felt wrong because…' comments. Feed them back into the PRD and TRD rather than leaving them as disconnected feedback." | Pilot observations go to the Muse, which updates sections with a trace | Done |
+| A7 | "**Validation and pilot loop** — Accept pilot observations, annotated screenshots, voice feedback, metrics, interview notes, and 'this felt wrong because…' comments. Feed them back into the PRD and TRD rather than leaving them as disconnected feedback." | Pilot observations go to Socra, which updates sections with a trace | Done |
 
 ## Honest maturity assessment (all 13 rows, "Needed next")
 
@@ -166,12 +166,12 @@ The end-to-end check walks this loop on a real product in the running Studio, in
 
 ## Claude Code export test (the team's sample feature request, run as a scripted step of the end-to-end check)
 
-Their request, word for word: "Let people save a voice note while walking, then have Muse transcribe it and ask one clarifying question before it becomes a backlog item."
+Their request, word for word: "Let people save a voice note while walking, then have Socra transcribe it and ask one clarifying question before it becomes a backlog item."
 
 | # | Their outcome | What we check | Status |
 |---|---|---|---|
 | X1 | "Preserved the original wording." | The message and the backlog item keep the exact words | Done |
-| X2 | "Added it to product truth." | The Muse carries it into the capability and spec sections it touches | Done |
+| X2 | "Added it to product truth." | Socra carries it into the capability and spec sections it touches | Done |
 | X3 | "Placed it in the ambient backlog for curation." | The backlog grows by one, "Thought held for curation" | Done (logic) |
 | X4 | "Opened the Prototype Brief." | The brief view opens with the package ready | Done |
 | X5 | "Generated and downloaded a real Claude Code ZIP." | ZIP downloads with all package files | Done |
@@ -189,12 +189,12 @@ Doug's answers to the walkthrough questions, word for word, each with how the St
 
 | # | Doug's words | How the Studio meets it | Status |
 |---|---|---|---|
-| F1 | "The agents should actually be like Muse with specialists for their specific categories. They could be an architect, they could be an engineer, they could be a business analyst, they could be a UX, UI specialist, they could actually be a subject matter specialist based on the area or the topic of the use case." | The Muse leads; five specialists (Business analyst, Solution architect, Product engineer, UX/UI designer, and a Domain expert named for the field, such as "Claims expert") speak in the conversation in their own names (`share_finding`). The Muse's team panel shows each one and what it is doing; click one to ask it directly. | Done |
-| F2 | "the majority of the people are going to have a blank idea and just come in like vibing ... And then they're also going to upload maybe presentations or other documents, business cases, Excel spreadsheets" | New product is one box (typed or spoken) plus documents: decks, business cases, spreadsheets, PDFs, notes and screenshots, read by markitdown and the document agent and handed to the Muse. The Muse names the product (rename any time from the product switcher) and the page lands in the conversation. | Done |
+| F1 | "The agents should actually be like Socra with specialists for their specific categories. They could be an architect, they could be an engineer, they could be a business analyst, they could be a UX, UI specialist, they could actually be a subject matter specialist based on the area or the topic of the use case." | Socra leads; five specialists (Business analyst, Solution architect, Product engineer, UX/UI designer, and a Domain expert named for the field, such as "Claims expert") speak in the conversation in their own names (`share_finding`). Socra's team panel shows each one and what it is doing; click one to ask it directly. | Done |
+| F2 | "the majority of the people are going to have a blank idea and just come in like vibing ... And then they're also going to upload maybe presentations or other documents, business cases, Excel spreadsheets" | New product is one box (typed or spoken) plus documents: decks, business cases, spreadsheets, PDFs, notes and screenshots, read by markitdown and the document agent and handed to Socra. Socra names the product (rename any time from the product switcher) and the page lands in the conversation. | Done |
 | F3 | "when you hit generate, the zip is there, but it should actually go out and use Claude ... it should use Claude CLI to go out and build the application." | Prototype brief's main button is "Build it with Claude Code" (on the Claude plan); the ZIP is the second button. | Done |
 | F4 | "The voice shouldn't be on by default ... You should click the voice and then be able to talk as long as you want. It should not stop. And they should then hit the deselect to stop it. And then that should convert to NATURAL language." | The mic in the composer is off until pressed, keeps listening through pauses (browser recognition restarts itself; ElevenLabs records with no limit), stops only when pressed again, then is cleaned into written language (low-cost model, with a plain clean-up as the floor) and sent; the words as spoken are kept with the message. | Done (transcription with ElevenLabs needs its key on the Mac) |
-| F5 | "A spoken yes is good enough to approve something. If it's in the human in the loop process, you're going to have an approve button or a reject button with comments." | A typed or spoken yes, or a number ("2", "2 and 5") from the Muse's numbered options, is an approved decision at once, with an Undo chip. Open decisions show as checkpoints with Approve and Reject and a comment; a rejection keeps it out of the build and the Muse proposes another way. | Done |
-| F6 | "I want to actually have several people have the ability to work in the product ... multiple roles, but all working on the same unified repository." | People on a product, each with a role (product owner, business analyst, product engineer, UX/UI designer, architect, subject-matter expert, stakeholder), from the top-bar avatar. Every message carries who said it and their role, and the Muse answers at that level. One shared product truth. | Done; Next round: sign-in (who you are is remembered per browser today) |
+| F5 | "A spoken yes is good enough to approve something. If it's in the human in the loop process, you're going to have an approve button or a reject button with comments." | A typed or spoken yes, or a number ("2", "2 and 5") from Socra's numbered options, is an approved decision at once, with an Undo chip. Open decisions show as checkpoints with Approve and Reject and a comment; a rejection keeps it out of the build and Socra proposes another way. | Done |
+| F6 | "I want to actually have several people have the ability to work in the product ... multiple roles, but all working on the same unified repository." | People on a product, each with a role (product owner, business analyst, product engineer, UX/UI designer, architect, subject-matter expert, stakeholder), from the top-bar avatar. Every message carries who said it and their role, and Socra answers at that level. One shared product truth. | Done; Next round: sign-in (who you are is remembered per browser today) |
 | F7 | "one person should be able to run several products ... they can actually work on several use cases at any particular point in time." | Home lists every product with the same readiness number its screens show; the product switcher moves between them. | Done |
 | F8 | Q10 left to Claude; "Number 11 is yes, it's okay." | The side menu is grouped Shape it, Prove it, See it (the new full-width Try & mark up view) and Ship it, with a next-best-move banner. The team's 390px cap on the menu is lifted (in studio-extras.css; their styles.css stays byte-identical). | Done |
-| F9 | "For number 12, I agree with you, the second, not an automatic build." | Builds start only when someone presses Build (or asks the Muse). The one exception is the first version at the opening, so there is a product to react to in minutes. | Done |
+| F9 | "For number 12, I agree with you, the second, not an automatic build." | Builds start only when someone presses Build (or asks Socra). The one exception is the first version at the opening, so there is a product to react to in minutes. | Done |

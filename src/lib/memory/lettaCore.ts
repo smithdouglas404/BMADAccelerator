@@ -64,7 +64,7 @@ const role = (key: RoleKey, name: string, title: string, job: string): Role => (
 });
 
 export const ROLES: Role[] = [
-  role("muse", "Muse", "Product physician", "In each product the Muse holds the conversation, writes the PRFAQ and the capability floor, and turns every yes into a decision. Remember which questions uncovered the real promise, which assumptions owners corrected, and which capabilities every product of a kind needs."),
+  role("muse", "Socra", "Product physician", "In each product Socra holds the conversation, writes the PRFAQ and the capability floor, and turns every yes into a decision. Remember which questions uncovered the real promise, which assumptions owners corrected, and which capabilities every product of a kind needs."),
   role("validator", "Use Case Validator", "Validator", "In each product the validator tests the problem, the customer, the evidence, the proof point and the thin slice. Remember which proof points held up in pilots and which were too soft."),
   role("ux", "UX / Component Mapper", "Product surface", "In each product the mapper turns capabilities into real shadcn/ui components and screens. Remember which screens and flows owners changed after seeing the built app."),
   role("engineer", "Product Engineer", "Pilot boundary", "In each product the engineer shapes the pilot: build moves, AgentKit workflows and human-in-the-loop points, and Claude Code builds it. Remember what broke in builds, which agentic workflows earned their place, and what owners corrected on screen."),

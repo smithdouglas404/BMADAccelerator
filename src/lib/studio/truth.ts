@@ -12,7 +12,7 @@ export type Statement = "fact" | "evidence" | "inference" | "recommendation" | "
 export const STATEMENTS: { key: Statement; label: string; plain: string }[] = [
   { key: "fact", label: "Said by a person", plain: "Someone on the team said this." },
   { key: "evidence", label: "Outside evidence", plain: "Research, an upload, an interview or the pilot shows this." },
-  { key: "inference", label: "Muse inference", plain: "The Muse or its team worked this out; nobody has confirmed it yet." },
+  { key: "inference", label: "Socra inference", plain: "Socra or its team worked this out; nobody has confirmed it yet." },
   { key: "recommendation", label: "Recommendation", plain: "Suggested, not decided." },
   { key: "decision", label: "Human decision", plain: "A person approved this." },
   { key: "open", label: "Open question", plain: "Only a person can answer this." },
@@ -137,7 +137,7 @@ export function truthNodes(g: GraphInput): LiveTruthNode[] {
       add({
         id: `msg:${m.id}`, type: "conversation", title: firstLine(m.content), detail: clip(m.content, 400), source: "muse", statement: asks ? "open" : "inference",
         ontologyClass: m.role === "agent" ? "actor" : "experience", semanticTags: tagsOf(m.agent.split(" · ")[0] || "muse", asks ? "question" : "reflection"),
-        at: iso(m.createdAt), by: m.agent || "Muse", view: "conversation", interpretations: [],
+        at: iso(m.createdAt), by: m.agent || "Socra", view: "conversation", interpretations: [],
       });
     }
   }
@@ -170,7 +170,7 @@ export function truthNodes(g: GraphInput): LiveTruthNode[] {
     add({
       id: `cap:${c.key}`, type: "capability", title: c.label, detail: `${c.description || ""}${items.length ? `\n\n${ok} confirmed, ${assumed} inferred from what leading products have, ${items.length - ok - assumed} ruled out.` : ""}`.trim(),
       source: "muse", statement: items.length && !assumed ? "decision" : "inference", ontologyClass: "experience", semanticTags: tagsOf("capability", `${c.readiness}%`),
-      at: iso(c.updatedAt), by: "Muse", view: "product", interpretations: [],
+      at: iso(c.updatedAt), by: "Socra", view: "product", interpretations: [],
     });
   }
 
@@ -237,11 +237,11 @@ export function truthEdges(g: GraphInput, nodes: LiveTruthNode[]): LiveTruthEdge
   const capByLabel = new Map(g.capabilities.flatMap((c) => [[c.label.toLowerCase(), c.key], [c.key, c.key]] as [string, string][]));
   const capNode = (c: string) => (c ? `cap:${capByLabel.get(c.toLowerCase()) ?? c}` : "");
 
-  // A person spoke, the Muse answered.
+  // A person spoke, Socra answered.
   let lastUser = "";
   for (const m of g.messages) {
     if (m.role === "user") lastUser = `msg:${m.id}`;
-    else if (lastUser && (m.role === "muse" || (m.role === "agent" && m.addressed))) link(lastUser, `msg:${m.id}`, "infers", m.role === "agent" ? `${m.agent.split(" · ")[0]} answered` : "the Muse interpreted it", "muse", iso(m.createdAt));
+    else if (lastUser && (m.role === "muse" || (m.role === "agent" && m.addressed))) link(lastUser, `msg:${m.id}`, "infers", m.role === "agent" ? `${m.agent.split(" · ")[0]} answered` : "Socra interpreted it", "muse", iso(m.createdAt));
     if (m.role === "signal" && m.ref && lastUser) link(lastUser, `decision:${m.ref}`, "approves", "a yes approved it", "owner", iso(m.createdAt));
   }
   // Words a decision or a backlog item came from.

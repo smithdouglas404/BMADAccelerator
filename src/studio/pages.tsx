@@ -40,7 +40,7 @@ export function HomePage() {
     <Shell active="home">
       <div className="page-wrap">
         <div className="page-intro">
-          <div><p className="eyebrow eyebrow-with-dot"><span className="status-dot" />Every product you are shaping</p><h1>Make the product <em>legible</em><br />before you make it real.</h1><p>Say what you want in a few lines. The Muse finds what kind of product it is, lays down everything the leading products of that kind have, and asks only what it can’t know.</p></div>
+          <div><p className="eyebrow eyebrow-with-dot"><span className="status-dot" />Every product you are shaping</p><h1>Make the product <em>legible</em><br />before you make it real.</h1><p>Say what you want in a few lines. Socra finds what kind of product it is, lays down everything the leading products of that kind have, and asks only what it can’t know.</p></div>
           <div className="intro-actions"><a className="button button-primary" href="/new" style={{ textDecoration: 'none' }}><Plus size={15} /> New product</a><span>{rows ? `${rows.length} products` : ''}</span></div>
         </div>
         {error && <p className="studio-muted">{error}</p>}
@@ -91,17 +91,17 @@ export function NewProductPage() {
   return (
     <Shell active="new">
       <div className="page-wrap">
-        <div className="page-intro"><div><p className="eyebrow eyebrow-with-dot"><span className="status-dot" />A new product</p><h1>Say it the way<br />you’d <em>say it.</em></h1><p>A few lines is enough, and a business case or a deck helps if you have one. The Muse works out what kind of product it is, names it, lays out everything the leading products of that kind have, and asks you what only you can answer. Its specialists join in as the product takes shape.</p></div></div>
+        <div className="page-intro"><div><p className="eyebrow eyebrow-with-dot"><span className="status-dot" />A new product</p><h1>Say it the way<br />you’d <em>say it.</em></h1><p>A few lines is enough, and a business case or a deck helps if you have one. Socra works out what kind of product it is, names it, lays out everything the leading products of that kind have, and asks you what only you can answer. Its specialists join in as the product takes shape.</p></div></div>
         <div className="studio-form">
           <label>What do you want to make?<textarea rows={7} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Who it’s for, what it should let them do, anything you already know… or just the idea in one line." autoFocus /></label>
           <div className="studio-form-row">
             <button type="button" className={`voice-button ${voice.listening ? 'is-listening' : ''}`} onClick={voice.toggle} disabled={voice.working}><Mic size={14} /> {voice.listening ? 'Listening… press again to stop' : voice.working ? 'Writing it down…' : 'Say it instead'}</button>
             <label className="button button-quiet file-button" style={{ textTransform: 'none', letterSpacing: 0, font: 'inherit', display: 'inline-flex' }}><Upload size={14} /> Add documents<input type="file" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.txt,.md,.rtf,.png,.jpg,.jpeg,.webp,.json,.html" onChange={(e) => setFiles([...files, ...Array.from(e.target.files ?? [])])} /></label>
-            <small className="studio-muted">Decks, business cases, spreadsheets, PDFs, notes or screenshots: the Muse reads them all.</small>
+            <small className="studio-muted">Decks, business cases, spreadsheets, PDFs, notes or screenshots: Socra reads them all.</small>
           </div>
           {files.length > 0 && <div className="studio-files">{files.map((f, i) => <span key={`${f.name}-${i}`}>{f.name}<button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles(files.filter((_, j) => j !== i))}>×</button></span>)}</div>}
           {note && <p className="studio-muted">{note}</p>}
-          <div className="studio-form-row"><button type="button" className="button button-primary" disabled={busy || voice.listening} onClick={() => void start()}>{busy ? 'Opening the room…' : 'Start with the Muse'} <ArrowRight size={15} /></button><small className="studio-muted">You can name it later; the Muse suggests a name.</small></div>
+          <div className="studio-form-row"><button type="button" className="button button-primary" disabled={busy || voice.listening} onClick={() => void start()}>{busy ? 'Opening the room…' : 'Start with Socra'} <ArrowRight size={15} /></button><small className="studio-muted">You can name it later; Socra suggests a name.</small></div>
         </div>
       </div>
     </Shell>
@@ -135,7 +135,7 @@ export function CapturePage() {
   return (
     <Shell active="capture">
       <div className="page-wrap">
-        <div className="page-intro"><div><p className="eyebrow eyebrow-with-dot"><span className="live-pulse" />Ambient capture</p><h1>Catch the thought<br /><em>before it’s a task.</em></h1><p>Phone, voice, or a half-sentence is enough. It waits in the backlog until the Muse finds its home.</p></div></div>
+        <div className="page-intro"><div><p className="eyebrow eyebrow-with-dot"><span className="live-pulse" />Ambient capture</p><h1>Catch the thought<br /><em>before it’s a task.</em></h1><p>Phone, voice, or a half-sentence is enough. It waits in the backlog until Socra finds its home.</p></div></div>
         <div className="studio-form">
           <label>Product<select value={product} onChange={(e) => setProduct(e.target.value)}>{rows.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
           <label>The thought<textarea rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder="I keep thinking about…" /></label>

@@ -8,7 +8,7 @@ import { assemblePackage, inspectPackage, PACKAGE_FILES } from "../src/lib/studi
 import { project, specChanges } from "../src/lib/studio/projection.ts";
 
 const fixture = (f) => JSON.parse(readFileSync(new URL(`./fixtures/export-v6/${f}`, import.meta.url), "utf8"));
-const SAMPLE = "Let people save a voice note while walking, then have Muse transcribe it and ask one clarifying question before it becomes a backlog item.";
+const SAMPLE = "Let people save a voice note while walking, then have Socra transcribe it and ask one clarifying question before it becomes a backlog item.";
 
 test("the living spec has 16 PRD and 21 TRD sections with stable refs", () => {
   assert.equal(PRD_SECTIONS.length, 16);

@@ -24,7 +24,7 @@ const Body = z.object({
 
 // Vibe review: the owner pointed at (object), circled (region) or captured (full screen) part of the
 // live product and said what should change. The note becomes a backlog signal with its frame and region
-// kept, ready for the next build, and the Muse confirms its meaning.
+// kept, ready for the next build, and Socra confirms its meaning.
 export async function POST(req: Request, { params }: Ctx) {
   const { id } = await params;
   const parsed = Body.safeParse(await req.json());

@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-// The people working on this product. Everyone shares one product truth; the role tells the Muse who
+// The people working on this product. Everyone shares one product truth; the role tells Socra who
 // it is talking to (a business analyst on the PRD, a product engineer on workflows and checkpoints...).
 export async function GET(_req: Request, { params }: Ctx) {
   const { id } = await params;

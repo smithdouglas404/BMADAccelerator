@@ -9,7 +9,7 @@ import { writeIntake } from "@/lib/provision";
 
 // The bar: given only a few lines about any kind of application, plain Claude Code ships a complete,
 // professional product. A control build is plain Claude Code given only the client's
-// own idea and documents, with no Studio, no floor and no rules. The Muse then scores both apps
+// own idea and documents, with no Studio, no floor and no rules. Socra then scores both apps
 // side by side; whatever the control has that ours lacks goes onto the capability floor.
 
 export type CompareStatus = { state: "idle" | "building" | "judging" | "done" | "failed"; startedAt?: string; finishedAt?: string; error?: string; version?: number };
@@ -90,7 +90,7 @@ export async function runControlBuild(useCaseId: string) {
         if (m.type === "result" && m.subtype !== "success") throw new Error(`Control build stopped: ${m.subtype}`);
       }
     }
-    // Copy the screenshots next to ours, where the Muse reads them.
+    // Copy the screenshots next to ours, where Socra reads them.
     const shotsTo = workspacePath(uc.slug, "studio", "control", "shots");
     await fs.rm(shotsTo, { recursive: true, force: true });
     // The control may save them in shots/ or app/shots/ (it ran the command from inside app/): take both.
@@ -115,7 +115,7 @@ As the owner's expert, judge the two honestly, side by side:
 4. Write "## Done" with today's date at the end of the comparison file, then tell the owner in two or three plain sentences: the totals, the biggest gap, and that the gaps are now on the capability floor.`;
 }
 
-// Called when the Muse finishes judging (it writes "## Done" in the comparison).
+// Called when Socra finishes judging (it writes "## Done" in the comparison).
 export async function settleCompare(slug: string) {
   const s = await compareStatus(slug);
   if (s.state !== "judging") return s;

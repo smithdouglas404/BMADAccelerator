@@ -52,7 +52,7 @@ export function AgentsView({ live, me, setToast }: { live: Live; me: Me; setToas
   const nameOf = (key: string) => view.agents.find((a) => a.key === key)?.name ?? key
 
   return <div className="page-wrap studio-agents">
-    <div className="page-intro"><div><p className="eyebrow eyebrow-with-dot"><span className="status-dot" />Agents · shared agent service</p><h1>The agents behind<br /><em>{live.name}.</em></h1><p>Each one is proposed by the Muse from what this product needs, approved by a person, and runs in the Studio’s shared agent service: Inngest AgentKit, a Letta persona that remembers each person, and Mem0 memory kept to this product only. People approve what matters; every run is kept.</p></div>
+    <div className="page-intro"><div><p className="eyebrow eyebrow-with-dot"><span className="status-dot" />Agents · shared agent service</p><h1>The agents behind<br /><em>{live.name}.</em></h1><p>Each one is proposed by Socra from what this product needs, approved by a person, and runs in the Studio’s shared agent service: Inngest AgentKit, a Letta persona that remembers each person, and Mem0 memory kept to this product only. People approve what matters; every run is kept.</p></div>
       <div className="truth-intro-side"><div className="truth-score"><span className="eyebrow">Running</span><strong>{view.agents.filter((a) => a.status === 'approved').length}</strong><small>{view.agents.filter((a) => a.status === 'proposed').length} waiting for a yes · {pending.length} approval{pending.length === 1 ? '' : 's'} waiting</small></div>{view.approvalPage && <a className="button button-quiet button-small" href={view.approvalPage} target="_blank" rel="noopener noreferrer"><ExternalLink size={13} /> Approval page</a>}</div></div>
     {view.note && <p className="studio-muted">{view.note}</p>}
 
@@ -65,7 +65,7 @@ export function AgentsView({ live, me, setToast }: { live: Live; me: Me; setToas
       </article>)}</div></section>}
 
     <section className="truth-graph-card"><div className="truth-card-heading"><div><p className="eyebrow">Agents · {view.agents.length}</p><h2>What each one does, and how</h2></div><Bot size={16} /></div>
-      {view.agents.length === 0 && <p className="studio-muted">No agents yet. The Muse proposes one only where an agent truly helps (a workflow, a message, an alert, a recommendation or an insight); fixed rules stay plain code.</p>}
+      {view.agents.length === 0 && <p className="studio-muted">No agents yet. Socra proposes one only where an agent truly helps (a workflow, a message, an alert, a recommendation or an insight); fixed rules stay plain code.</p>}
       <div className="studio-agent-list">{view.agents.map((a) => {
         const runs = view.runs.filter((r) => r.agent === a.key)
         return <article className={`studio-agent is-${a.status}`} key={a.id}>

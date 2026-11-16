@@ -17,7 +17,7 @@ export type LibrarySkill = {
   source: LibrarySource;
   origin: string;
   alwaysOn: boolean; // the Studio's own skills, and the design skill every build reads
-  core: boolean; // loaded into the Muse's instructions on every turn
+  core: boolean; // loaded into Socra's instructions on every turn
   allProducts: boolean;
   useCases: string[];
   valid: boolean;
@@ -41,7 +41,7 @@ export async function studioSkills(dir = STUDIO_SKILLS_DIR) {
     const fm = frontmatterOf(md);
     out.push({ name: fm.name || name, description: fm.description, origin: fm.origin });
   }
-  // Core skills first, in the order the Muse loads them.
+  // Core skills first, in the order Socra loads them.
   const rank = (n: string) => {
     const i = (CORE_SKILLS as readonly string[]).indexOf(n);
     return i < 0 ? 99 : i;

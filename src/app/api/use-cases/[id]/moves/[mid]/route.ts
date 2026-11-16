@@ -8,8 +8,8 @@ type Ctx = { params: Promise<{ id: string; mid: string }> };
 
 const Body = z.object({ status: z.enum(BOARD), by: z.string().max(80).default(""), why: z.string().max(400).default("") });
 
-// A person moves a card by hand (never required: the Muse and the builds move them). It is logged and the
-// Muse hears it, so a card moved back reopens the conversation about it.
+// A person moves a card by hand (never required: Socra and the builds move them). It is logged and the
+// Socra hears it, so a card moved back reopens the conversation about it.
 export async function PATCH(req: Request, { params }: Ctx) {
   const { id, mid } = await params;
   const parsed = Body.safeParse(await req.json());

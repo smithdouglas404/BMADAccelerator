@@ -174,7 +174,7 @@ export function DecisionRegister({ live, act }: { live: Live; act: Act }) {
           <div className="studio-row-main"><strong>{d.text}</strong><small>{d.status} · {d.capability || 'whole product'} · {ago(d.createdAt)}{d.words ? ` · you said “${d.words.slice(0, 80)}”` : ''}</small></div>
           {d.status !== 'approved' && <textarea className="studio-input" rows={1} value={answer[d.id] ?? d.answer} onChange={(e) => setAnswer({ ...answer, [d.id]: e.target.value })} placeholder="Your answer…" />}
           <div className="studio-review-actions">
-            {d.status !== 'approved' ? <button type="button" className="button button-primary button-small" onClick={() => patch(d.id, { status: 'approved', ...(answer[d.id] ? { answer: answer[d.id] } : {}) }, 'Decision approved and carried forward')}><Check size={13} /> Approve</button> : <button type="button" className="button button-quiet button-small" onClick={() => patch(d.id, { status: 'open' }, 'Decision reopened — the Muse will ask about it')}>Reopen</button>}
+            {d.status !== 'approved' ? <button type="button" className="button button-primary button-small" onClick={() => patch(d.id, { status: 'approved', ...(answer[d.id] ? { answer: answer[d.id] } : {}) }, 'Decision approved and carried forward')}><Check size={13} /> Approve</button> : <button type="button" className="button button-quiet button-small" onClick={() => patch(d.id, { status: 'open' }, 'Decision reopened — Socra will ask about it')}>Reopen</button>}
             <label className="studio-toggle"><input type="checkbox" checked={d.includeInBuild} onChange={(e) => patch(d.id, { includeInBuild: e.target.checked }, e.target.checked ? 'Included in the next build' : 'Left out of the next build')} /> include in next build</label>
             <button type="button" className="text-button" onClick={() => setImpactOf(impactOf === d.id ? '' : d.id)}>What it touches <ArrowRight size={12} /></button>
           </div>
@@ -200,7 +200,7 @@ export function ObservationComposer({ live, act }: { live: Live; act: Act }) {
     const t = text.trim()
     if (t.length < 2) return
     setText('')
-    void act(() => api(`/api/use-cases/${live.id}/observations`, { json: { kind, text: t } }), 'Pilot feedback added — the Muse is carrying it into the spec')
+    void act(() => api(`/api/use-cases/${live.id}/observations`, { json: { kind, text: t } }), 'Pilot feedback added — Socra is carrying it into the spec')
   }
   return (
     <section className="studio-card studio-observe">

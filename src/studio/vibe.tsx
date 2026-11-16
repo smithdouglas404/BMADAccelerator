@@ -40,7 +40,7 @@ export function LiveFrame({ live, annotationMode, shape, onPick, tall = false }:
         <div className="live-empty-copy">
           <span className="live-pulse" />
           <strong>{live.generateBusy ? live.generateStatus || 'Claude Code is building' : stopped ? `Version ${live.generateCount} is built; its preview is stopped` : live.preview.hasApp ? 'Starting the preview…' : 'The first version builds from the floor'}</strong>
-          <small>{live.generateBusy ? 'An early version appears here as soon as it runs.' : stopped ? <button type="button" className="annotate-trigger" onClick={() => void api(`/api/use-cases/${live.id}/preview`, { method: 'POST' })}>Start the preview</button> : live.preview.hasApp ? 'One moment.' : 'Ask the Muse, or press “Build it now” on the prototype brief.'}</small>
+          <small>{live.generateBusy ? 'An early version appears here as soon as it runs.' : stopped ? <button type="button" className="annotate-trigger" onClick={() => void api(`/api/use-cases/${live.id}/preview`, { method: 'POST' })}>Start the preview</button> : live.preview.hasApp ? 'One moment.' : 'Ask Socra, or press “Build it now” on the prototype brief.'}</small>
         </div>
       </div>
     )

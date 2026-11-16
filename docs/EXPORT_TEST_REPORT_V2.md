@@ -2,9 +2,9 @@
 
 ## Sample feature request
 
-> Let people save a voice note while walking, then have Muse transcribe it and ask one clarifying question before it becomes a backlog item.
+> Let people save a voice note while walking, then have Socra transcribe it and ask one clarifying question before it becomes a backlog item.
 
-The request was submitted through the real Muse conversation UI. The Studio responded with `Thought held for curation`, preserved the original language, added it to product truth, and increased the ambient backlog from 4 to 5 signals.
+The request was submitted through the real Socra conversation UI. The Studio responded with `Thought held for curation`, preserved the original language, added it to product truth, and increased the ambient backlog from 4 to 5 signals.
 
 ## Export result
 
@@ -71,7 +71,7 @@ The voice and visual path is represented as a chain rather than a single opaque 
 
 ```text
 Voice / conversation
-  → Muse inference
+  → Socra inference
   → backlog signal
   → Living PRD section
   → TRD state transition
@@ -85,10 +85,10 @@ For the original seeded demo trace used to explain the schema (not the corrected
 |---|---|---|
 | Conversation: “I want one clear next move.” | PRD / Validated use case | The owner’s own product language anchors the use case. |
 | Evidence: context is lost between walk and desk | PRD / Validated use case | Interview evidence raises confidence. |
-| Muse inference: held thought becomes a next move | PRD / Validated use case | The agent proposes meaning without silently approving it. |
+| Socra inference: held thought becomes a next move | PRD / Validated use case | The agent proposes meaning without silently approving it. |
 | Backlog: Voice capture becomes a held thought | PRD / Validated use case | The feature is curated as a capability signal. |
 | Annotation: Circle region on Thought input | PRD / Primary customer flow | Visual feedback changes the experience shape. |
-| Muse inference: reduce context switching, ask one question | PRD / Primary customer flow | The annotation becomes a behavior hypothesis. |
+| Socra inference: reduce context switching, ask one question | PRD / Primary customer flow | The annotation becomes a behavior hypothesis. |
 | Conversation: Studio remains the source of truth | TRD / System context | The architectural boundary is derived from product intent. |
 | Agent route: capture → probe → curate → generate | TRD / System context | AgentKit orchestration is documented as a technical implication. |
 | Package: source context is preserved in BACKLOG and VISUAL_ANNOTATIONS | TRD / Data and state transitions | The technical model keeps provenance attached to generated artifacts. |

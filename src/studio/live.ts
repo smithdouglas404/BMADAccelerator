@@ -98,7 +98,7 @@ export function toMessages(d: Live, me?: { name?: string }): StudioMessage[] {
   return d.messages.map((m) => ({
     id: m.id,
     role: m.role === 'user' ? 'user' : m.role === 'signal' ? 'signal' : 'muse',
-    label: m.role === 'user' ? (m.author && m.author !== me?.name ? `${m.author} · ${m.authorRole || 'Product owner'}` : 'You') : m.agent || (m.role === 'signal' ? 'Signal' : 'Muse · Product physician'),
+    label: m.role === 'user' ? (m.author && m.author !== me?.name ? `${m.author} · ${m.authorRole || 'Product owner'}` : 'You') : m.agent || (m.role === 'signal' ? 'Signal' : 'Socra · Product physician'),
     text: m.content,
     time: ago(m.createdAt),
     accent: colorOf(d, m.accent),
@@ -138,7 +138,7 @@ export function toEvidence(d: Live): EvidenceItem[] {
 export function toSpec(d: Live): (SpecSection & { ref: string; basis: string; review: string; reviewNote: string; key: string; updatedAt: string })[] {
   return d.spec.map((s) => ({
     id: s.key, key: s.key, ref: s.ref, tab: s.tab, title: s.title, kicker: s.kicker, content: s.content, completeness: s.completeness,
-    confidence: s.confidence, status: s.status as SpecSection['status'], source: s.source || (s.content ? 'Muse inference' : 'Not yet researched'),
+    confidence: s.confidence, status: s.status as SpecSection['status'], source: s.source || (s.content ? 'Socra inference' : 'Not yet researched'),
     related: s.related, trace: s.trace as SpecSection['trace'], basis: s.basis, review: s.review, reviewNote: s.reviewNote, updatedAt: s.updatedAt,
   }))
 }

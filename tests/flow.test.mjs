@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ROLES, SPECIALISTS, numberedOptions, pickedNumbers, tidySpeech, workingName, isAffirmative, proposalFrom, suggestedOption } from "../src/lib/studio/core.ts";
 
-test("numbered options are read from a Muse message, in order", () => {
+test("numbered options are read from a Socra message, in order", () => {
   const text = "Who decides a claim today?\n\n1. Missing documents slow it most\n2) Waiting for an adjuster\n**3.** Back-and-forth on the decision";
   assert.deepEqual(numberedOptions(text), [
     { n: 1, label: "Missing documents slow it most" },
@@ -39,7 +39,7 @@ test("only a bare yes approves; a yes that goes on to say something new is a tho
     assert.equal(isAffirmative(t), false, t);
 });
 
-test("a yes approves only a proposal the Muse actually made", () => {
+test("a yes approves only a proposal Socra actually made", () => {
   assert.equal(proposalFrom("Got it. Should claimants upload photos with the first notice?"), "claimants upload photos with the first notice");
   assert.equal(proposalFrom("I'd suggest a calm status page first. Want me to add it?"), "add it");
   assert.equal(proposalFrom("That helps. How does your way differ from how others handle claims today?"), "");
@@ -61,17 +61,17 @@ test("speech is tidied without changing what was said", () => {
   assert.equal(tidySpeech("what about appeals? they matter"), "What about appeals? They matter.");
 });
 
-test("a working name comes from the first words until the Muse names the product", () => {
+test("a working name comes from the first words until Socra names the product", () => {
   assert.equal(workingName("An insurance claims tool: people file a claim with photos"), "Insurance Claims");
   assert.equal(workingName(""), "New product");
 });
 
-test("the Muse has five visible specialists and the product has roles", () => {
+test("Socra has five visible specialists and the product has roles", () => {
   assert.deepEqual(SPECIALISTS.map((s) => s.key), ["business-analyst", "architect", "engineer", "ux", "domain"]);
   for (const r of ["Product owner", "Business analyst", "Product engineer"]) assert.ok(ROLES.includes(r));
 });
 
-test("the Muse's core skills load on every turn: reimagine first, then the conversation", async () => {
+test("Socra's core skills load on every turn: reimagine first, then the conversation", async () => {
   const { coreInstructions, CORE_SKILLS } = await import("../src/lib/agent/instructions.ts");
   assert.deepEqual([...CORE_SKILLS], ["studio-reimagine", "studio-muse"]);
   const text = await coreInstructions();
@@ -95,7 +95,7 @@ test("the reimagine skill facilitates first: ask how theirs differs, listen, sug
   assert.match(muse, /Facilitate first \(studio-reimagine section 1/);
 });
 
-test("the Muse asks one question with a suggestion, keeps a why us, and never shows the machinery", async () => {
+test("Socra asks one question with a suggestion, keeps a why us, and never shows the machinery", async () => {
   const fs = await import("fs/promises");
   const muse = await fs.readFile("studio-skills/studio-muse/SKILL.md", "utf8");
   assert.match(muse, /One question per reply, never more, and never without your suggestion/);
