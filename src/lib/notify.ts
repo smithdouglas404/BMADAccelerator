@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { ASSISTANT_NAME, brand } from "@/lib/brand";
+import { ASSISTANT_NAME, PRODUCT_NAME, brand } from "@/lib/brand";
 import { decrypt } from "@/lib/settings";
 import { asksSomething, bodyFor, questionOf, subjectFor, type WaitingItem } from "./notifyFormat";
 
@@ -56,7 +56,7 @@ async function send(kind: string, address: string, items: WaitingItem[]) {
     const nodemailer = await import("nodemailer");
     const t = nodemailer.createTransport(smtp);
     const from = process.env.NOTIFY_FROM || (() => { try { return decodeURIComponent(new URL(smtp).username) || "studio@localhost"; } catch { return "studio@localhost"; } })();
-    await t.sendMail({ from: `Working Backwards Studio <${from}>`, to: address, subject, text });
+    await t.sendMail({ from: `${PRODUCT_NAME} <${from}>`, to: address, subject, text });
     return;
   }
   const body = kind === "slack" ? { text: `*${subject}*\n\n${text}` } : { subject, text, items };

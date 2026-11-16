@@ -14,5 +14,9 @@ export function brand(text: string): string {
   return text.replace(article, ASSISTANT_NAME).replace(OLD, ASSISTANT_NAME);
 }
 
-/** The product's name as outside assistants see it (the MCP connector, the REST API, OAuth). */
-export const PRODUCT_NAME = "Working Backwards Studio";
+/** The line under the brand. Doug (Nov 16): the product is branded with the assistant's name, "Socra", with
+ *  "Working Backwards Studio" underneath. */
+export const PRODUCT_LINE = "Working Backwards Studio";
+
+/** The product's full name: the browser tab, emails, and what outside assistants see (MCP, REST, OAuth). */
+export const PRODUCT_NAME = `${ASSISTANT_NAME} · ${PRODUCT_LINE}`;

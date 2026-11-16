@@ -6,6 +6,7 @@ import { ArrowRight, Check, Mic, Plus, Settings2, Upload } from 'lucide-react'
 import { api, ago } from './live'
 import { useVoice } from './vibe'
 import { useMe } from './flow'
+import { ASSISTANT_NAME, PRODUCT_LINE } from '@/lib/brand'
 
 type ProductRow = { id: string; name: string; statement: string; category: string; stageLabel: string; customer: string; businessArea: string; lastView: string; readiness: number; versions: number; thoughts: number; decisions: number; busy: boolean; updatedAt: string }
 
@@ -14,7 +15,7 @@ export function StudioTop({ active }: { active?: 'home' | 'new' | 'settings' | '
     <header className="studio-page-top">
       <a href="/" className="brand-lockup" style={{ padding: 0, textDecoration: 'none' }}>
         <div className="brand-mark"><span /><span /><span /></div>
-        <div><p className="eyebrow">agentic studio</p><p className="brand-name">backward<span>.</span></p></div>
+        <div><p className="eyebrow">{PRODUCT_LINE}</p><p className="brand-name">{ASSISTANT_NAME}<span>.</span></p></div>
       </a>
       <nav>
         <a href="/" className={active === 'home' ? 'is-active' : ''}>Products</a>

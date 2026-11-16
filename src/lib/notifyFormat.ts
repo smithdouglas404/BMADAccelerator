@@ -42,5 +42,5 @@ export function bodyFor(items: WaitingItem[], assistant: string) {
     return `${KIND[i.kind]} · ${i.useCase}${i.from ? ` · from ${i.from}` : ""}\n${i.text}${opts}\nAnswer: ${i.link}`;
   });
   const tail = items.some((i) => i.options.length) ? `\n\nA number is enough. You can also answer from a connected assistant: "what's waiting on me in the Studio?"` : "";
-  return `${blocks.join("\n\n")}${tail}\n\n— ${assistant}, Working Backwards Studio`;
+  return `${blocks.join("\n\n")}${tail}\n\n— ${assistant} · Working Backwards Studio`;
 }

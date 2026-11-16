@@ -61,6 +61,7 @@ import { NAV_GROUPS, NextMove, PeopleMenu, TeamPanel, Checkpoints, UndoChip, opt
 import { TruthGraphView, MarkChain, ObservationEffects } from './truth'
 import { AgentsView } from './agents'
 import { ProductSwitcher, StudioMarkdown, SpecReviewTools, ImpactPanel, VersionHistory, ReadinessFactors, DecisionRegister, ObservationComposer, SyncPreview, ProvidersCard, BuildHistory } from './extras'
+import { ASSISTANT_NAME, PRODUCT_LINE } from '@/lib/brand'
 
 const viewTitles: Record<StudioView, string> = {
   review: 'Try & mark up',
@@ -93,7 +94,7 @@ function App({ id }: { id: string }) {
   if (!data) {
     return (
       <div className="app-shell studio-loading">
-        <div className="studio-loading-card"><div className="brand-mark"><span /><span /><span /></div><p className="eyebrow">agentic studio</p><strong>{error ? 'This product could not be opened.' : 'Opening the product…'}</strong>{error && <small>{error}</small>}{error && <a className="text-button" href="/">Back to all products <ArrowRight size={14} /></a>}</div>
+        <div className="studio-loading-card"><div className="brand-mark"><span /><span /><span /></div><p className="eyebrow">{PRODUCT_LINE}</p><strong>{error ? 'This product could not be opened.' : 'Opening the product…'}</strong>{error && <small>{error}</small>}{error && <a className="text-button" href="/">Back to all products <ArrowRight size={14} /></a>}</div>
       </div>
     )
   }
@@ -310,8 +311,8 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
         <a className="brand-lockup studio-home-brand" href="/" title="All use cases">
           <div className="brand-mark"><span /><span /><span /></div>
           <div>
-            <p className="eyebrow">agentic studio</p>
-            <p className="brand-name">backward<span>.</span></p>
+            <p className="eyebrow">{PRODUCT_LINE}</p>
+            <p className="brand-name">{ASSISTANT_NAME}<span>.</span></p>
           </div>
           <span className="version-badge">0.1</span>
         </a>
