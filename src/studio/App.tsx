@@ -453,7 +453,7 @@ function OverviewView(props: OverviewProps) {
           <div className="product-wordmark"><span className="wordmark-orbit" />{item.name}</div>
           <p>{item.statement || item.description}</p>
           <div className="product-card-meta"><span>{item.audience || 'Audience still being named'}</span><span className="meta-divider" /><span>Updated {ago(item.updatedAt)}</span></div>
-          <div className="quote-line"><span>“</span>{(item.customerQuote || 'The customer’s own words land here once Socra hears them.').replace(/[“”]/g, '')}</div>
+          {(() => { const q = (item.customerQuote || 'The customer’s own words land here once Socra hears them.').replace(/[“”]/g, '').trim(); return <div className="quote-line" title={q}><span>“</span>{q.length > 90 ? `${q.slice(0, 88).replace(/\s+\S*$/, '')}…` : q}</div> })()}
         </div>
       </section>
 
