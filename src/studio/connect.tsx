@@ -132,7 +132,7 @@ function CopyLine({ label, value }: { label: string; value: string }) {
 export function ConnectTab({ setToast }: { setToast: (s: string) => void }) {
   const [info, setInfo] = useState<Info | null>(null)
   const [code, setCode] = useState<{ code: string; until: string } | null>(null)
-  const [form, setForm] = useState({ name: '', scope: 'read', customer: '', person: '', role: ROLES[0] })
+  const [form, setForm] = useState({ name: 'Meta Muse', scope: 'write', customer: '', person: '', role: ROLES[0] })
   const [shown, setShown] = useState('')
   const load = () => void api<Info>('/api/settings/connect', { cache: 'no-store' }).then(setInfo).catch((e: Error) => setToast(e.message))
   useEffect(load, [setToast])
@@ -142,7 +142,7 @@ export function ConnectTab({ setToast }: { setToast: (s: string) => void }) {
     try {
       const r = await api<{ token: string }>('/api/settings/connect', { json: { action: 'token', ...form } })
       setShown(r.token)
-      setForm({ ...form, name: '' })
+      setForm({ ...form, name: 'Meta Muse' })
       load()
     } catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
   }
@@ -181,6 +181,7 @@ export function ConnectTab({ setToast }: { setToast: (s: string) => void }) {
           <label>Customer<input value={form.customer} onChange={(e) => setForm({ ...form, customer: e.target.value })} placeholder="Every customer" /></label>
           <label>What it may do<select value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value })}><option value="read">Look only</option><option value="write">Look and make changes</option></select></label>
           <button type="button" className="button button-primary button-small" disabled={!form.name.trim()} onClick={() => void makeToken()}><KeyRound size={14} /> Make a token</button>
+          {!form.name.trim() && <p className="studio-muted">Type a name above first (for example Meta Muse); the button stays off until there is one.</p>}
           {shown && <div className="studio-card" style={{ marginTop: 8 }}><p className="studio-muted" style={{ marginTop: 0 }}>Shown once. Put it straight into the connector’s settings; never paste it into a chat.</p><CopyLine label="Token" value={shown} /><button type="button" className="button button-quiet button-small" onClick={() => setShown('')}>Done, hide it</button></div>}
         </div>
       </section>
