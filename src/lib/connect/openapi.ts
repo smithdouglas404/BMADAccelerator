@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { PRODUCT_NAME, ASSISTANT_NAME } from "@/lib/brand";
-import { TOOLS, TOOL_NAMES } from "./catalog";
+import { LEVEL_LABEL, TOOLS, TOOL_NAMES } from "./catalog";
 
 /** OpenAPI 3.1 for the REST API, generated from the same tool list as the MCP connector. */
 export function openApi(base: string) {
@@ -13,7 +13,8 @@ export function openApi(base: string) {
       post: {
         operationId: name,
         summary: t.title,
-        description: `${t.description}${t.write ? " Needs write access." : " Read-only."}`,
+        description: `${t.description} Needs: ${LEVEL_LABEL[t.need]}.`,
+        tags: [t.need === "read" ? "Look" : t.need === "write" ? "Change" : "Admin"],
         requestBody: { required: true, content: { "application/json": { schema } } },
         responses: {
           "200": { description: "Done", content: { "application/json": { schema: { $ref: "#/components/schemas/Ok" } } } },
@@ -30,10 +31,11 @@ export function openApi(base: string) {
     openapi: "3.1.0",
     info: {
       title: `${PRODUCT_NAME} API`,
-      version: "1.0.0",
-      description: `Shape and build use cases with ${ASSISTANT_NAME} from any assistant. Approving, building, withdrawing, reopening and sending a card back answer 202 with a preview; show it to the person and send the same call with "confirm": true only after they say yes. Every call is logged, and changes are recorded under the signed-in person's name.`,
+      version: "2.0.0",
+      description: `Shape and build use cases with ${ASSISTANT_NAME} from any assistant: everything a person can do on the Studio's screens. Every operation is a POST with a JSON body. Start with list_use_cases (find ids) or whats_waiting; my_access says what this token may do. Three levels: Look, Look and make changes, and Admin (archive, restore and delete use cases, the call log). Anything hard to undo (approve, build, withdraw, reopen, undo, send back, remove, archive, delete, push to Git or Linear) answers 202 with a preview and changes nothing; show the preview to the person and send the same call with "confirm": true only after they say yes. delete_use_case also needs confirm_name, the use case's exact name. Every call is logged, and changes are recorded under the token's person's name.`,
     },
     servers: [{ url: base }],
+    tags: [{ name: "Look", description: "Read only." }, { name: "Change", description: "Needs Look and make changes." }, { name: "Admin", description: "Needs Admin, full access." }],
     security: [{ oauth: [] }, { token: [] }],
     paths,
     components: {
@@ -41,7 +43,7 @@ export function openApi(base: string) {
         token: { type: "http", scheme: "bearer", description: "A token from Settings > Connect in the Studio." },
         oauth: {
           type: "oauth2",
-          flows: { authorizationCode: { authorizationUrl: `${base}/oauth/authorize`, tokenUrl: `${base}/oauth/token`, refreshUrl: `${base}/oauth/token`, scopes: { read: "Look at use cases", write: "Change use cases (with confirmation for approvals and builds)" } } },
+          flows: { authorizationCode: { authorizationUrl: `${base}/oauth/authorize`, tokenUrl: `${base}/oauth/token`, refreshUrl: `${base}/oauth/token`, scopes: { read: "Look at use cases", write: "Change use cases (with confirmation for approvals and builds)", admin: "Everything, including archiving and deleting use cases" } } },
         },
       },
       schemas: {

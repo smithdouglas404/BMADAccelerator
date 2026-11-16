@@ -11,7 +11,7 @@ const Body = z.object({
   person: z.string().trim().min(1).max(80),
   role: z.string().trim().min(2).max(60),
   customer: z.string().trim().max(120).default(""),
-  scope: z.enum(["read", "write"]),
+  scope: z.enum(["read", "write", "admin"]),
   deny: z.boolean().optional(),
 });
 

@@ -7,9 +7,11 @@ import { explainReadiness } from "@/lib/studio/spec";
 import { ensureRoutes, ensureSpec } from "@/lib/studio/state";
 import { ensureStarted } from "@/lib/studio/actions";
 
-// Every product the team is shaping, newest first.
-export async function GET() {
+// Every product the team is shaping, newest first. Archived ones only with ?archived=1.
+export async function GET(req: Request) {
+  const withArchived = new URL(req.url).searchParams.get("archived") === "1";
   const rows = await prisma.useCase.findMany({
+    where: withArchived ? {} : { archivedAt: null },
     orderBy: { updatedAt: "desc" },
     include: { capabilities: { select: { readiness: true } }, spec: true, decisions: { select: { status: true, includeInBuild: true } }, moves: { select: { status: true } }, _count: { select: { backlog: true, decisions: true, evidence: true } } },
   });
@@ -38,6 +40,7 @@ export async function GET() {
       decisions: u._count.decisions,
       busy: u.agentBusy || u.generateBusy,
       updatedAt: u.updatedAt,
+      archivedAt: u.archivedAt,
     })),
   );
 }

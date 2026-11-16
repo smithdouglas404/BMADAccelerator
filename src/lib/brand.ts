@@ -5,12 +5,14 @@ export const ASSISTANT_NAME = "Socra";
 
 // Records written before a rename (messages, decisions, the team's sample text) still say the old name.
 const OLD_NAMES = ["Muse"];
-const OLD = new RegExp(`\\b(${OLD_NAMES.filter((n) => n !== ASSISTANT_NAME).join("|") || "(?!)"})\\b`, "g");
+// "Meta Muse" is Meta's assistant (a connector client), not ours, so it keeps its name.
+const OLD_ALT = OLD_NAMES.filter((n) => n !== ASSISTANT_NAME).join("|") || "(?!)";
+const OLD = new RegExp(`(?<!Meta )\\b(${OLD_ALT})\\b`, "g");
 
 /** Shows any older name of the assistant as its current name. */
 export function brand(text: string): string {
   if (!text) return text;
-  const article = new RegExp(`\\b[Tt]he (${OLD.source.slice(3, -3)})\\b`, "g");
+  const article = new RegExp(`\\b[Tt]he (${OLD_ALT})\\b`, "g");
   return text.replace(article, ASSISTANT_NAME).replace(OLD, ASSISTANT_NAME);
 }
 

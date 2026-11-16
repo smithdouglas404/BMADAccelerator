@@ -6,6 +6,7 @@ import { studioState } from "@/lib/studio/state";
 import { ensureStarted, focusCapability } from "@/lib/studio/actions";
 import { VALIDATION_SIGNALS, type Validation } from "@/lib/studio/core";
 import { connectionStatus } from "@/lib/studio/sync";
+import { stopPreview } from "@/lib/preview";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -69,6 +70,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
 
 export async function DELETE(_req: Request, { params }: Ctx) {
   const { id } = await params;
+  await stopPreview(id).catch(() => undefined);
   await prisma.useCase.delete({ where: { id } }).catch(() => null);
   return NextResponse.json({ ok: true });
 }

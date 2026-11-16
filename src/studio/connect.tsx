@@ -6,7 +6,11 @@ import { Bell, Check, Copy, KeyRound, Link2, ScrollText, Send, ShieldCheck, Tras
 import { api } from './live'
 import { PRODUCT_NAME as PRODUCT } from '@/lib/brand'
 
-const ROLES = ['Product owner', 'Business analyst', 'Product engineer', 'Viewer']
+const ROLES = ['Product owner', 'Business analyst', 'Product engineer', 'Viewer', 'Admin']
+type Level = 'read' | 'write' | 'admin'
+const LEVELS: { key: Level; label: string }[] = [{ key: 'read', label: 'Look only' }, { key: 'write', label: 'Look and make changes (asks before approving or building)' }, { key: 'admin', label: 'Admin, full access (also archive and delete use cases; asks first)' }]
+// Admin needs the Admin role; a Viewer only looks. The server applies the same rule (ROLE_RULES).
+const fit = (role: string, scope: Level): Level => (role === 'Viewer' ? 'read' : scope === 'admin' && role !== 'Admin' ? 'write' : scope)
 
 type Params = { client_id: string; redirect_uri: string; state: string; code_challenge: string }
 
@@ -14,7 +18,7 @@ export function ConsentPage({ problem, clientName, params, wantsWrite, customers
   const [person, setPerson] = useState('')
   const [role, setRole] = useState(ROLES[0])
   const [customer, setCustomer] = useState('')
-  const [scope, setScope] = useState<'read' | 'write'>(wantsWrite ? 'write' : 'read')
+  const [scope, setScope] = useState<Level>(wantsWrite ? 'write' : 'read')
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -22,7 +26,7 @@ export function ConsentPage({ problem, clientName, params, wantsWrite, customers
     setBusy(true)
     setError('')
     try {
-      const r = await api<{ redirect: string }>('/api/oauth/approve', { json: { ...params, person, role, customer, scope: role === 'Viewer' ? 'read' : scope, connect_code: code, deny } })
+      const r = await api<{ redirect: string }>('/api/oauth/approve', { json: { ...params, person, role, customer, scope: fit(role, scope), connect_code: code, deny } })
       window.location.href = r.redirect
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); setBusy(false) }
   }
@@ -36,7 +40,7 @@ export function ConsentPage({ problem, clientName, params, wantsWrite, customers
               <label>Your name<input value={person} onChange={(e) => setPerson(e.target.value)} placeholder="Doug" autoComplete="name" /></label>
               <label>Your role<select value={role} onChange={(e) => setRole(e.target.value)}>{ROLES.map((r) => <option key={r}>{r}</option>)}</select></label>
               <label>Which customer it may see<select value={customer} onChange={(e) => setCustomer(e.target.value)}><option value="">Every customer</option>{customers.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
-              <label>What it may do<select value={role === 'Viewer' ? 'read' : scope} disabled={role === 'Viewer'} onChange={(e) => setScope(e.target.value as 'read' | 'write')}><option value="read">Look only</option><option value="write">Look and make changes (asks before approving or building)</option></select></label>
+              <label>What it may do<select value={fit(role, scope)} disabled={role === 'Viewer'} onChange={(e) => { const v = e.target.value as Level; setScope(v); if (v === 'admin') setRole('Admin') }}>{LEVELS.map((l) => <option key={l.key} value={l.key}>{l.label}</option>)}</select></label>
               <label>Connect code (Settings &gt; Connect in the Studio)<input value={code} onChange={(e) => setCode(e.target.value)} placeholder="6 letters" autoComplete="one-time-code" /></label>
               {error && <p className="studio-muted" role="alert">{error}</p>}
               <div className="studio-review-actions"><button type="button" className="button button-primary" disabled={busy || !person.trim() || !code.trim()} onClick={() => void send()}><ShieldCheck size={14} /> Allow</button><button type="button" className="button button-quiet" disabled={busy} onClick={() => void send(true)}>Don’t allow</button></div>
@@ -52,8 +56,8 @@ type Info = {
   mcpUrl: string
   openApiUrl: string
   isPublic: boolean
-  tools: { name: string; title: string; write: boolean }[]
-  tokens: { id: string; name: string; prefix: string; scope: string; customer: string; person: string; role: string; viaOAuth: boolean; lastUsedAt: string | null; createdAt: string }[]
+  tools: { name: string; title: string; write: boolean; need?: Level }[]
+  tokens: { id: string; name: string; prefix: string; scope: string; customer: string; person: string; role: string; level?: Level; levelLabel?: string; viaOAuth: boolean; lastUsedAt: string | null; createdAt: string }[]
   calls: { id: string; person: string; tool: string; via: string; outcome: string; note: string; createdAt: string }[]
   notify: { id: string; kind: 'email' | 'slack' | 'webhook'; hint: string; customer: string; enabled: boolean; lastError: string; lastSent: string | null }[]
   emailReady: boolean
@@ -132,7 +136,7 @@ function CopyLine({ label, value }: { label: string; value: string }) {
 export function ConnectTab({ setToast }: { setToast: (s: string) => void }) {
   const [info, setInfo] = useState<Info | null>(null)
   const [code, setCode] = useState<{ code: string; until: string } | null>(null)
-  const [form, setForm] = useState({ name: 'Meta Muse', scope: 'write', customer: '', person: '', role: ROLES[0] })
+  const [form, setForm] = useState({ name: 'Meta Muse', scope: 'admin' as Level, customer: '', person: '', role: 'Admin' })
   const [shown, setShown] = useState('')
   const load = () => void api<Info>('/api/settings/connect', { cache: 'no-store' }).then(setInfo).catch((e: Error) => setToast(e.message))
   useEffect(load, [setToast])
@@ -145,6 +149,10 @@ export function ConnectTab({ setToast }: { setToast: (s: string) => void }) {
       setForm({ ...form, name: 'Meta Muse' })
       load()
     } catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
+  }
+  const setAccess = async (id: string, scope: Level, role: string) => {
+    const r = scope === 'admin' ? 'Admin' : role === 'Admin' ? 'Product owner' : role
+    try { await api('/api/settings/connect', { json: { action: 'access', id, scope: fit(r, scope), role: r } }); setToast('Access changed. It applies to the next call.'); load() } catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
   }
   const revoke = async (id: string) => { await api('/api/settings/connect', { json: { action: 'revoke', id } }); load() }
   const MUSE_TEXT = "Every 15 minutes, call the Socra Studio connector's whats_waiting tool. For every question waiting, tell me the product name, Socra's question and its numbered options, and which one Socra suggests. When I answer, call answer with that product's use_case_id and my words (a number picks that option). If answer comes back needing confirmation, show me the preview and send the same call again with confirm: true only after I say yes. Don't approve, build or withdraw anything unless I ask for it in that message."
@@ -159,7 +167,8 @@ export function ConnectTab({ setToast }: { setToast: (s: string) => void }) {
         <p style={{ marginBottom: 4 }}><strong>Step 2.</strong> Make a token here, then paste it into Muse’s bearer token or API key box. It is shown once.</p>
         <div className="studio-kv">
           <label>Name for the token<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Meta Muse" /></label>
-          <label>What it may do<select value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value })}><option value="read">Look only</option><option value="write">Look and make changes (needed to answer)</option></select></label>
+          <label>Acts in the name of<input value={form.person} onChange={(e) => setForm({ ...form, person: e.target.value })} placeholder="Doug" autoComplete="name" /></label>
+          <label>What it may do<select value={form.scope} onChange={(e) => { const v = e.target.value as Level; setForm({ ...form, scope: v, role: v === 'admin' ? 'Admin' : form.role === 'Admin' ? 'Product owner' : form.role }) }}>{LEVELS.map((l) => <option key={l.key} value={l.key}>{l.label}</option>)}</select></label>
           <button type="button" className="button button-primary button-small" disabled={!form.name.trim()} onClick={() => void makeToken()}><KeyRound size={14} /> Make a token</button>
           {!form.name.trim() && <p className="studio-muted">Type a name first; the button stays off until there is one.</p>}
           {shown && <div className="studio-card" style={{ marginTop: 8 }}><p className="studio-muted" style={{ marginTop: 0 }}>Shown once. Copy it and paste it into Muse now; never paste it into a chat.</p><CopyLine label="Token (paste into Muse)" value={shown} /><button type="button" className="button button-quiet button-small" onClick={() => setShown('')}>Done, hide it</button></div>}
@@ -173,7 +182,7 @@ export function ConnectTab({ setToast }: { setToast: (s: string) => void }) {
           <CopyLine label="MCP connector (Claude, ChatGPT)" value={info.mcpUrl} />
           <CopyLine label="OpenAPI (custom GPT actions, scripts)" value={info.openApiUrl} />
         </div>
-        <p className="studio-muted">{info.tools.length} tools: {info.tools.map((t) => t.title).join(' · ')}. Approving, building, withdrawing, reopening and sending a card back always show a preview and wait for a yes.</p>
+        <p className="studio-muted">{info.tools.length} tools: {info.tools.map((t) => t.title).join(' · ')}. Approving, building, withdrawing, reopening, sending a card back, archiving and deleting always show a preview and wait for a yes.</p>
       </section>
       <section className="studio-card">
         <div className="stack-header"><div><p className="eyebrow">Connect code</p><h3>For signing in from an assistant</h3></div><ShieldCheck size={16} /></div>
@@ -186,7 +195,8 @@ export function ConnectTab({ setToast }: { setToast: (s: string) => void }) {
         {info.tokens.length === 0 && <p className="studio-muted">Nothing connected yet.</p>}
         <div className="studio-list">{info.tokens.map((t) => (
           <div key={t.id} className="studio-list-row">
-            <div className="studio-row-main"><strong>{t.name}</strong><small>{t.person || 'no name'} · {t.role} · {t.scope === 'write' ? 'look and change' : 'look only'} · {t.customer || 'every customer'} · {t.viaOAuth ? 'signed in' : `token ${t.prefix}…`} · last used {when(t.lastUsedAt)}</small></div>
+            <div className="studio-row-main"><strong>{t.name}</strong><small>{t.person || 'no name'} · {t.role} · {t.levelLabel ?? (t.scope === 'write' ? 'look and change' : 'look only')} · {t.customer || 'every customer'} · {t.viaOAuth ? 'signed in' : `token ${t.prefix}…`} · last used {when(t.lastUsedAt)}</small></div>
+            <select aria-label={`What ${t.name} may do`} value={t.level ?? (t.scope as Level)} onChange={(e) => void setAccess(t.id, e.target.value as Level, t.role)}>{LEVELS.map((l) => <option key={l.key} value={l.key}>{l.label.split(' (')[0]}</option>)}</select>
             <button type="button" className="icon-button subtle" aria-label={`Remove access for ${t.name}`} onClick={() => void revoke(t.id)}><Trash2 size={13} /></button>
           </div>
         ))}</div>

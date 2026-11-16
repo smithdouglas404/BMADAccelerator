@@ -65,6 +65,8 @@ model UseCase {
   packageCount      Int       @default(0)
   lastGeneratedAt   DateTime?
   previewPort       Int       @default(0)
+  // Archived use cases leave the home list but keep everything; an admin can restore them.
+  archivedAt        DateTime?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
@@ -470,7 +472,7 @@ model ApiToken {
   name        String
   hash        String    @unique
   prefix      String
-  scope       String    @default("read") // read | write
+  scope       String    @default("read") // read | write | admin
   customer    String    @default("")
   person      String    @default("")
   role        String    @default("Product owner")

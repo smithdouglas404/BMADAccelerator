@@ -1,4 +1,5 @@
 import { randomInt } from "node:crypto";
+import { asLevel, type Level } from "./catalog";
 import { prisma } from "@/lib/db";
 import { issueToken, newSecret, pkceOk, sha256 } from "./tokens";
 
@@ -46,13 +47,14 @@ export async function clientFor(clientId: string, redirectUri: string) {
   return c && c.redirectUris.includes(redirectUri) ? c : null;
 }
 
-export async function issueCode(a: { clientId: string; redirectUri: string; challenge: string; scope: "read" | "write"; customer: string; person: string; role: string }) {
+export async function issueCode(a: { clientId: string; redirectUri: string; challenge: string; scope: Level; customer: string; person: string; role: string }) {
   const code = newSecret("wbo_");
   await prisma.oAuthCode.create({ data: { hash: sha256(code), clientId: a.clientId, redirectUri: a.redirectUri, challenge: a.challenge, scope: a.scope, customer: a.customer, person: a.person, role: a.role, expiresAt: new Date(Date.now() + CONNECT_TTL) } });
   return code;
 }
 
 const DAYS = 30;
+const scopeWords = (l: Level) => (l === "admin" ? "read write admin" : l === "write" ? "read write" : "read");
 const grant = (t: { token: string; refresh: string }, scope: string) => ({ access_token: t.token, token_type: "Bearer", expires_in: DAYS * 86_400, refresh_token: t.refresh, scope });
 
 export async function exchange(p: URLSearchParams): Promise<{ status: number; body: Record<string, unknown> }> {
@@ -65,18 +67,18 @@ export async function exchange(p: URLSearchParams): Promise<{ status: number; bo
     if (row.clientId !== p.get("client_id") || row.redirectUri !== p.get("redirect_uri")) return bad("invalid_grant", "Client or redirect does not match.");
     if (!pkceOk(p.get("code_verifier") ?? "", row.challenge)) return bad("invalid_grant", "PKCE check failed.");
     const client = await prisma.oAuthClient.findUnique({ where: { clientId: row.clientId } });
-    const scope = row.scope === "write" ? "write" : "read";
+    const scope = asLevel(row.scope);
     const t = await issueToken({ name: client?.name || "An assistant", scope, customer: row.customer, person: row.person, role: row.role, clientId: row.clientId, days: DAYS, refresh: true });
-    return { status: 200, body: grant(t, scope === "write" ? "read write" : "read") };
+    return { status: 200, body: grant(t, scopeWords(scope)) };
   }
   if (p.get("grant_type") === "refresh_token") {
     const old = await prisma.apiToken.findFirst({ where: { refreshHash: sha256(p.get("refresh_token") ?? ""), revokedAt: null } });
     if (!old || !old.refreshHash) return bad("invalid_grant", "Unknown refresh token.");
     if (p.get("client_id") && p.get("client_id") !== old.clientId) return bad("invalid_grant", "Client does not match.");
     await prisma.apiToken.update({ where: { id: old.id }, data: { revokedAt: new Date() } });
-    const scope = old.scope === "write" ? "write" : "read";
+    const scope = asLevel(old.scope);
     const t = await issueToken({ name: old.name, scope, customer: old.customer, person: old.person, role: old.role, clientId: old.clientId, days: DAYS, refresh: true });
-    return { status: 200, body: grant(t, scope === "write" ? "read write" : "read") };
+    return { status: 200, body: grant(t, scopeWords(scope)) };
   }
   return bad("unsupported_grant_type", "Use authorization_code or refresh_token.");
 }

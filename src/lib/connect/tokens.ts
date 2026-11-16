@@ -1,5 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { prisma } from "@/lib/db";
+import { asLevel, type Level } from "./catalog";
 
 // Access tokens for the Studio's MCP connector and REST API. Only a token's SHA-256 is stored; the token
 // itself is shown once (Settings > Connect) or handed to the assistant through OAuth, never again.
@@ -7,9 +8,9 @@ import { prisma } from "@/lib/db";
 export const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 export const newSecret = (prefix: string) => `${prefix}${randomBytes(32).toString("base64url")}`;
 
-export type Access = { id: string; scope: "read" | "write"; customer: string; person: string; role: string; name: string };
+export type Access = { id: string; scope: Level; customer: string; person: string; role: string; name: string };
 
-export async function issueToken(t: { name: string; scope: "read" | "write"; customer?: string; person?: string; role?: string; clientId?: string; days?: number; refresh?: boolean }) {
+export async function issueToken(t: { name: string; scope: Level; customer?: string; person?: string; role?: string; clientId?: string; days?: number; refresh?: boolean }) {
   const token = newSecret("wbs_");
   const refresh = t.refresh ? newSecret("wbr_") : "";
   const row = await prisma.apiToken.create({
@@ -38,7 +39,7 @@ export async function accessFrom(req: Request): Promise<Access | null> {
   if (!row || row.revokedAt || (row.expiresAt && row.expiresAt < new Date())) return null;
   if (!timingSafeEqual(Buffer.from(row.hash), Buffer.from(hash))) return null;
   void prisma.apiToken.update({ where: { id: row.id }, data: { lastUsedAt: new Date() } }).catch(() => undefined);
-  return { id: row.id, scope: row.scope === "write" ? "write" : "read", customer: row.customer, person: row.person, role: row.role, name: row.name };
+  return { id: row.id, scope: asLevel(row.scope), customer: row.customer, person: row.person, role: row.role, name: row.name };
 }
 
 /** PKCE S256: base64url(sha256(verifier)) must equal the challenge. */

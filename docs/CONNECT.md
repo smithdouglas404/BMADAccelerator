@@ -1,6 +1,6 @@
 # Connect to the Studio from an assistant
 
-The Studio can be used from Claude, ChatGPT, Meta Muse or a script. The same 13 tools are offered in two forms:
+The Studio can be used from Claude, ChatGPT, Meta Muse or a script: everything a person can do on its screens. The same 30 tools are offered in two forms:
 
 | Form | Address | For |
 |---|---|---|
@@ -11,15 +11,33 @@ Both addresses are shown, with copy buttons, on **Settings > Connect**.
 
 ## The tools
 
-They can look: list use cases, what's waiting on me, brief me, why did this change, read the spec, backlog or board, and agent status.
+**Look** (any access): what may I do (`my_access`), list use cases, open a use case (everything in one call, with ids and the link that opens it), what's waiting on me, brief me, why did this change, read any part (PRD, TRD, PR/FAQ, backlog, Board, Story map, Truth Graph, decisions, people, documents, evidence, spec versions, the whole conversation), read a Board card, and agent status.
 
-They can change: capture a thought, add evidence, start a use case, answer Socra, approve or reject, change an earlier choice, and build the next version.
+**Change** ("Look and make changes"): capture a thought, add evidence, start a use case, rename or edit a use case (name, customer, business area, description, PR/FAQ, lens, Git and Linear settings), answer Socra or one of its specialists, approve or reject, change an earlier choice (edit, withdraw, park, pull a recommendation, in or out of the next build, edit or reopen a decision, undo a yes), add, edit, move and attach files to Board cards, review or rewrite spec sections and restore an earlier version, link stories on the Story map, add or remove people, switch the product's agents and answer their approvals, build, start the preview, mark up the preview, nudge Socra, and push to Git or Linear.
+
+**Admin** ("Admin, full access"): archive or restore a use case, delete a use case for good, and read the call log.
+
+## Who may do what
+
+Every token has a level and a role. What it can do is the lower of the two:
+
+| Role | The most it may do |
+|---|---|
+| Admin | Admin, full access |
+| Product owner, Product engineer, Business analyst, Solution architect, UX/UI designer, Domain expert | Look and make changes |
+| Viewer | Look only |
+| Agent: watcher (an automation that only reads) | Look only |
+| Agent: helper (an automation that captures and answers) | Look and make changes |
+| Agent: operator (a trusted automation) | Admin, full access |
+
+The table lives in one place, `ROLE_RULES` in `src/lib/connect/catalog.ts`. Change a token's level on **Settings > Connect > Who has access** at any time; the assistant keeps working with the new rights on its next call.
 
 ## The rules
 
 - **Look only by default.** Making changes has to be allowed when you connect, and a Viewer can never make changes.
-- **Asks before acting.** Approving, rejecting, building, withdrawing, reopening a decision and sending a card back all return a preview first ("this would approve X, which touches PRD sections Y and Z"). The assistant must show you the preview and send `confirm: true` only after you say yes.
+- **Asks before acting.** Approving, rejecting, building, withdrawing, reopening or undoing a decision, sending a card back or moving it to Done, removing a spec section, a link or a person, restoring a spec version, pushing to Git or Linear, and archiving or deleting a use case all return a preview first ("this would approve X, which touches PRD sections Y and Z"). The assistant must show you the preview and send `confirm: true` only after you say yes.
 - **A bare "yes" or a number sent to Socra is an approval**, so it is confirmed first too.
+- **Deleting is twice guarded.** `delete_use_case` shows what would be lost, and deletes only with `confirm: true` and `confirm_name` set to the use case's exact name. Archiving is the safe choice: it hides a use case from the home list and keeps everything.
 - **One customer, or all.** Access is either for one customer's use cases or for every customer's. An id from another customer answers "not found".
 - **Every call is logged** on Settings > Connect: who made it, which tool, and how it ended.
 - **Changes are recorded in your name.** Every change lands in the Product Truth Graph as "Doug (via Claude)", and Socra carries it through the spec exactly as if you had made it on screen.
