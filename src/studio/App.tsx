@@ -44,6 +44,7 @@ import {
   X,
   PenLine,
   Zap,
+  Workflow,
 } from 'lucide-react'
 import {
   type BacklogItem,
@@ -60,6 +61,7 @@ import { LiveFrame, captureLive, useVoice, type Pick } from './vibe'
 import { NAV_GROUPS, NextMove, PeopleMenu, TeamPanel, Checkpoints, UndoChip, optionsFrom, roleShort, specialistIcon, talkingTo, useMe, type Me, type StudioView } from './flow'
 import { TruthGraphView, MarkChain, ObservationEffects } from './truth'
 import { AgentsView } from './agents'
+import { StoryMapView } from './storymap'
 import { ProductSwitcher, StudioMarkdown, SpecReviewTools, ImpactPanel, VersionHistory, ReadinessFactors, DecisionRegister, ObservationComposer, SyncPreview, ProvidersCard, BuildHistory } from './extras'
 import { ASSISTANT_NAME, PRODUCT_LINE } from '@/lib/brand'
 
@@ -74,7 +76,8 @@ const viewTitles: Record<StudioView, string> = {
   spec: 'Living specification',
   readiness: 'Pilot readiness',
   brief: 'Prototype brief',
-  pilot: 'Make it real',
+  pilot: 'Board',
+  storymap: 'Story map',
   connections: 'Connections',
   agents: 'Agents',
 }
@@ -335,6 +338,7 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
                 {item.id === 'product' && <FileText size={17} />}
                 {item.id === 'evidence' && <Database size={17} />}
                 {item.id === 'truth' && <Network size={17} />}
+                {item.id === 'storymap' && <Workflow size={17} />}
                 {item.id === 'agents' && <Bot size={17} />}
                 {item.id === 'spec' && <FileText size={17} />}
                 {item.id === 'readiness' && <Target size={17} />}
@@ -381,6 +385,7 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
         {activeView === 'evidence' && <EvidenceView {...{ live, act, evidence, changeView, role, setRole, setToast }} />}
         {activeView === 'agents' && <AgentsView live={live} me={me} setToast={setToast} />}
         {activeView === 'truth' && <TruthGraphView key={truthNode || 'all'} live={live} changeView={changeView} setToast={setToast} focusNode={truthNode} />}
+        {activeView === 'storymap' && <StoryMapView live={live} me={me} changeView={changeView} setToast={setToast} />}
         {activeView === 'spec' && <SpecView {...{ ...props, specSections, messages, evidence, backlog, execution }} />}
         {activeView === 'readiness' && <ReadinessView {...{ live, capabilities, readiness, overallReadiness, selected, focusCapability, changeView }} />}
         {activeView === 'brief' && <BriefView {...{ live, act, validationScore, repositoryUrl: live.repoUrl, generatedFiles: generatedFiles.length ? generatedFiles : live.packageFiles, prototypeStatus, generatePrototype, buildNow, generationVersion, setTechnicalOpen, technicalOpen, changeView, role, setRole, setToast }} />}

@@ -1,4 +1,5 @@
 import path from "path";
+import { LINK_KINDS, LINK_LABEL, MAX_SUGGESTED_PER_STORY, maySuggest } from "@/lib/studio/storymap";
 import { tool, createSdkMcpServer } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
@@ -65,6 +66,7 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
               messages: { orderBy: { createdAt: "desc" }, take: 12 },
               spec: { orderBy: [{ tab: "asc" }, { position: "asc" }] },
               members: { orderBy: { createdAt: "asc" } },
+              storyLinks: { orderBy: { createdAt: "asc" } },
             },
           });
           const out = {
@@ -78,6 +80,8 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
             backlog: s.backlog.map((b) => ({ id: b.id, title: b.title, note: b.note, kind: b.kind, group: b.group, source: b.source, recKind: b.recKind, state: b.state, probe: b.probe, includeInBuild: b.includeInBuild })),
             evidence: s.evidence.map((e) => ({ source: e.source, type: e.type, insight: e.insight, confidence: e.confidence })),
             moves: s.moves.map((m) => ({ id: m.id, title: m.title, capability: m.capability, status: m.status, owner: m.owner, decision: m.decision })),
+            // The Story map: ends are "move:<id>" or "backlog:<id>". Dismissed links are listed so you never offer them again.
+            storyLinks: s.storyLinks.map((l) => ({ from: l.from, to: l.to, kind: l.kind, status: l.status, why: l.why })),
             routes: s.routes.map((r) => ({ agent: r.agent, state: r.state, detail: r.detail })),
             components: s.components,
             techNotes: s.techNotes,
@@ -289,7 +293,7 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
       ),
       tool(
         "move_card",
-        "Move a card on the Make it real board, so nobody has to: to 'ready' once its acceptance criteria are agreed, back to 'queued' when a mark on the prototype or a person's no reopens it, to 'done' when a person said yes to it on the live preview. Builds move cards into and out of 'building' themselves. 'why' is one plain line the owner sees on the card (\"you approved it on version 4\").",
+        "Move a card on the Board, so nobody has to: to 'ready' once its acceptance criteria are agreed, back to 'queued' when a mark on the prototype or a person's no reopens it, to 'done' when a person said yes to it on the live preview. Builds move cards into and out of 'building' themselves. 'why' is one plain line the owner sees on the card (\"you approved it on version 4\").",
         { id: z.string(), status: z.enum(["queued", "ready", "building", "review", "done"]), why: z.string().min(5).max(300), causes: z.array(z.string()).default([]) },
         async ({ id, status, why, causes }) => {
           const { moveCard } = await import("@/lib/studio/board");
@@ -485,7 +489,7 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
       ),
       tool(
         "upsert_move",
-        "Create or update a build move on the Make it real board. Every move traces to a capability and a decision. status: queued (Backlog), ready (Ready to shape), building (Being made real), review (Human review), done. owner: the agent or 'Product owner'. signal: a short tag (OPEN QUESTION, TRACEABLE, THIN SLICE, HUMAN REVIEW). hidden: capability | epic | story | task | workflow.",
+        "Create or update a build move on the Board. Every move traces to a capability and a decision. status: queued (Backlog), ready (Ready to shape), building (Being made real), review (Human review), done. owner: the agent or 'Product owner'. signal: a short tag (OPEN QUESTION, TRACEABLE, THIN SLICE, HUMAN REVIEW). hidden: capability | epic | story | task | workflow.",
         {
           id: z.string().default(""),
           title: z.string().min(3),
@@ -509,6 +513,26 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
           }
           const m = await prisma.move.create({ data: { useCaseId, position: await prisma.move.count({ where: { useCaseId } }), ...data } });
           return ok(`Move ${m.id}.`);
+        },
+      ),
+      tool(
+        "link_stories",
+        `Draw a line on the Story map between two stories (board moves, "move:<id>") or a story and one of your recommendations ("backlog:<id>"). kind: depends_on (from needs to first), split_from (from was broken out of to), related. A link you draw is a GUESS shown dashed until a person accepts it, so use it when something changes and you see a connection the owner hasn't made ("what you said here affects that"). Offer only the strongest: at most ${MAX_SUGGESTED_PER_STORY} suggested links per story, and never one a person dismissed. Set confirmed true only when a person just told you the two are linked. Say why in plain words.`,
+        { from: z.string().min(3), to: z.string().min(3), kind: z.enum(LINK_KINDS), why: z.string().default(""), confirmed: z.boolean().default(false) },
+        async (a) => {
+          const ref = (r: string) => (/^(move|backlog):/.test(r) ? r : `move:${r}`);
+          const from = ref(a.from), to = ref(a.to);
+          const exists = async (r: string) => (r.startsWith("move:") ? !!(await prisma.move.findFirst({ where: { id: r.slice(5), useCaseId } })) : !!(await prisma.backlogItem.findFirst({ where: { id: r.slice(8), useCaseId } })));
+          if (!(await exists(from)) || !(await exists(to))) return ok("One of those isn't a story or recommendation in this product. Use ids from get_state.");
+          const all = await prisma.storyLink.findMany({ where: { useCaseId } });
+          if (!a.confirmed) {
+            const may = maySuggest(all, from, to, a.kind);
+            if (!may.ok) return ok(may.why);
+          }
+          const status = a.confirmed ? "confirmed" : "suggested";
+          const l = await prisma.storyLink.upsert({ where: { useCaseId_from_to_kind: { useCaseId, from, to, kind: a.kind } }, create: { useCaseId, from, to, kind: a.kind, status, why: a.why, by: speaker }, update: { status, why: a.why || undefined, by: speaker } });
+          await recordChange(useCaseId, { node: from, kind: "changed", summary: `${speaker} ${a.confirmed ? "linked" : "suggested a link:"} ${from} ${LINK_LABEL[a.kind]} ${to}${a.why ? `, because ${a.why}` : ""}`, after: `${LINK_LABEL[a.kind]} ${to} (${status})`, causes: [to], by: speaker, fromTurn: true });
+          return ok(`Link ${l.id} (${status}).`);
         },
       ),
       tool(

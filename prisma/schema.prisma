@@ -79,6 +79,7 @@ model UseCase {
   backlog       BacklogItem[]
   evidence      Evidence[]
   moves         Move[]
+  storyLinks    StoryLink[]
   routes        AgentRoute[]
   spec          SpecSection[]
   specRevisions SpecRevision[]
@@ -86,8 +87,8 @@ model UseCase {
   truthChanges  TruthChange[]
   appAgents     AppAgent[]
   // The shared agent service's app token and callback secret for this product (encrypted).
-  agentToken    String    @default("")
-  agentSecret   String    @default("")
+  agentToken    String         @default("")
+  agentSecret   String         @default("")
 }
 
 // The "why did this change?" timeline of the Product Truth Graph: one row per real change to a node,
@@ -309,23 +310,23 @@ model Document {
 }
 
 model Message {
-  id        String   @id @default(cuid())
-  useCaseId String
-  role      String // user | muse | signal | agent
-  agent     String   @default("") // who spoke: Muse, a specialist, or a signal label
-  accent    String   @default("") // capability key the message belongs to
-  content   String
+  id         String   @id @default(cuid())
+  useCaseId  String
+  role       String // user | muse | signal | agent
+  agent      String   @default("") // who spoke: Muse, a specialist, or a signal label
+  accent     String   @default("") // capability key the message belongs to
+  content    String
   // The person who spoke (several people can work on one product) and their role.
-  author     String  @default("")
-  authorRole String  @default("")
+  author     String   @default("")
+  authorRole String   @default("")
   // Who they addressed: "" for the Muse, or a specialist's key.
-  addressed  String  @default("")
+  addressed  String   @default("")
   // The words as spoken, when the message was cleaned up from voice.
-  raw        String  @default("")
+  raw        String   @default("")
   // The decision a "Decision captured" signal recorded, so it can be undone.
-  ref        String  @default("")
-  createdAt DateTime @default(now())
-  useCase   UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+  ref        String   @default("")
+  createdAt  DateTime @default(now())
+  useCase    UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
 }
 
 // Voice drafts: recordings with no time limit; continue, save or submit.
@@ -341,30 +342,30 @@ model Recording {
 }
 
 model Preferences {
-  id                String  @id @default("global")
+  id                String   @id @default("global")
   // Claude Code's .claude/skills is always on; these add more tool targets.
-  targetCodex       Boolean @default(false)
-  targetCursor      Boolean @default(false)
-  targetAntigravity Boolean @default(false)
+  targetCodex       Boolean  @default(false)
+  targetCursor      Boolean  @default(false)
+  targetAntigravity Boolean  @default(false)
   // ECC library skills switched on for every product (per-product picks are UseCaseSkill rows).
   eccAllProducts    String[] @default([])
 }
 
 // Visual markup on a generated screen: the drawing, the comment, and the card it became.
 model Feedback {
-  id        String   @id @default(cuid())
-  useCaseId String
-  comment   String
-  imagePath String
-  pageUrl   String   @default("")
-  target    String   @default("") // the surface the owner pointed at
-  shape     String   @default("object") // object | circle | full-screen
-  status    String   @default("new") // new | built
+  id             String   @id @default(cuid())
+  useCaseId      String
+  comment        String
+  imagePath      String
+  pageUrl        String   @default("")
+  target         String   @default("") // the surface the owner pointed at
+  shape          String   @default("object") // object | circle | full-screen
+  status         String   @default("new") // new | built
   // The Muse's reading of the mark: observation, desired behaviour, acceptance criteria, component change,
   // the PRD and TRD sections it changes, and any question (the annotation interpretation chain).
-  interpretation Json @default("{}")
-  createdAt DateTime @default(now())
-  useCase   UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+  interpretation Json     @default("{}")
+  createdAt      DateTime @default(now())
+  useCase        UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
 }
 
 // Queue of things the Muse must hear (messages, captures, moves, annotations, build notes),
@@ -523,15 +524,15 @@ model ConnectorCall {
 // Where the Studio sends what is waiting on people (an open question, a checkpoint, a card to review):
 // an email address, a Slack incoming webhook or any webhook. The address is stored encrypted.
 model NotifyTarget {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   kind      String // email | slack | webhook
   address   String // encrypted
-  hint      String   @default("") // what the page may show: the email, or the webhook's host
-  customer  String   @default("") // empty = every customer
-  enabled   Boolean  @default(true)
-  lastError String   @default("")
+  hint      String    @default("") // what the page may show: the email, or the webhook's host
+  customer  String    @default("") // empty = every customer
+  enabled   Boolean   @default(true)
+  lastError String    @default("")
   lastSent  DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 }
 
 // One row per thing already sent to a target, so nothing is sent twice.
@@ -542,4 +543,23 @@ model NotifySent {
   createdAt DateTime @default(now())
 
   @@unique([targetId, key])
+}
+
+// The Story map: links between stories (board cards) and Socra's recommendations. A person's link is
+// confirmed; Socra's is a suggestion (a guess) until someone accepts it, and a dismissed one is kept so
+// Socra never offers it again. Every add, accept and dismiss is logged in "Why did this change?".
+model StoryLink {
+  id        String   @id @default(cuid())
+  useCaseId String
+  from      String // node ref: move:<id> or backlog:<id>
+  to        String
+  kind      String // depends_on | split_from | related
+  status    String   @default("confirmed") // confirmed | suggested | dismissed
+  why       String   @default("")
+  by        String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  useCase   UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+
+  @@unique([useCaseId, from, to, kind])
 }

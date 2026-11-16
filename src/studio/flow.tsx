@@ -11,7 +11,7 @@ import { api, initials, type Live, type StudioMessage } from './live'
 type Act = (fn: () => Promise<unknown>, ok?: string) => Promise<void>
 
 /** The Studio's views: the team's ten plus a full-width place to try the product and mark it up. */
-export type StudioView = ViewId | 'review' | 'agents'
+export type StudioView = ViewId | 'review' | 'agents' | 'storymap'
 
 /** The side menu in four groups, in the order work usually moves. Every one of the team's views stays. */
 export const NAV_GROUPS: { title: string; items: { id: StudioView; label: string; hint: string }[] }[] = [
@@ -30,18 +30,21 @@ export const NAV_GROUPS: { title: string; items: { id: StudioView; label: string
       { id: 'validation', label: 'Validate use case', hint: 'Test the proof' },
       { id: 'evidence', label: 'Evidence & signals', hint: 'Keep the why' },
       { id: 'truth', label: 'Product Truth Graph', hint: 'See the meaning' },
+      { id: 'storymap', label: 'Story map', hint: 'How stories connect' },
       { id: 'readiness', label: 'Pilot readiness', hint: 'Find the ceiling' },
     ],
   },
   {
     title: 'See it',
-    items: [{ id: 'review', label: 'Try & mark up', hint: 'The live product' }],
+    items: [
+      { id: 'review', label: 'Try & mark up', hint: 'The live product' },
+      { id: 'pilot', label: 'Board', hint: 'What is in play' },
+    ],
   },
   {
     title: 'Ship it',
     items: [
       { id: 'brief', label: 'Prototype brief', hint: 'Build with Claude Code' },
-      { id: 'pilot', label: 'Make it real', hint: 'Trace the build' },
       { id: 'agents', label: 'Agents', hint: 'What runs, and why' },
       { id: 'connections', label: 'Connections', hint: 'Repository & Linear' },
     ],
@@ -126,7 +129,7 @@ export function nextMove(live: Live): { text: string; view: StudioView; cta: str
   if (live.preview.hasApp && !live.feedback.length) return { text: 'Try the product and mark anything that should change.', view: 'review', cta: 'Try it' }
   if (unreviewed) return { text: `${unreviewed} spec ${unreviewed === 1 ? 'section was' : 'sections were'} inferred for you. Keep, revise or remove them.`, view: 'spec', cta: 'Review' }
   if (live.validationScore < 60) return { text: 'The use case isn’t proven yet. See which signals are still soft.', view: 'validation', cta: 'Validate' }
-  if (live.readiness.overall >= 65) return { text: 'Ready for a thin-slice pilot with real people.', view: 'pilot', cta: 'Make it real' }
+  if (live.readiness.overall >= 65) return { text: 'Ready for a thin-slice pilot with real people.', view: 'pilot', cta: 'Open the Board' }
   return { text: 'Keep shaping with Socra; it will say when to build again.', view: 'conversation', cta: 'Continue' }
 }
 

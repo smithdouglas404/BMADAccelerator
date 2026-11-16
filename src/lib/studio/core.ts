@@ -11,7 +11,7 @@ export const VIEWS: { id: ViewId; label: string; hint: string; title: string }[]
   { id: "evidence", label: "Evidence & signals", hint: "Keep the why", title: "Evidence & signals" },
   { id: "readiness", label: "Pilot readiness", hint: "Find the ceiling", title: "Pilot readiness" },
   { id: "brief", label: "Prototype brief", hint: "Prepare Claude Code", title: "Prototype brief" },
-  { id: "pilot", label: "Make it real", hint: "Traceable moves", title: "Make it real" },
+  { id: "pilot", label: "Board", hint: "What is in play", title: "Board" },
   { id: "connections", label: "Connections", hint: "Git & Linear", title: "Connections" },
 ];
 
