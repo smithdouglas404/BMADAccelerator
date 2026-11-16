@@ -61,6 +61,34 @@ type Info = {
 
 const KIND_LABEL = { email: 'Email', slack: 'Slack', webhook: 'Webhook' } as const
 
+/** Email goes out through the owner's own Gmail: their address and a Google app password, typed here once. */
+function GmailSender({ info, reload, setToast }: { info: Info; reload: () => void; setToast: (s: string) => void }) {
+  const first = info.notify.find((t) => t.kind === 'email' && /@gmail\.com$/i.test(t.hint))?.hint ?? ''
+  const [address, setAddress] = useState(first)
+  const [password, setPassword] = useState('')
+  const save = async () => {
+    try {
+      const url = `smtps://${encodeURIComponent(address.trim())}:${encodeURIComponent(password.replace(/\s+/g, ''))}@smtp.gmail.com:465`
+      await api('/api/settings/models', { method: 'PUT', json: { action: 'key', env: 'SMTP_URL', value: url } })
+      setPassword('')
+      for (const t of info.notify.filter((x) => x.kind === 'email')) await api('/api/settings/connect', { json: { action: 'notify_test', id: t.id } })
+      setToast('Saved. A test email is on its way: check your inbox.')
+      reload()
+    } catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
+  }
+  return (
+    <div className="studio-card" style={{ margin: '12px 0' }}>
+      <p className="eyebrow" style={{ marginTop: 0 }}>One step: let the Studio send email from your Gmail</p>
+      <p className="studio-muted">Open <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer">Google app passwords</a>, make one named “Studio”, and type its 16 letters below. It is stored encrypted, used only to send these emails, and never shown again.</p>
+      <div className="studio-kv">
+        <label>Your Gmail address<input type="email" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="you@gmail.com" /></label>
+        <label>App password<input type="password" autoComplete="off" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="16 letters" /></label>
+        <button type="button" className="button button-primary button-small" disabled={!address.includes('@') || password.replace(/\s+/g, '').length < 16} onClick={() => void save()}><Send size={14} /> Save and send a test</button>
+      </div>
+    </div>
+  )
+}
+
 function Notify({ info, reload, setToast }: { info: Info; reload: () => void; setToast: (s: string) => void }) {
   const [form, setForm] = useState({ kind: 'email' as 'email' | 'slack' | 'webhook', address: '', customer: '' })
   const post = async (json: Record<string, unknown>, done?: string) => {
@@ -70,6 +98,7 @@ function Notify({ info, reload, setToast }: { info: Info; reload: () => void; se
     <section className="studio-card">
       <div className="stack-header"><div><p className="eyebrow">Notify me · {info.notify.length}</p><h3>Send what’s waiting on you</h3></div><Bell size={16} /></div>
       <p className="studio-muted">When a question, a checkpoint or something to try is waiting on you, the Studio sends it with its numbered options and a link, within a couple of minutes. Several at once arrive as one message, and nothing is sent twice.</p>
+      {!info.emailReady && info.notify.some((t) => t.kind === 'email') && <GmailSender info={info} reload={reload} setToast={setToast} />}
       <div className="studio-list">{info.notify.map((t) => (
         <div key={t.id} className="studio-list-row">
           <div className="studio-row-main"><strong>{KIND_LABEL[t.kind]} · {t.hint}</strong><small>{t.customer || 'every customer'} · last sent {when(t.lastSent)}{t.lastError ? ` · didn’t send: ${t.lastError}` : ''}</small></div>
@@ -81,7 +110,7 @@ function Notify({ info, reload, setToast }: { info: Info; reload: () => void; se
         <label>Send to<select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value as typeof form.kind })}><option value="email">Email</option><option value="slack">Slack (incoming webhook)</option><option value="webhook">Any webhook (JSON)</option></select></label>
         <label>{form.kind === 'email' ? 'Email address' : 'Webhook address (stored encrypted, never shown again)'}<input type={form.kind === 'email' ? 'email' : 'password'} autoComplete="off" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder={form.kind === 'email' ? 'you@company.com' : 'https://hooks.slack.com/services/…'} /></label>
         <label>Customer<input value={form.customer} onChange={(e) => setForm({ ...form, customer: e.target.value })} placeholder="Every customer" /></label>
-        {form.kind === 'email' && !info.emailReady && <p className="studio-muted">Email needs a sending account first: add the SMTP address under Settings &gt; Models and keys (for Gmail, an app password).</p>}
+
         <button type="button" className="button button-primary button-small" disabled={!form.address.trim()} onClick={() => void post({ action: 'notify_add', ...form }, 'Added. Use “Send a test” to check it.').then(() => setForm({ ...form, address: '' }))}><Bell size={14} /> Send here</button>
       </div>
     </section>
