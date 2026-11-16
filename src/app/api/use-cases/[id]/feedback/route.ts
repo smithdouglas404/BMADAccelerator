@@ -61,7 +61,7 @@ export async function POST(req: Request, { params }: Ctx) {
     },
   });
   rememberFeedback(uc, `A${n}`, `On ${d.target || d.pageUrl} the owner said: "${d.comment}"`);
-  await recordChange(id, { node: `ann:${fb.id}`, kind: "added", summary: `${d.shape === "circle" ? "Circled" : d.shape === "full-screen" ? "Captured the whole screen of" : "Pointed at"} ${d.target || "the product"}: “${d.comment}”`, after: d.comment, by: "Owner" });
+  await recordChange(id, { node: `ann:${fb.id}`, kind: "added", summary: `${d.shape === "circle" ? "Circled" : d.shape === "full-screen" ? "Captured the whole screen of" : "Pointed at"} ${d.target ? d.target.replace(/^Circled /, "") : "the product"}: “${d.comment}”`, after: d.comment, by: "Owner" });
   if (agentsEnabled())
     await enqueue(
       id,

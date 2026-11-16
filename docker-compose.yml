@@ -166,14 +166,20 @@ services:
       BACC_SECRET: ${BACC_SECRET:-}
       # Partner shadcn registries the advisor searches: a list, "all" or "off".
       BACC_SHADCN_REGISTRIES: ${BACC_SHADCN_REGISTRIES:-}
+      npm_config_prefer_offline: "true"
+      npm_config_audit: "false"
+      npm_config_fund: "false"
     volumes:
       - workspaces:/data/workspaces
       # The agents' session history, so conversations resume after a rebuild.
       - claude-home:/home/node/.claude
+      # npm's download cache, kept between builds so installs after the first come from disk.
+      - npm-cache:/home/node/.npm
     shm_size: "512m"
 
 volumes:
   db:
   workspaces:
   claude-home:
+  npm-cache:
   mem0-history:

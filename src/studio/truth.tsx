@@ -106,7 +106,7 @@ export function MarkChain({ mark }: { mark: Live['feedback'][number] }) {
   const it = mark.interpretation ?? {}
   const changes = [...(it.prd ?? []), ...(it.trd ?? [])]
   return <span className="studio-chain">
-    <span><em>Region</em>{mark.shape === 'circle' ? 'Circled' : mark.shape === 'full-screen' ? 'Whole screen' : 'Pointed at'} {mark.target || 'the product'}</span>
+    <span><em>Region</em>{mark.shape === 'circle' ? 'Circled' : mark.shape === 'full-screen' ? 'Whole screen' : 'Pointed at'} {mark.target ? mark.target.replace(/^Circled /, '') : 'the product'}</span>
     <span><em>Observation</em>“{it.observation || mark.comment}”</span>
     {it.behaviour ? <span><em>Behaviour</em>{it.behaviour}</span> : <span><em>Behaviour</em>Socra is reading what this means…</span>}
     {!!it.acceptance?.length && <span><em>Acceptance</em>{it.acceptance.join(' · ')}</span>}

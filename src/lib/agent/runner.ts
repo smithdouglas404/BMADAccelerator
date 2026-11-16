@@ -175,6 +175,8 @@ async function runSdkTurnOnce(opts: {
   model?: string;
   effort?: "low" | "medium" | "high";
   speaker?: string;
+  /** Stop the run when nothing has happened for this long (a command stuck waiting for input). */
+  idleMs?: number;
 }) {
   const auth = opts.auth ?? authOrder()[0] ?? "key";
   const ws = workspacePath(opts.slug);
@@ -183,9 +185,11 @@ async function runSdkTurnOnce(opts: {
   const shadcnDir = process.env.BACC_SHADCN_MCP === "0" ? "" : await shadcnLookupDir(opts.slug).catch(() => "");
   await syncStudioSkills(opts.useCaseId, opts.slug).catch((e) => console.error("skill sync", e));
   const connectors = await mcpServersFor(opts.useCaseId).catch(() => ({}));
+  const abort = new AbortController();
   const q = query({
     prompt: opts.prompt,
     options: {
+      abortController: abort,
       cwd: ws,
       model: opts.model || agentModel(),
       ...(opts.effort ? { effort: opts.effort } : {}),
@@ -203,7 +207,8 @@ async function runSdkTurnOnce(opts: {
       agents: STUDIO_TEAM,
       resume: opts.resume || undefined,
       maxTurns: opts.maxTurns ?? 200,
-      env: authEnv(auth),
+      // No shell command may run for ever: 3 minutes unless it asks for more, never more than 7.
+      env: { ...authEnv(auth), BASH_DEFAULT_TIMEOUT_MS: "180000", BASH_MAX_TIMEOUT_MS: "420000" },
       stderr: (d) => console.error("[claude]", d.trimEnd()),
     },
   });
@@ -213,7 +218,21 @@ async function runSdkTurnOnce(opts: {
     q.interrupt().catch(() => undefined);
     return new LimitError(limitMessage(auth, resetsAt), sessionId, resetsAt);
   };
+  let lastActivity = Date.now();
+  let stalled = false;
+  const watchdog = opts.idleMs
+    ? setInterval(() => {
+        if (Date.now() - lastActivity < opts.idleMs!) return;
+        stalled = true;
+        console.warn(`[claude] no activity for ${Math.round(opts.idleMs! / 60000)} min, stopping the run`);
+        q.interrupt().catch(() => undefined);
+        setTimeout(() => abort.abort(), 30_000).unref?.();
+      }, 15_000)
+    : null;
+  try {
   for await (const m of q as AsyncIterable<SDKMessage>) {
+    lastActivity = Date.now();
+    if (stalled) break;
     if (m.type === "rate_limit_event" && m.rate_limit_info.status === "rejected") throw limited(m.rate_limit_info.resetsAt);
     if (m.type === "assistant" && (m.error === "rate_limit" || m.error === "billing_error")) throw limited();
     if ("session_id" in m && m.session_id && m.session_id !== sessionId) {
@@ -231,11 +250,16 @@ async function runSdkTurnOnce(opts: {
         }
       }
     }
-    if (m.type === "result" && m.subtype !== "success") {
+    if (m.type === "result" && m.subtype !== "success" && !stalled) {
       throw new Error(`Agent stopped: ${m.subtype}`);
     }
   }
-  return { texts, sessionId };
+  } catch (e) {
+    if (!stalled) throw e;
+  } finally {
+    if (watchdog) clearInterval(watchdog);
+  }
+  return { texts, sessionId, stalled };
 }
 
 async function runTurn(useCaseId: string, prompt: string) {

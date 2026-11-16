@@ -196,7 +196,7 @@ export function truthNodes(g: GraphInput): LiveTruthNode[] {
   for (const f of g.feedback) {
     const it = readInterpretation(f.interpretation);
     add({
-      id: `ann:${f.id}`, type: "prototype", title: clip(f.comment, 80), detail: `${f.shape === "circle" ? "Circled" : f.shape === "full-screen" ? "Whole screen" : "Pointed at"} ${f.target || "the product"}: “${f.comment}”${it.behaviour ? `\n\nMeans: ${it.behaviour}` : ""}`,
+      id: `ann:${f.id}`, type: "prototype", title: clip(f.comment, 80), detail: `${f.shape === "circle" ? "Circled" : f.shape === "full-screen" ? "Whole screen" : "Pointed at"} ${f.target ? f.target.replace(/^Circled /, "") : "the product"}: “${f.comment}”${it.behaviour ? `\n\nMeans: ${it.behaviour}` : ""}`,
       source: "prototype", statement: "fact", ontologyClass: "artifact", semanticTags: tagsOf("annotation", f.shape, f.status), at: iso(f.createdAt), by: "", view: "review",
       interpretations: interpretText(f.comment),
     });

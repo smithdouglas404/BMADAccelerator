@@ -111,3 +111,11 @@ test("Socra asks one question with a suggestion, keeps a why us, and never shows
     assert.match(framed({ kind: "build", prompt: "done" }), /^\[Studio update, not a message from anyone/);
   }
 });
+
+test("the agents a product needs are proposed, so they reach the Agents view (Mac rerun, Nov 16)", async () => {
+  const fs = await import("node:fs");
+  const team = fs.readFileSync(new URL("../src/lib/agent/team.ts", import.meta.url), "utf8");
+  assert.match(team, /Product engineer[\s\S]*mcp__studio__propose_agent[\s\S]*persona is on by default/);
+  const skill = fs.readFileSync(new URL("../studio-skills/studio-muse/SKILL.md", import.meta.url), "utf8");
+  assert.match(skill, /propose_agent/);
+});

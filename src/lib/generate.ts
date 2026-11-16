@@ -45,15 +45,15 @@ Running and safety (the only hard rules):
 - It runs with no accounts or paid services: \`npm install\`, \`npm run build\`, \`npm start\`, listening on \`process.env.PORT\` and host 0.0.0.0. SQLite or files for data.
 - Realistic sample data (records, pages, figures), labelled as samples. Never invent people: no made-up customers, reviews or contact details; those areas exist with friendly empty states.
 - Health, safety, money, legal and AI wording must be honest.
-- Never kill processes by name or pattern (\`pkill -f\`, \`killall\`): your own command line contains words like "shadcn" and "claude". Run anything that could hang with \`timeout\` and no input, and stop only PIDs you started.
+- Never kill processes by name or pattern (\`pkill -f\`, \`killall\`): your own command line contains words like "shadcn" and "claude". Run anything that could hang with \`timeout\` and no input, and stop only PIDs you started. Never run a command that waits for input: no bare \`cat\`, \`read\` or a pipe from the terminal (\`cat >> /dev/null\` hung a build for 9 minutes); give every command its input or \`< /dev/null\`.
 
 Order of work, so the owner sees something early: first the main customer flow and the core screens with sample data, then \`npm run build\` and \`mcp__studio__show_preview\` (aim for about ten minutes in), then the rest of the floor, calling \`mcp__studio__show_preview\` again after each big step. Install once: add every package and component you know you need in one go, and don't reinstall between checks.
 
 Check it with your own eyes before you finish:
 1. Start it on a spare port (for example 4999).
-2. Screenshot every main page at desktop and phone size into \`studio/shots/\`: \`node ${SHOT} http://127.0.0.1:4999 <shots folder> / /other-page ...\`.
+2. Screenshot the pages that matter in one command into \`studio/shots/\`: the home page and at most three other main pages (on a later version, only the pages this build changed): \`node ${SHOT} http://127.0.0.1:4999 <shots folder> / /other-page ...\`.
 3. Open each screenshot with Read and compare it with the three leading products in your direction. Anything they all have that this app lacks is a bug, unless the owner said no to it. Check hierarchy, type, spacing, imagery and the phone layout.
-4. Fix and repeat until it would stand next to them: one round on a first version (the owner reviews it next), at least two on later versions. Then stop the app.
+4. Fix what you found, then take one more screenshot of only the pages you fixed. One round, plus that check, is enough: the owner reviews it next, and Socra reviews the screenshots after you. Then stop the app.
 
 Talk to the owner only with \`mcp__studio__say\`, two or three short sentences in plain words. Plain text you write is not shown.`;
 
@@ -200,7 +200,8 @@ export async function runGenerate(useCaseId: string, opts: { redesign?: boolean;
         tally,
         maxTurns: 600,
         model: process.env.BACC_GENERATE_MODEL || undefined,
-        effort: "high",
+        // The first version and a redesign think hardest; an iteration builds in what changed.
+        effort: uc.generateCount === 0 || fresh || redesign ? "high" : "medium",
         onSession: async (id) => {
           await prisma.useCase.update({ where: { id: useCaseId }, data: { generateSessionId: id } });
         },
@@ -208,6 +209,9 @@ export async function runGenerate(useCaseId: string, opts: { redesign?: boolean;
           await prisma.useCase.update({ where: { id: useCaseId }, data: { generateStatus: s } });
         },
         onTool: (name, input) => timer.tool(name, input),
+        // A command stuck waiting (it hung a Northwind build for 9 minutes): after 8 quiet minutes the run
+        // stops and the Studio finishes the build with what Claude Code made.
+        idleMs: 8 * 60_000,
       });
       } finally {
         // Where the time went, for the owner and for making builds faster.
@@ -216,7 +220,7 @@ export async function runGenerate(useCaseId: string, opts: { redesign?: boolean;
     }
     await prisma.useCase.update({ where: { id: useCaseId }, data: { generateStatus: "Starting the preview" } });
     await commitApp(appDir(uc.slug), n);
-    await prisma.useCase.update({ where: { id: useCaseId }, data: { generateCount: n, lastGeneratedAt: new Date() } });
+    await prisma.useCase.update({ where: { id: useCaseId }, data: { generateCount: n, lastGeneratedAt: new Date(), stageLabel: `Version ${n} · in review` } });
     await stopPreview(useCaseId);
     await startPreview(useCaseId);
     if (decisions.length) await prisma.decision.updateMany({ where: { id: { in: decisions.map((d) => d.id) } }, data: { builtInVersion: n } });
