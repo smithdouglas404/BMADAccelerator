@@ -178,6 +178,28 @@ services:
       - npm-cache:/home/node/.npm
     shm_size: "512m"
 
+  # Optional: a public address for assistants on the web (Meta Muse, claude.ai). Off unless you run
+  #   docker compose --profile public up -d
+  # connector-gate lets ONLY the connector's addresses through (the Studio's screens stay on this computer);
+  # tunnel is a free Cloudflare quick tunnel to it, with no account. Its address changes if the tunnel restarts:
+  #   scripts/public-address.sh   prints the current one.
+  connector-gate:
+    image: nginx:1.27-alpine
+    profiles: ["public"]
+    restart: unless-stopped
+    depends_on:
+      - app
+    volumes:
+      - ./connector-gate/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./connector-gate/pass.conf:/etc/nginx/pass.conf:ro
+  tunnel:
+    image: cloudflare/cloudflared:2024.12.2
+    profiles: ["public"]
+    restart: unless-stopped
+    depends_on:
+      - connector-gate
+    command: tunnel --no-autoupdate --url http://connector-gate:8080
+
 volumes:
   db:
   workspaces:

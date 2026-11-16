@@ -37,6 +37,17 @@ Claude Desktop and Claude Code on the same Mac can skip this step and use `http:
 
 > **Warning:** the Studio has no sign-in of its own yet. Anyone who can open the public address can use the whole Studio, not only the connector. Before you open it to the internet, protect the address, for example with Cloudflare Access on your email. The connector's own sign-in is safe on its own: it needs a connect code from Settings > Connect.
 
+### The easy way: the public door (Cloudflare quick tunnel, no account)
+
+```
+docker compose --profile public up -d
+scripts/public-address.sh      # prints the address and the two connector addresses
+```
+
+This starts two small containers. `connector-gate` lets only the connector's addresses through (`/api/mcp`, `/api/v1/`, `/oauth/`, `/api/oauth/`, `/.well-known/` and the sign-in page's files). Everything else, including every Studio screen, answers 404 on the internet, so the Studio's missing sign-in is not exposed. `tunnel` connects it to the internet. Requests are limited to about 10 a second per visitor.
+
+The address looks like `https://something-random.trycloudflare.com` and **changes whenever the tunnel container restarts** (a Mac restart, or Docker restarting). Run `scripts/public-address.sh` again and update the connector. For an address that never changes, use a named Cloudflare Tunnel on your own domain and set `STUDIO_PUBLIC_URL`.
+
 ## Claude (claude.ai, Desktop)
 
 1. Go to **Settings > Connectors > Add custom connector**.
@@ -74,6 +85,14 @@ Meta Muse uses the REST API.
 A call that needs confirming answers **202** with `needs_confirmation` and a preview. Send the same call again with `"confirm": true` after the person says yes.
 
 No submission to Meta's connector platform has been made. This is a private custom connector.
+
+### Having Muse bring you Socra's questions
+
+Muse can't be pushed to, so it checks on a schedule. Give it this instruction once the connector is made:
+
+> Every 15 minutes, call the Socra Studio connector's `whats_waiting` tool. For every question waiting, tell me the product name, Socra's question and its numbered options, and which one Socra suggests. When I answer, call `answer` with that product's `use_case_id` and my words (a number picks that option). If `answer` comes back needing confirmation, show me the preview and send the same call again with `confirm: true` only after I say yes. Don't approve, build or withdraw anything unless I ask for it in that message.
+
+The token needs "Look and make changes" for `answer` to work.
 
 ## Scripts
 
