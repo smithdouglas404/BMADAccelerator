@@ -140,7 +140,7 @@ export function NextMove({ live, changeView }: { live: Live; changeView: (v: Stu
 }
 
 const SPECIALIST_ICON: Record<string, React.ReactNode> = { 'business-analyst': <Scale size={13} />, architect: <Layers3 size={13} />, engineer: <Wrench size={13} />, ux: <PenTool size={13} />, domain: <Compass size={13} /> }
-const SPECIALIST_ROUTE: Record<string, string> = { 'business-analyst': 'Business Analyst', architect: 'Solution Architect', engineer: 'Product Engineer', ux: 'UX / Component Mapper', domain: 'Domain Expert' }
+export const SPECIALIST_ROUTE: Record<string, string> = { 'business-analyst': 'Business Analyst', architect: 'Solution Architect', engineer: 'Product Engineer', ux: 'UX / Component Mapper', domain: 'Domain Expert' }
 export const specialistIcon = (key?: string) => SPECIALIST_ICON[key ?? ''] ?? <UserRound size={13} />
 
 /** Socra and its specialists, what each is doing, and who you are talking to. */
