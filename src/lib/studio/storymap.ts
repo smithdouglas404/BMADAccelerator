@@ -107,3 +107,8 @@ export function neighbourhood(id: string, links: StoryLinkRow[]) {
 export function connectPrompt(a: string, b: string, kind: LinkKind) {
   return `I think “${a}” and “${b}” are linked: “${a}” ${LINK_LABEL[kind]} “${b}”. Ask me two or three short questions to firm up how they connect (what one needs from the other, what happens at the hand-off, and anything that would break if one changes), one at a time, and turn my answers into requirements.`;
 }
+
+/** What a person says when they ask Socra to look for links now (Socra otherwise looks only when something changes). */
+export function suggestPrompt() {
+  return `Look across the stories on the Story map and suggest the links you are most sure of with link_stories: what depends on what, what was split from what, what is related. At most ${MAX_SUGGESTED_PER_STORY} per story, each with a one-line why, never one a person dismissed. Then tell me in a sentence or two which gaps stand out.`;
+}

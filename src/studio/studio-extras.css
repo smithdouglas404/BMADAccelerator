@@ -345,3 +345,6 @@ a.studio-home-brand { color: inherit; text-decoration: none; padding-bottom: 12p
 .truth-edge-list .sm-link .text-button:hover { color: var(--ink); }
 .sm-link small { color: var(--faint); font-size: .7rem; line-height: 1.4; }
 .sm-gap { display: flex; gap: .4rem; align-items: flex-start; }
+.storymap-loose-label { position: absolute; margin: 0; font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; color: var(--warm); }
+.sm-node { justify-content: flex-start; }
+.sm-node small { margin-top: auto; }

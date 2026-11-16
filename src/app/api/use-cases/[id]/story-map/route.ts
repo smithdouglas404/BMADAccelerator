@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { ownerSays } from "@/lib/studio/actions";
 import { recordChange } from "@/lib/studio/truthlog";
-import { LINK_KINDS, LINK_LABEL, connectPrompt, liveLinks, storyNodes, unlinked } from "@/lib/studio/storymap";
+import { LINK_KINDS, LINK_LABEL, connectPrompt, liveLinks, storyNodes, suggestPrompt, unlinked } from "@/lib/studio/storymap";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -25,6 +25,8 @@ const Body = z.discriminatedUnion("action", [
   // A person connects two stories. With ask, Socra asks two or three questions to firm up the link.
   z.object({ action: z.literal("connect"), from: z.string().min(3), to: z.string().min(3), kind: z.enum(LINK_KINDS), ask: z.boolean().default(true), author: Author }),
   z.object({ action: z.enum(["accept", "dismiss", "remove"]), link: z.string().min(3), author: Author }),
+  // A person asks Socra to look for links now.
+  z.object({ action: z.literal("suggest"), author: Author }),
 ]);
 
 export async function POST(req: Request, { params }: Ctx) {
@@ -53,6 +55,11 @@ export async function POST(req: Request, { params }: Ctx) {
     await recordChange(id, { node: b.from, kind: "changed", summary: `${by} linked “${a}” ${LINK_LABEL[b.kind]} “${c}”`, after: `${LINK_LABEL[b.kind]} ${c}`, causes: [b.to], by });
     if (b.ask) await ownerSays(id, connectPrompt(a, c, b.kind), { source: "Story map", author: b.author });
     return NextResponse.json({ ok: true, link: l.id }, { status: 201 });
+  }
+
+  if (b.action === "suggest") {
+    await ownerSays(id, suggestPrompt(), { source: "Story map", author: b.author });
+    return NextResponse.json({ ok: true }, { status: 202 });
   }
 
   const l = await prisma.storyLink.findFirst({ where: { id: b.link, useCaseId: id } });

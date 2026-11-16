@@ -15,7 +15,7 @@ type MapData = { nodes: StoryNode[]; links: StoryLinkRow[]; unlinked: string[]; 
 
 const STATE_LABEL: Record<StoryNode['state'], string> = { idea: `${ASSISTANT_NAME}'s idea`, backlog: 'Backlog', shaping: 'Ready to shape', building: 'Being built', review: 'Human review', done: 'Done' }
 const STATE_ORDER: StoryNode['state'][] = ['done', 'review', 'building', 'shaping', 'backlog', 'idea']
-const W = 214, H = 76, GX = 86, GY = 16, PAD = 18
+const W = 214, H = 88, GX = 86, GY = 16, PAD = 18
 const MANY = 40
 
 type Props = { live: Live; me: Me; changeView: (v: StudioView) => void; setToast: (v: string) => void }
@@ -57,9 +57,13 @@ export function StoryMapView({ live, me, changeView, setToast }: Props) {
   const ids = new Set(visible.map((n) => n.id))
   const shownLinks = links.filter((l) => ids.has(l.from) && ids.has(l.to))
   const layout = useMemo(() => {
-    const col = columns(visible, shownLinks)
+    // Stories with links read left to right in PERT columns; loose ones wait in a grid underneath, by area.
+    const touched = new Set(shownLinks.flatMap((l) => [l.from, l.to]))
+    const linked = visible.filter((n) => touched.has(n.id))
+    const loose = visible.filter((n) => !touched.has(n.id))
+    const col = columns(linked, shownLinks)
     const byCol = new Map<number, StoryNode[]>()
-    for (const n of visible) { const c = col.get(n.id) ?? 0; byCol.set(c, [...(byCol.get(c) ?? []), n]) }
+    for (const n of linked) { const c = col.get(n.id) ?? 0; byCol.set(c, [...(byCol.get(c) ?? []), n]) }
     const pos = new Map<string, { x: number; y: number }>()
     let rows = 0
     for (const [c, list] of byCol) {
@@ -67,8 +71,16 @@ export function StoryMapView({ live, me, changeView, setToast }: Props) {
       list.forEach((n, r) => pos.set(n.id, { x: PAD + c * (W + GX), y: PAD + r * (H + GY) }))
       rows = Math.max(rows, list.length)
     }
-    const cols = Math.max(1, ...[...byCol.keys()].map((c) => c + 1))
-    return { pos, width: PAD * 2 + cols * W + (cols - 1) * GX, height: PAD * 2 + Math.max(1, rows) * H + Math.max(0, rows - 1) * GY }
+    const cols = byCol.size ? Math.max(...[...byCol.keys()].map((c) => c + 1)) : 0
+    const pertW = cols ? cols * W + (cols - 1) * GX : 0
+    const per = Math.max(3, Math.floor((pertW + GY) / (W + GY)))
+    const top = rows ? PAD + rows * (H + GY) + 36 : PAD + 28
+    loose.sort((a, b) => (a.capability || '~').localeCompare(b.capability || '~') || STATE_ORDER.indexOf(a.state) - STATE_ORDER.indexOf(b.state) || a.title.localeCompare(b.title))
+    loose.forEach((n, i) => pos.set(n.id, { x: PAD + (i % per) * (W + GY), y: top + Math.floor(i / per) * (H + GY) }))
+    const looseRows = Math.ceil(loose.length / per)
+    const width = PAD * 2 + Math.max(pertW, loose.length ? Math.min(per, loose.length) * W + (Math.min(per, loose.length) - 1) * GY : 0, W)
+    const height = (loose.length ? top + looseRows * (H + GY) - GY : PAD + rows * (H + GY) - GY) + PAD
+    return { pos, width, height, looseTop: loose.length ? top - 26 : -1, looseCount: loose.length }
   }, [visible, shownLinks])
 
   if (!data) return <div className="page-wrap storymap-page"><div className="page-intro"><div><p className="eyebrow eyebrow-with-dot"><span className="status-dot" />Story map</p><h1>Drawing how the<br /><em>stories connect…</em></h1></div></div></div>
@@ -103,7 +115,7 @@ export function StoryMapView({ live, me, changeView, setToast }: Props) {
 
   return <div className="page-wrap storymap-page">
     <div className="page-intro"><div><p className="eyebrow eyebrow-with-dot"><span className="status-dot" />Story map · how the work fits together</p><h1>See how the stories<br /><em>connect.</em></h1><p>Read left to right: a story sits after the stories it depends on. Solid lines are links a person made; dashed ones are {ASSISTANT_NAME}’s guesses for you to accept or dismiss. A story with a warm outline has no links yet. Pick two stories to connect them and {ASSISTANT_NAME} asks what firms up the link.</p></div>
-      <div className="intro-actions"><button className="button button-primary" type="button" onClick={() => { setConnecting(connecting ? null : []); setSelected('') }}><Link2 size={16} /> {connecting ? 'Cancel connecting' : 'Connect two stories'}</button><span>{nodes.filter((n) => n.state !== 'idea').length} stories · {links.filter((l) => l.status === 'confirmed').length} links · {suggested.length} suggested</span></div></div>
+      <div className="intro-actions"><button className="button button-primary" type="button" onClick={() => { setConnecting(connecting ? null : []); setSelected('') }}><Link2 size={16} /> {connecting ? 'Cancel connecting' : 'Connect two stories'}</button>{!connecting && nodes.length > 1 && <button className="button button-quiet" type="button" disabled={busy} onClick={() => void post({ action: 'suggest' }, `${ASSISTANT_NAME} is looking for links. Its guesses appear here dashed.`)}><Sparkles size={16} /> Ask {ASSISTANT_NAME} to suggest links</button>}<span>{nodes.filter((n) => n.state !== 'idea').length} stories · {links.filter((l) => l.status === 'confirmed').length} links · {suggested.length} suggested</span></div></div>
 
     <div className="storymap-layout">
       <section className="truth-graph-card storymap-card">
@@ -116,6 +128,7 @@ export function StoryMapView({ live, me, changeView, setToast }: Props) {
         {visible.length > MANY && !focus && !area && <p className="storymap-hint"><Crosshair size={13} /> {visible.length} stories is a lot to read at once. Pick a story and press Focus, or choose an area above.</p>}
         {nodes.length === 0 ? <p className="studio-muted">No stories yet. They appear here as {ASSISTANT_NAME} and the team turn the conversation into board cards; nothing is made up.</p> :
           <div className="storymap-scroll"><div className="storymap-canvas" style={{ width: layout.width, height: layout.height }}>
+            {layout.looseTop >= 0 && <p className="storymap-loose-label" style={{ top: layout.looseTop, left: PAD }}>Not linked yet · {layout.looseCount}, grouped by area</p>}
             <svg width={layout.width} height={layout.height} className="storymap-lines" aria-hidden="true">
               <defs><marker id="sm-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" /></marker></defs>
               {shownLinks.map((l) => <path key={l.id} d={edgePath(l)} className={`sm-line is-${l.status} is-${l.kind} ${sel && (l.from === sel.id || l.to === sel.id) ? 'is-hot' : ''}`} markerEnd={l.kind === 'related' ? undefined : 'url(#sm-arrow)'} />)}
