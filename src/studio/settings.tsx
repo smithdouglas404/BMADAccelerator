@@ -29,8 +29,8 @@ export function SettingsPage() {
     <div className="studio-page">
       <StudioTop active="settings" />
       <div className="page-wrap">
-        <div className="page-intro"><div><p className="eyebrow">Settings</p><h1>The plumbing,<br /><em>out of the way.</em></h1><p>Models and keys, the connectors and skills Socra and Claude Code can use, and the memory that carries lessons between products.</p></div></div>
-        <div className="studio-tabs">{([['models', 'Models and keys'], ['connectors', 'Connectors (MCP)'], ['connect', 'Connect'], ['skills', 'Skills'], ['memory', 'Memory'], ['jev', 'Jev']] as const).map(([k, l]) => <button key={k} type="button" className={tab === k ? 'is-active' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
+        <div className="page-intro"><div><p className="eyebrow">Settings</p><h1>The plumbing,<br /><em>out of the way.</em></h1><p>Three places to know: AI models and keys (what runs Socra), Tools the Studio uses (outside systems Socra can call), and Connect your assistant (how Muse or Claude reaches the Studio).</p></div></div>
+        <div className="studio-tabs">{([['models', 'AI models and keys'], ['connectors', 'Tools the Studio uses'], ['connect', 'Connect your assistant (Muse, Claude)'], ['skills', 'Skills'], ['memory', 'Memory'], ['jev', 'Jev']] as const).map(([k, l]) => <button key={k} type="button" className={tab === k ? 'is-active' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
         {tab === 'models' && <Models setToast={setToast} />}
         {tab === 'connectors' && <Connectors setToast={setToast} />}
         {tab === 'connect' && <ConnectTab setToast={setToast} />}
@@ -114,7 +114,8 @@ function Connectors({ setToast }: { setToast: (s: string) => void }) {
   return (
     <div className="studio-settings-grid">
       <section className="studio-card">
-        <div className="stack-header"><div><p className="eyebrow">Connectors · {rows.length}</p><h3>MCP servers the agents can use</h3></div><Plug size={16} /></div>
+        <div className="stack-header"><div><p className="eyebrow">Connectors · {rows.length}</p><h3>Outside tools Socra can call</h3></div><Plug size={16} /></div>
+        <p className="studio-muted"><strong>This is for the Studio calling other systems</strong> (Notion, a database, your own API). It is not where Meta Muse or Claude connects to the Studio: for that, open the “Connect your assistant” tab.</p>
         {rows.length === 0 && <p className="studio-muted">None yet. Add any MCP server (Notion, a database, your own API) for every product or chosen ones.</p>}
         <div className="studio-list">{rows.map((c) => (
           <div key={c.id} className="studio-list-row">

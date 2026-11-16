@@ -147,18 +147,34 @@ export function ConnectTab({ setToast }: { setToast: (s: string) => void }) {
     } catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
   }
   const revoke = async (id: string) => { await api('/api/settings/connect', { json: { action: 'revoke', id } }); load() }
+  const MUSE_TEXT = "Every 15 minutes, call the Socra Studio connector's whats_waiting tool. For every question waiting, tell me the product name, Socra's question and its numbered options, and which one Socra suggests. When I answer, call answer with that product's use_case_id and my words (a number picks that option). If answer comes back needing confirmation, show me the preview and send the same call again with confirm: true only after I say yes. Don't approve, build or withdraw anything unless I ask for it in that message."
   return (
     <div className="studio-settings-grid">
+      <section className="studio-card" style={{ gridColumn: '1 / -1' }}>
+        <div className="stack-header"><div><p className="eyebrow">Connect your assistant</p><h3>Meta Muse in three steps</h3></div><Link2 size={16} /></div>
+        <p className="studio-muted">This is where Muse (or any assistant) reaches the Studio. Nothing here needs to be pasted back into the Studio: you make a token here and paste it into Muse.</p>
+        {!info.isPublic && <p className="studio-muted">This Studio is only reachable on this computer, so Muse can’t reach it yet. See docs/CONNECT.md for the public address.</p>}
+        <p style={{ marginBottom: 4 }}><strong>Step 1.</strong> In Muse, add a custom connector and give it this address (OpenAPI):</p>
+        <div className="studio-list"><CopyLine label="Address for Muse" value={info.openApiUrl} /></div>
+        <p style={{ marginBottom: 4 }}><strong>Step 2.</strong> Make a token here, then paste it into Muse’s bearer token or API key box. It is shown once.</p>
+        <div className="studio-kv">
+          <label>Name for the token<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Meta Muse" /></label>
+          <label>What it may do<select value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value })}><option value="read">Look only</option><option value="write">Look and make changes (needed to answer)</option></select></label>
+          <button type="button" className="button button-primary button-small" disabled={!form.name.trim()} onClick={() => void makeToken()}><KeyRound size={14} /> Make a token</button>
+          {!form.name.trim() && <p className="studio-muted">Type a name first; the button stays off until there is one.</p>}
+          {shown && <div className="studio-card" style={{ marginTop: 8 }}><p className="studio-muted" style={{ marginTop: 0 }}>Shown once. Copy it and paste it into Muse now; never paste it into a chat.</p><CopyLine label="Token (paste into Muse)" value={shown} /><button type="button" className="button button-quiet button-small" onClick={() => setShown('')}>Done, hide it</button></div>}
+        </div>
+        <p style={{ marginBottom: 4 }}><strong>Step 3.</strong> Tell Muse what to do with it:</p>
+        <div className="studio-list"><CopyLine label="Paste this into Muse as its instruction" value={MUSE_TEXT} /></div>
+      </section>
       <section className="studio-card">
-        <div className="stack-header"><div><p className="eyebrow">Connect from an assistant</p><h3>Claude, ChatGPT, Meta Muse or a script</h3></div><Link2 size={16} /></div>
+        <div className="stack-header"><div><p className="eyebrow">Other assistants</p><h3>Claude, ChatGPT or a script</h3></div><Link2 size={16} /></div>
         <div className="studio-list">
           <CopyLine label="MCP connector (Claude, ChatGPT)" value={info.mcpUrl} />
-          <CopyLine label="OpenAPI (Meta Muse, custom GPT actions, scripts)" value={info.openApiUrl} />
+          <CopyLine label="OpenAPI (custom GPT actions, scripts)" value={info.openApiUrl} />
         </div>
-        {!info.isPublic && <p className="studio-muted">This Studio is only reachable on this computer. Claude Desktop and Claude Code can connect here; claude.ai, ChatGPT and Meta Muse need a public address first (see the guide in docs/CONNECT.md).</p>}
         <p className="studio-muted">{info.tools.length} tools: {info.tools.map((t) => t.title).join(' · ')}. Approving, building, withdrawing, reopening and sending a card back always show a preview and wait for a yes.</p>
       </section>
-      <Notify info={info} reload={load} setToast={setToast} />
       <section className="studio-card">
         <div className="stack-header"><div><p className="eyebrow">Connect code</p><h3>For signing in from an assistant</h3></div><ShieldCheck size={16} /></div>
         <p className="studio-muted">When an assistant opens the Studio’s sign-in page, type this code there. It works once, for ten minutes.</p>
@@ -174,16 +190,6 @@ export function ConnectTab({ setToast }: { setToast: (s: string) => void }) {
             <button type="button" className="icon-button subtle" aria-label={`Remove access for ${t.name}`} onClick={() => void revoke(t.id)}><Trash2 size={13} /></button>
           </div>
         ))}</div>
-        <div className="studio-kv" style={{ marginTop: 12 }}>
-          <label>New token for (an OpenAPI connector or a script)<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Meta Muse" /></label>
-          <label>Whose name it acts in<input value={form.person} onChange={(e) => setForm({ ...form, person: e.target.value })} placeholder="Doug" /></label>
-          <label>Role<select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>{ROLES.map((r) => <option key={r}>{r}</option>)}</select></label>
-          <label>Customer<input value={form.customer} onChange={(e) => setForm({ ...form, customer: e.target.value })} placeholder="Every customer" /></label>
-          <label>What it may do<select value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value })}><option value="read">Look only</option><option value="write">Look and make changes</option></select></label>
-          <button type="button" className="button button-primary button-small" disabled={!form.name.trim()} onClick={() => void makeToken()}><KeyRound size={14} /> Make a token</button>
-          {!form.name.trim() && <p className="studio-muted">Type a name above first (for example Meta Muse); the button stays off until there is one.</p>}
-          {shown && <div className="studio-card" style={{ marginTop: 8 }}><p className="studio-muted" style={{ marginTop: 0 }}>Shown once. Put it straight into the connector’s settings; never paste it into a chat.</p><CopyLine label="Token" value={shown} /><button type="button" className="button button-quiet button-small" onClick={() => setShown('')}>Done, hide it</button></div>}
-        </div>
       </section>
       <section className="studio-card">
         <div className="stack-header"><div><p className="eyebrow">Every call · latest {info.calls.length}</p><h3>What assistants did</h3></div><ScrollText size={16} /></div>
@@ -194,6 +200,7 @@ export function ConnectTab({ setToast }: { setToast: (s: string) => void }) {
           </div>
         ))}</div>
       </section>
+      <Notify info={info} reload={load} setToast={setToast} />
     </div>
   )
 }
