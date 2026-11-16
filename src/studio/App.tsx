@@ -14,11 +14,9 @@ import {
   Settings2,
   Upload,
   UserRound,
-  ArrowLeft,
   ArrowRight,
   Bell,
   Check,
-  ChevronDown,
   CircleHelp,
   FileText,
   Filter,
@@ -43,8 +41,6 @@ import {
   Waves,
   X,
   PenLine,
-  Zap,
-  Workflow,
 } from 'lucide-react'
 import {
   type BacklogItem,
@@ -58,13 +54,14 @@ import {
 import { downloadPrototypeZip } from './generation'
 import { api, ago, initials, previewUrl, sessionLine, toBacklog, toCapabilities, toEvidence, toExecution, toMessages, toRecommendations, toSpec, useLive, type Live, type StudioMessage } from './live'
 import { LiveFrame, captureLive, useVoice, type Pick } from './vibe'
-import { NAV_GROUPS, NextMove, PeopleMenu, TeamPanel, Checkpoints, UndoChip, optionsFrom, roleShort, specialistIcon, talkingTo, useMe, type Me, type StudioView } from './flow'
+import { NextMove, PeopleMenu, TeamPanel, Checkpoints, UndoChip, optionsFrom, roleShort, specialistIcon, talkingTo, useMe, type Me, type StudioView } from './flow'
 import { TruthGraphView, MarkChain, ObservationEffects } from './truth'
 import { AgentsView } from './agents'
 import { StoryMapView } from './storymap'
 import { BoardView } from './board'
-import { ProductSwitcher, StudioMarkdown, SpecReviewTools, ImpactPanel, VersionHistory, ReadinessFactors, DecisionRegister, ObservationComposer, SyncPreview, ProvidersCard, BuildHistory } from './extras'
-import { ASSISTANT_NAME, PRODUCT_LINE } from '@/lib/brand'
+import { StudioMarkdown, SpecReviewTools, ImpactPanel, VersionHistory, ReadinessFactors, DecisionRegister, ObservationComposer, SyncPreview, ProvidersCard, BuildHistory } from './extras'
+import { PRODUCT_LINE } from '@/lib/brand'
+import { StudioFrame, StudioSidebar, StudioTopBar } from './shell'
 
 const viewTitles: Record<StudioView, string> = {
   review: 'Try & mark up',
@@ -309,71 +306,17 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
   const props = { live, reload, act, setToast, changeView }
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <a className="brand-lockup studio-home-brand" href="/" title="All use cases">
-          <div className="brand-mark"><span /><span /><span /></div>
-          <div>
-            <p className="eyebrow">{PRODUCT_LINE}</p>
-            <p className="brand-name">{ASSISTANT_NAME}<span>.</span></p>
-          </div>
-          <span className="version-badge">0.1</span>
-        </a>
-        <a className="studio-home-link" href="/"><ArrowLeft size={13} /> All use cases</a>
-
-        <ProductSwitcher live={live}>
-          <span className="project-glyph">{initials(live.name).slice(0, 1)}</span>
-          <span className="project-switcher-copy"><strong>{live.name}</strong><small>{live.stageLabel}</small></span>
-          <ChevronDown size={15} />
-        </ProductSwitcher>
-
-        <nav className="primary-nav studio-nav" aria-label="Product workspace">
-          {NAV_GROUPS.map((group) => (<div className="studio-nav-group" key={group.title}><div className="sidebar-section-label">{group.title}</div>{group.items.map((item) => (
-            <button className={`nav-item ${activeView === item.id ? 'is-active' : ''}`} key={item.id} onClick={() => changeView(item.id)} type="button">
-              <span className="nav-icon">
-                {item.id === 'review' && <MousePointer2 size={17} />}
-                {item.id === 'overview' && <Layers3 size={17} />}
-                {item.id === 'conversation' && <Waves size={17} />}
-                {item.id === 'validation' && <CircleHelp size={17} />}
-                {item.id === 'product' && <FileText size={17} />}
-                {item.id === 'evidence' && <Database size={17} />}
-                {item.id === 'truth' && <Network size={17} />}
-                {item.id === 'storymap' && <Workflow size={17} />}
-                {item.id === 'agents' && <Bot size={17} />}
-                {item.id === 'spec' && <FileText size={17} />}
-                {item.id === 'readiness' && <Target size={17} />}
-                {item.id === 'brief' && <PackageOpen size={17} />}
-                {item.id === 'pilot' && <Zap size={17} />}
-                {item.id === 'connections' && <FolderGit2 size={17} />}
-              </span>
-              <span className="nav-copy"><strong>{item.label}</strong><small>{item.hint}</small></span>
-              {item.id === 'conversation' && <span className="nav-live-dot" />}
-            </button>
-          ))}</div>))}
-        </nav>
-
-        <div className="sidebar-divider" />
-        <div className="sidebar-section-label">Held in the background</div>
-        <div className="sidebar-mini-list">
-          <button type="button" onClick={() => changeView('product')}><span className="mini-icon warm"><Lightbulb size={14} /></span><span><strong>{backlog.length} thoughts</strong><small>waiting for a home</small></span><ArrowRight size={13} /></button>
-          <button type="button" onClick={() => changeView('pilot')}><span className="mini-icon lilac"><GitBranch size={14} /></span><span><strong>{execution.length} build moves</strong><small>traceable to the shape</small></span><ArrowRight size={13} /></button>
-        </div>
-
-        <div className="sidebar-spacer" />
-        <div className="ambient-capture-card">
-          <div className="ambient-card-top"><span className="live-pulse" /><span>Ambient capture</span><Mic size={15} /></div>
-          <p>Have a thought while you’re away from the desk? Put it here. No need to make it a ticket yet.</p>
-          <button type="button" onClick={() => { if (!document.getElementById('ambient-capture')) changeView('product'); window.setTimeout(() => document.getElementById('ambient-capture')?.focus(), 80) }}><Plus size={14} /> Capture a thought</button>
-        </div>
-        <div className="profile-row" role="link" tabIndex={0} title="Settings" onClick={() => { window.location.href = '/settings' }} onKeyDown={(event) => { if (event.key === 'Enter') window.location.href = '/settings' }}><div className="avatar">{me.name ? initials(me.name) : roleShort(me.role)}</div><div><strong>Settings</strong><small>{me.name ? `${me.name} · ${me.role}` : me.role}</small></div><MoreHorizontal size={16} /></div>
-      </aside>
-
-      <main className="main-content">
-        <header className="topbar">
-          <div className="breadcrumbs"><span>{live.name}</span><span className="crumb-slash">/</span><strong>{viewTitles[activeView]}</strong></div>
-          <div className="topbar-actions"><span className="save-state"><span /> {live.generateBusy ? live.generateStatus || 'Claude Code is building' : busy ? live.agentStatus || 'Socra is working' : 'All changes saved'}</span><button className="icon-button" type="button" aria-label="Notifications" onClick={() => changeView('conversation')}><Bell size={17} /></button><PeopleMenu live={live} me={me} setMe={setMe} setToast={setToast} /></div>
-        </header>
-
+    <StudioFrame sidebar={<StudioSidebar useCase={{
+      id: live.id, name: live.name, stageLabel: live.stageLabel, active: activeView, onNavigate: (v) => changeView(v),
+      badges: { conversation: live.decisions.filter((d) => d.status === 'open').length },
+      thoughts: backlog.length, buildMoves: execution.length,
+      onCapture: () => { if (!document.getElementById('ambient-capture')) changeView('product'); window.setTimeout(() => document.getElementById('ambient-capture')?.focus(), 80) },
+    }} />}>
+      <StudioTopBar
+        crumbs={<><span className="truncate">{live.name}</span><span aria-hidden>/</span><strong className="truncate font-semibold text-foreground">{viewTitles[activeView]}</strong></>}
+        actions={<><span className="hidden items-center gap-2 text-xs text-muted-foreground md:flex"><span className="size-2 rounded-full bg-primary" />{live.generateBusy ? live.generateStatus || 'Claude Code is building' : busy ? live.agentStatus || 'Socra is working' : 'All changes saved'}</span><button className="icon-button" type="button" aria-label="Notifications" onClick={() => changeView('conversation')}><Bell size={17} /></button><PeopleMenu live={live} me={me} setMe={setMe} setToast={setToast} /></>}
+      />
+      <div className="main-content">
         <NextMove live={live} changeView={changeView} />
         {!live.agentsEnabled && <div className="studio-banner"><CircleHelp size={14} /><span>Socra and Claude Code switch on once Claude is signed in. Everything you say is kept meanwhile.</span><a href="/settings">Open Settings <ArrowRight size={13} /></a></div>}
 
@@ -393,8 +336,8 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
         {activeView === 'connections' && <ConnectionsView {...{ live, act, setToast, changeView }} />}
 
         {toast && <div className="toast" role="status"><span className="toast-check"><Check size={14} /></span>{toast}<button type="button" onClick={() => setToast('')} aria-label="Dismiss"><X size={14} /></button></div>}
-      </main>
-    </div>
+      </div>
+    </StudioFrame>
   )
 }
 

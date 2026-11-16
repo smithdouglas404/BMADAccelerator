@@ -7,6 +7,7 @@ import { api, ago } from './live'
 import { useVoice } from './vibe'
 import { useMe } from './flow'
 import { ASSISTANT_NAME, PRODUCT_LINE } from '@/lib/brand'
+import { StudioFrame, StudioSidebar, StudioTopBar } from './shell'
 
 type ProductRow = { id: string; name: string; statement: string; category: string; stageLabel: string; customer: string; businessArea: string; lastView: string; readiness: number; versions: number; thoughts: number; decisions: number; busy: boolean; updatedAt: string }
 
@@ -27,8 +28,16 @@ export function StudioTop({ active }: { active?: 'home' | 'new' | 'settings' | '
   )
 }
 
-function Shell({ active, children }: { active: 'home' | 'new' | 'settings' | 'capture'; children: ReactNode }) {
-  return <div className="studio-page"><StudioTop active={active} />{children}</div>
+const PLACE_TITLES = { home: 'All use cases', new: 'New use case', capture: 'Capture a thought', settings: 'Settings' } as const
+
+/** Home, New, Capture and Settings: the same sidebar as inside a use case, the place's title in the top bar. */
+export function Shell({ active, children }: { active: 'home' | 'new' | 'settings' | 'capture'; children: ReactNode }) {
+  return (
+    <StudioFrame sidebar={<StudioSidebar place={active} />}>
+      <StudioTopBar crumbs={<strong className="font-semibold text-foreground">{PLACE_TITLES[active]}</strong>} />
+      <div className="studio-page">{children}</div>
+    </StudioFrame>
+  )
 }
 
 export const BUSINESS_AREAS = ['Finance', 'IT', 'HR', 'Operations', 'Sales', 'Marketing', 'Customer service', 'Legal / Compliance', 'Supply chain'] as const
