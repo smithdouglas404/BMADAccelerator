@@ -17,7 +17,7 @@ type Run = { id: string; agent: string; person: string; input: string; output: s
 type Approval = { id: string; agent: string; kind: string; title: string; detail: string; status: string; comment: string; decided_by: string; created_at: string }
 type View = { agents: Agent[]; runs: Run[]; approvals: Approval[]; note: string; approvalPage: string }
 
-const STATUS: Record<Agent['status'], string> = { proposed: 'Waiting for your yes', approved: 'Running', off: 'Off' }
+const STATUS: Record<Agent['status'], string> = { proposed: 'Waiting for your yes', approved: 'Approved · on', off: 'Off' }
 const when = (s: string) => new Date(s).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 
 export function AgentsView({ live, me, setToast }: { live: Live; me: Me; setToast: (s: string) => void }) {
@@ -53,7 +53,7 @@ export function AgentsView({ live, me, setToast }: { live: Live; me: Me; setToas
 
   return <div className="page-wrap studio-agents">
     <div className="page-intro"><div><p className="eyebrow eyebrow-with-dot"><span className="status-dot" />Agents · shared agent service</p><h1>The agents behind<br /><em>{live.name}.</em></h1><p>Each one is proposed by Socra from what this product needs, approved by a person, and runs in the Studio’s shared agent service: Inngest AgentKit, a Letta persona that remembers each person, and Mem0 memory kept to this product only. People approve what matters; every run is kept.</p></div>
-      <div className="truth-intro-side"><div className="truth-score"><span className="eyebrow">Running</span><strong>{view.agents.filter((a) => a.status === 'approved').length}</strong><small>{view.agents.filter((a) => a.status === 'proposed').length} waiting for a yes · {pending.length} approval{pending.length === 1 ? '' : 's'} waiting</small></div>{view.approvalPage && <a className="button button-quiet button-small" href={view.approvalPage} target="_blank" rel="noopener noreferrer"><ExternalLink size={13} /> Approval page</a>}</div></div>
+      <div className="truth-intro-side"><div className="truth-score"><span className="eyebrow">Approved</span><strong>{view.agents.filter((a) => a.status === 'approved').length}</strong><small>{view.agents.filter((a) => a.status === 'proposed').length} waiting for a yes · {pending.length} approval{pending.length === 1 ? '' : 's'} waiting</small></div>{view.approvalPage && <a className="button button-quiet button-small" href={view.approvalPage} target="_blank" rel="noopener noreferrer"><ExternalLink size={13} /> Approval page</a>}</div></div>
     {view.note && <p className="studio-muted">{view.note}</p>}
 
     {pending.length > 0 && <section className="truth-graph-card"><div className="truth-card-heading"><div><p className="eyebrow">Waiting for a person</p><h2>Approve or reject, with a comment</h2></div><ShieldCheck size={16} /></div>
