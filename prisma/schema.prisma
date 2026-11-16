@@ -76,6 +76,25 @@ model UseCase {
   spec          SpecSection[]
   specRevisions SpecRevision[]
   members       Member[]
+  truthChanges  TruthChange[]
+}
+
+// The "why did this change?" timeline of the Product Truth Graph: one row per real change to a node,
+// with what caused it (other node ids) and who made it. Written only when something happens.
+model TruthChange {
+  id        String   @id @default(cuid())
+  useCaseId String
+  node      String // e.g. spec:prd-flows, decision:<id>, ann:<id>, evidence:<id>, version:3
+  kind      String // said | added | changed | approved | rejected | undone | reviewed | interpreted | observed | built
+  summary   String
+  before    String   @default("")
+  after     String   @default("")
+  causes    String[] @default([])
+  by        String   @default("")
+  createdAt DateTime @default(now())
+  useCase   UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+
+  @@index([useCaseId, createdAt])
 }
 
 // The people working on a product, each with a role (product owner, business analyst, product
@@ -327,6 +346,9 @@ model Feedback {
   target    String   @default("") // the surface the owner pointed at
   shape     String   @default("object") // object | circle | full-screen
   status    String   @default("new") // new | built
+  // The Muse's reading of the mark: observation, desired behaviour, acceptance criteria, component change,
+  // the PRD and TRD sections it changes, and any question (the annotation interpretation chain).
+  interpretation Json @default("{}")
   createdAt DateTime @default(now())
   useCase   UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
 }
@@ -338,6 +360,9 @@ model AgentEvent {
   useCaseId String
   kind      String // user | move | feedback | generate | review | start
   prompt    String
+  // The Product Truth Graph node that caused this turn (msg:…, ann:…, evidence:…), so every change the
+  // Muse makes in it can say why.
+  cause     String   @default("")
   status    String   @default("queued") // queued | running | done | failed
   attempts  Int      @default(0)
   createdAt DateTime @default(now())

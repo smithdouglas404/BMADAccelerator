@@ -1,3 +1,4 @@
+import { recordChange } from "@/lib/studio/truthlog";
 import type { UseCase } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { colorFor, workingName } from "@/lib/studio/core";
@@ -71,6 +72,7 @@ export async function fakeAgentTurn(uc: UseCase, prompt: string, tally: RunTally
         where: { useCaseId: uc.id, key },
         data: { content, completeness, basis: "inferred", status: "exploring", confidence: "medium", source: "Muse inference", trace: [{ label: "Inference", detail: `What the leading ${k.category.toLowerCase()} products have`, type: "inference" }] },
       });
+    for (const [key] of spec) await recordChange(uc.id, { node: `spec:${key}`, kind: "added", summary: `The Muse wrote this from what the leading ${k.category.toLowerCase()} products have (inferred, not confirmed)`, by: "Muse", fromTurn: true });
     await prisma.agentRoute.updateMany({ where: { useCaseId: uc.id, agent: "Muse / Interviewer" }, data: { state: "complete", detail: "Floor and PRFAQ written" } });
     await prisma.agentRoute.updateMany({ where: { useCaseId: uc.id, agent: "Use Case Validator" }, data: { state: "active", detail: "Testing the proof point" } });
     await prisma.agentRoute.updateMany({ where: { useCaseId: uc.id, agent: "UX / Component Mapper" }, data: { state: "ready" } });
@@ -82,6 +84,34 @@ export async function fakeAgentTurn(uc: UseCase, prompt: string, tally: RunTally
     await specialist("architect", "Solution architect", "For the pilot it runs on its own database with roles from day one; outside systems are labelled demos until you connect them. I'd keep an audit trail on every change.");
     return;
   }
+  const mark = prompt.match(/interpret_annotation \(annotation (\w+)\)/);
+  if (mark) {
+    const f = await prisma.feedback.findFirst({ where: { id: mark[1], useCaseId: uc.id } });
+    if (f) {
+      const interpretation = { observation: f.comment, behaviour: `What they pointed at should change: ${f.comment.replace(/\.$/, "")}.`, acceptance: [`Given the screen ${f.target || "they marked"}, when someone uses it, then it reflects: ${f.comment.replace(/\.$/, "")}`], component: f.target || "the marked surface", prd: ["prd-flows"], trd: [] as string[], question: "" };
+      await prisma.feedback.update({ where: { id: f.id }, data: { interpretation } });
+      await recordChange(uc.id, { node: `ann:${f.id}`, kind: "interpreted", summary: `The Muse read the mark: ${interpretation.behaviour}`, after: interpretation.acceptance.join("\n"), by: "Muse" });
+      const s = await prisma.specSection.findFirst({ where: { useCaseId: uc.id, key: "prd-flows" } });
+      if (s) {
+        const content = `${s.content}\n- ${f.comment}`.trim();
+        await prisma.specSection.update({ where: { id: s.id }, data: { content, related: [...new Set([...s.related, f.id])], trace: [...((s.trace ?? []) as object[]), { label: "Annotation", detail: f.comment, type: "annotation" }].slice(-12) } });
+        await recordChange(uc.id, { node: "spec:prd-flows", kind: "changed", summary: "The Muse carried the mark into the primary customer flow", before: s.content, after: content, causes: [`ann:${f.id}`], by: "Muse", fromTurn: true });
+      }
+    }
+    await say("I've read your mark and carried it into the primary flow. It goes into the next build.", uc.focus);
+    return;
+  }
+  const pilot = prompt.match(/Pilot feedback \([^,]+, evidence (\w+)\): "([^"]+)"/);
+  if (pilot) {
+    const s = await prisma.specSection.findFirst({ where: { useCaseId: uc.id, key: "prd-acceptance" } });
+    if (s) {
+      const content = `${s.content}\n- Seen in the pilot: ${pilot[2]}`.trim();
+      await prisma.specSection.update({ where: { id: s.id }, data: { content, completeness: Math.max(s.completeness, 30), basis: s.basis === "not-researched" ? "inferred" : s.basis, related: [...new Set([...s.related, pilot[1]])], trace: [...((s.trace ?? []) as object[]), { label: "Evidence", detail: pilot[2], type: "evidence" }].slice(-12) } });
+      await recordChange(uc.id, { node: "spec:prd-acceptance", kind: "changed", summary: "The pilot changed the acceptance criteria", before: s.content, after: content, by: "Muse", fromTurn: true });
+    }
+    await say("That pilot observation now shapes the acceptance criteria.", uc.focus);
+    return;
+  }
   if (prompt.includes("Build finished")) {
     await say("The new version is in the preview. The main flow reads well; the detail screens need more polish before they stand next to the leaders.");
     return;
@@ -91,6 +121,15 @@ export async function fakeAgentTurn(uc: UseCase, prompt: string, tally: RunTally
     const key = { "Business analyst": "business-analyst", "Solution architect": "architect", "Product engineer": "engineer", "UX/UI designer": "ux", "Domain expert": "domain" }[addressed[1]] ?? "domain";
     await specialist(key, addressed[1] === "Domain expert" ? kindOf(uc.description).expert : addressed[1], "Good question. I've looked at it against what the leading products do and noted it in the spec; the short answer is to keep it simple for the pilot and revisit after the first real users.");
     return;
+  }
+  const words = prompt.match(/said: "([^"]+)"/)?.[1];
+  if (words) {
+    const s = await prisma.specSection.findFirst({ where: { useCaseId: uc.id, key: "prd-use-case" } });
+    if (s) {
+      const content = `${s.content}\n- ${words}`.trim();
+      await prisma.specSection.update({ where: { id: s.id }, data: { content, completeness: Math.max(s.completeness, 25), basis: s.basis === "not-researched" ? "inferred" : s.basis, trace: [...((s.trace ?? []) as object[]), { label: "Conversation", detail: words, type: "conversation" }].slice(-12) } });
+      await recordChange(uc.id, { node: "spec:prd-use-case", kind: "changed", summary: "The Muse carried what was said into the validated use case", before: s.content, after: content, by: "Muse", fromTurn: true });
+    }
   }
   await say("Got it. I've carried that into the product. What should feel different the first time someone uses it?", uc.focus);
 }

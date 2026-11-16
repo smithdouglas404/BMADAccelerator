@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordChange } from "@/lib/studio/truthlog";
 import { promises as fs } from "fs";
 import path from "path";
 import { z } from "zod";
@@ -60,11 +61,13 @@ export async function POST(req: Request, { params }: Ctx) {
     },
   });
   rememberFeedback(uc, `A${n}`, `On ${d.target || d.pageUrl} the owner said: "${d.comment}"`);
+  await recordChange(id, { node: `ann:${fb.id}`, kind: "added", summary: `${d.shape === "circle" ? "Circled" : d.shape === "full-screen" ? "Captured the whole screen of" : "Pointed at"} ${d.target || "the product"}: “${d.comment}”`, after: d.comment, by: "Owner" });
   if (agentsEnabled())
     await enqueue(
       id,
       "annotation",
-      `Vibe review: the owner ${d.shape === "circle" ? "circled a region of" : d.shape === "full-screen" ? "captured the whole screen of" : "pointed at"} ${d.target || "the live product"} (page ${d.pageUrl}) and said: "${d.comment}".${imagePath ? ` The picture is studio/annotations/annotation-${n}.png (open it with Read).` : ""} It is in the backlog (item ${item.id}), ticked for the next build. Confirm the meaning in one line if it is unclear; otherwise record it as a decision, update the spec sections it touches with an annotation trace step, and suggest a build when enough has changed.`,
+      `Vibe review: the owner ${d.shape === "circle" ? "circled a region of" : d.shape === "full-screen" ? "captured the whole screen of" : "pointed at"} ${d.target || "the live product"} (page ${d.pageUrl}) and said: "${d.comment}".${imagePath ? ` The picture is studio/annotations/annotation-${n}.png (open it with Read).` : ""} It is in the backlog (item ${item.id}), ticked for the next build. Interpret it with mcp__studio__interpret_annotation (annotation ${fb.id}): what they observed, the behaviour they want in plain words, acceptance criteria, the component change, and the PRD and TRD sections it changes, with a question if the meaning is unclear. Then update those sections (set_spec_section with an annotation trace step), and suggest a build when enough has changed.`,
+      `ann:${fb.id}`,
     );
   return NextResponse.json({ feedback: fb, item }, { status: 201 });
 }

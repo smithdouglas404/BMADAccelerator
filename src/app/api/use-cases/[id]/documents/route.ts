@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordChange } from "@/lib/studio/truthlog";
 import { promises as fs } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
@@ -40,6 +41,7 @@ export async function POST(req: Request, { params }: Ctx) {
       data: { useCaseId: id, documentId: doc.id, source: safeName, type: ["interview", "research"].includes(kind) ? kind : "uploaded", insight: "New source uploaded — the Muse will extract the product signal next.", confidence: "open", trace: "Awaiting synthesis" },
     });
     created.push(doc);
+    await recordChange(id, { node: `doc:${doc.id}`, kind: "added", summary: `${safeName} was added to the evidence library`, by: "Owner" });
   }
   await prisma.useCase.update({ where: { id }, data: { updatedAt: new Date() } });
   void Promise.all(created.map((d) => describeDocument(d.id).catch((e) => console.error("document agent", e)))).then(async () => {
@@ -49,6 +51,7 @@ export async function POST(req: Request, { params }: Ctx) {
         id,
         "evidence",
         `The owner added ${created.length === 1 ? "a source" : `${created.length} sources`} to the evidence library: ${created.map((d) => `studio/uploads/${path.basename(d.storagePath)}`).join(", ")}. The document agent already filed its signals, contradictions and questions as evidence and its potential requirements as suggestions. Read them, raise the floor or the spec where the evidence supports it (set_spec_section with an evidence trace step), and tell the owner in one line what it changed.`,
+        created[0] ? `doc:${created[0].id}` : "",
       );
   });
   return NextResponse.json(created, { status: 201 });

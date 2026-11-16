@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { enqueue, agentsEnabled } from "@/lib/agent/runner";
 import { rememberDecision } from "@/lib/memory";
 import { SPEC_STATUSES, cleanTrace } from "@/lib/studio/spec";
+import { recordChange } from "@/lib/studio/truthlog";
 
 type Ctx = { params: Promise<{ id: string; key: string }> };
 
@@ -36,6 +37,15 @@ export async function PATCH(req: Request, { params }: Ctx) {
   if (content !== undefined && content !== s.content) Object.assign(data, { content, basis: "confirmed", source: "Owner's own words" });
   if (status) data.status = status;
   const after = await prisma.specSection.update({ where: { id: s.id }, data });
+  if (review !== undefined || content !== undefined || status)
+    await recordChange(id, {
+      node: `spec:${key}`,
+      kind: review === "keep" ? "approved" : review === "remove" ? "rejected" : review ? "reviewed" : "changed",
+      summary: review ? `The owner chose ${review === "keep" ? "Keep" : review === "remove" ? "Remove" : review === "challenge" ? "Challenge" : "Revise"} on ${s.ref} ${s.title}${note ? `: “${note}”` : ""}` : content !== undefined ? `The owner edited ${s.ref} ${s.title} in their own words` : `${s.ref} ${s.title} moved to ${status}`,
+      before: content !== undefined ? s.content : s.status,
+      after: content !== undefined ? content : after.status,
+      by: "Owner",
+    });
   if (review && review !== "keep") {
     const uc = await prisma.useCase.findUniqueOrThrow({ where: { id } });
     rememberDecision(uc, "muse", `The owner chose ${review} on ${s.ref} ${s.title}${note ? `: ${note}` : ""}`, "studio:spec-review");
@@ -48,6 +58,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
           : review === "challenge"
             ? `The owner challenged ${s.ref} ${s.title}${note ? `: "${note}"` : ""}. Current text: "${s.content.slice(0, 800)}". Look at what it rests on (its trace and evidence), tell them honestly how sure you are, ask one question to settle it, and update the section (set_spec_section) once it is settled.`
             : `The owner asked to revise ${s.ref} ${s.title}${note ? `: "${note}"` : ""}${content !== undefined ? ` and edited it to: "${content.slice(0, 800)}"` : ""}. Carry the revision into this section and any sections it touches (set_spec_section), then tell them in one line.`,
+        `spec:${key}`,
       );
   }
   return NextResponse.json(after);

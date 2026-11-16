@@ -40,7 +40,7 @@ function input(sp, annotations = []) {
     iteration: 1, productName: "Field Notes", statement: "", category: "", audience: "", customerQuote: "", useCase: "", readiness: 0, validationScore: 0,
     repositoryUrl: "", gitBranch: "", prfaq: "", capabilities: [], decisions: [], backlog: [], evidence: [], moves: [], routes: [],
     messages: [{ role: "user", agent: "You", content: SAMPLE, createdAt: "2026-11-15T00:00:00Z" }], annotations, components: [], technicalNotes: [],
-    spec: sp, specVersion: 1, specDiff: "",
+    spec: sp, specVersion: 1, specDiff: "", truthGraph: { schema: {}, nodes: [], edges: [] }, vibeLoop: [],
   };
 }
 const withEdges = (pairs) => {

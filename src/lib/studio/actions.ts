@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/db";
 import { enqueue, agentsEnabled, START_PROMPT } from "@/lib/agent/runner";
 import { rememberDecision } from "@/lib/memory";
-import { bumpReadiness, clip, isAffirmative, numberedOptions, pickedNumbers, proposalFrom, specialistByKey } from "./core";
+import { bumpReadiness, clip, isAffirmative, numberedOptions, pickedNumbers, proposalFrom, specialistByKey, suggestedOption } from "./core";
 import { SESSION_EDGES, addTrace } from "./trace";
+import { recordChange } from "./truthlog";
 
 const NO_AGENTS = "I've kept that. The Muse switches on once Claude is signed in on Settings.";
 
@@ -53,11 +54,18 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
   const offered = since.find((m) => numberedOptions(m.content).length);
   const options = offered ? numberedOptions(offered.content) : [];
   const nums = options.length ? pickedNumbers(content) : null;
-  const picked = nums ? options.filter((x) => nums.includes(x.n)) : [];
-  const approved = !specialist && (picked.length > 0 || (isAffirmative(content) && !!lastMuse));
+  let picked = nums ? options.filter((x) => nums.includes(x.n)) : [];
+  // A bare yes approves only what was actually proposed: the option the Muse marked as its suggestion,
+  // or the yes/no proposal it last made. A yes to an open question or to unmarked options is held.
+  const yes = !specialist && !picked.length && isAffirmative(content);
+  const suggested = yes && offered ? suggestedOption(offered.content) : null;
+  if (suggested) picked = options.filter((x) => x.n === suggested);
+  const proposed = yes && !picked.length && !offered && lastMuse ? proposalFrom(lastMuse.content) : "";
+  const unclearYes = yes && !picked.length && !proposed;
+  const approved = !specialist && (picked.length > 0 || !!proposed);
 
   if (approved) {
-    const proposal = picked.length ? picked.map((x) => `${x.n}. ${x.label}`).join("; ") : proposalFrom(lastMuse!.content) || content;
+    const proposal = picked.length ? picked.map((x) => `${x.n}. ${x.label}`).join("; ") : proposed;
     const decision = await prisma.decision.create({
       data: { useCaseId, text: proposal, status: "approved", capability: focus?.label ?? "", words: content, agent: who.name || "Owner", session: uc.session, resolvedAt: new Date() },
     });
@@ -73,17 +81,30 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
       },
     });
     rememberDecision(uc, "muse", `${who.said} approved: ${proposal}`, "studio:yes");
+    await recordChange(useCaseId, { node: `decision:${decision.id}`, kind: "approved", summary: `${who.said} ${picked.length ? "chose" : "approved"}: ${proposal}`, after: proposal, causes: [`msg:${msg.id}`, ...((offered ?? lastMuse) ? [`msg:${(offered ?? lastMuse)!.id}`] : [])], by: who.name || who.role });
     if (agentsEnabled())
       await enqueue(
         useCaseId,
         "user",
         `${who.said} said: "${content}"\n\nThe Studio recorded it as an approved decision (id ${decision.id}): "${proposal}"${focus ? `, in ${focus.label}` : ""}, and moved its readiness forward. They can undo it. Carry it into the product truth (PRFAQ, the spec sections it touches, the capability's items from [assumed] to [confirmed] where it applies) and ask the next question.`,
+        `decision:${decision.id}`,
+      );
+  } else if (unclearYes) {
+    // A bare yes with nothing single on the table to approve: it answers the last question. Nothing is
+    // approved and nothing is held (a lone "yes" is not a requirement); the Muse reads it in context.
+    if (agentsEnabled())
+      await enqueue(
+        useCaseId,
+        "user",
+        `${who.said} said: "${content}"\n\nNothing approved: your last message had ${offered ? "numbered options without a marked suggestion" : "no single yes/no proposal"}. Read it as their answer to your last question. If it is unclear what they agreed to, ask in one line which one, by number, and say which you suggest.`,
+        `msg:${msg.id}`,
       );
   } else {
     const item = await prisma.backlogItem.create({
       data: { useCaseId, title: clip(content, 140), note: content.length > 140 ? content : "Captured from the living conversation", kind: "capture", group: focus?.label ?? "Unsorted signal", source: who.name ? `${source} · ${who.name}` : source, state: "held" },
     });
     if (focus) await prisma.capability.update({ where: { id: focus.id }, data: { readiness: bumpReadiness(focus.readiness, false) } });
+    await recordChange(useCaseId, { node: `backlog:${item.id}`, kind: "added", summary: `${who.said} said it; held in the backlog in their words`, after: content, causes: [`msg:${msg.id}`], by: who.name || who.role });
     await prisma.message.create({
       data: specialist
         ? { useCaseId, role: "signal", agent: `Asked the ${specialist.name.toLowerCase()}`, accent: "#a9d8ff", content: `The ${specialist.name.toLowerCase()} is looking at it and will answer here. Your words are kept in the backlog too.` }
@@ -96,6 +117,7 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
         specialist
           ? `${who.said} asked the ${specialist.name} directly: "${content}"\n\nThe Studio held it in the backlog (item ${item.id}). Send \`${specialist.agent}\` with the Agent tool to answer it; the answer reaches them through mcp__studio__share_finding as the ${specialist.name}${specialist.key === "domain" ? " (named for this product's field)" : ""}. Then carry what it changes into the product truth.`
           : `${who.said} said: "${content}"\n\nThe Studio held it in the backlog in their words (item ${item.id}). Curate it, carry its meaning into the product truth, and answer them.`,
+        `msg:${msg.id}`,
       );
   }
   if (!agentsEnabled()) await prisma.message.create({ data: { useCaseId, role: "muse", agent: "Muse · Product physician", content: NO_AGENTS } });
@@ -110,6 +132,7 @@ export async function undoApproval(useCaseId: string, decisionId: string, author
   const who = await whoSpoke(useCaseId, author);
   await prisma.decision.delete({ where: { id: d.id } });
   await prisma.message.updateMany({ where: { useCaseId, ref: d.id, agent: "Decision captured" }, data: { agent: "Approval undone", accent: "#f5c88a", content: `Undone: ${d.text}. Nothing was carried forward.` } });
+  await recordChange(useCaseId, { node: `decision:${d.id}`, kind: "undone", summary: `${who.said} undid the approval: ${d.text}`, before: d.text, by: who.name || who.role });
   if (agentsEnabled())
     await enqueue(useCaseId, "decision", `${who.said} undid an approval: "${d.text}" (decision ${d.id}, now removed). Take it back out of the product truth wherever you carried it in, and ask about it again later only if it matters.`);
   return d;
@@ -121,7 +144,8 @@ export async function captureThought(useCaseId: string, text: string, source = "
     data: { useCaseId, title: clip(text, 140), note: text.length > 140 ? text : "Ambient capture · ready for a home", kind: "capture", group: "Unsorted signal", source, state: "held" },
   });
   await addTrace(useCaseId, ...SESSION_EDGES.capture(text));
-  if (agentsEnabled()) await enqueue(useCaseId, "capture", `A captured thought arrived (${source}, backlog item ${item.id}): "${text}". Curate it with the others waiting; talk about the pattern, not the thought.`);
+  await recordChange(useCaseId, { node: `backlog:${item.id}`, kind: "added", summary: `A thought was captured (${source})`, after: text, by: source });
+  if (agentsEnabled()) await enqueue(useCaseId, "capture", `A captured thought arrived (${source}, backlog item ${item.id}): "${text}". Curate it with the others waiting; talk about the pattern, not the thought.`, `backlog:${item.id}`);
   return item;
 }
 
@@ -129,6 +153,7 @@ export async function captureThought(useCaseId: string, text: string, source = "
 export async function pullForward(useCaseId: string, itemId: string) {
   const item = await prisma.backlogItem.update({ where: { id: itemId }, data: { state: "probing" } });
   await addTrace(useCaseId, ...SESSION_EDGES.recommendation(item.title));
+  await recordChange(useCaseId, { node: `backlog:${item.id}`, kind: "reviewed", summary: `The owner pulled “${item.title}” forward for a probing conversation`, by: "Owner" });
   const cap = item.group ? await prisma.capability.findFirst({ where: { useCaseId, label: item.group } }) : null;
   if (cap) await prisma.useCase.update({ where: { id: useCaseId }, data: { focus: cap.key } });
   await prisma.message.create({
@@ -139,6 +164,7 @@ export async function pullForward(useCaseId: string, itemId: string) {
       useCaseId,
       "probe",
       `The owner pulled a recommendation forward (backlog item ${item.id}): "${item.title}" (${item.recKind || "consider"}). ${item.note}\nIts probing question: ${item.probe || "(write one)"}\nAsk it now, one question, with your suggestion. A yes makes it an approved decision and the item ready for the build (curate with includeInBuild); a no parks it.`,
+      `backlog:${item.id}`,
     );
   else
     await prisma.message.create({

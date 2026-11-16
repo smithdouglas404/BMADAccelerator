@@ -11,6 +11,8 @@ export const PACKAGE_FILES = [
   "PRD.md",
   "TRD.md",
   "SPEC_TRACE.json",
+  "TRUTH_GRAPH.json",
+  "VIBE_LOOP.json",
   "SPEC_DIFF.md",
   "TECHNICAL_REQUIREMENTS.md",
   "COMPONENT_MAP.json",
@@ -50,6 +52,10 @@ export type PackageInput = {
   spec: { key: string; ref: string; tab: string; title: string; content: string; completeness: number; confidence: string; basis: string; status: string; review: string; capability: string; related: string[]; trace: { label: string; detail: string; type: string }[] }[];
   specVersion: number;
   specDiff: string;
+  /** The Product Truth Graph of this product: the team's schema with real nodes and edges only. */
+  truthGraph: { schema: unknown; nodes: { id: string }[]; edges: { id: string; from: string; to: string }[] };
+  /** Each mark on the prototype and how far it has gone round the loop (select, describe, interpret, shape, regenerate). */
+  vibeLoop: { annotation: string; target: string; shape: string; stage: string; observation: string; behaviour: string; acceptance: string[]; component: string; changes: string[]; question: string }[];
 };
 
 const json = (v: unknown) => JSON.stringify(v, null, 2) + "\n";
@@ -84,7 +90,7 @@ export function assemblePackage(input: PackageInput): Record<(typeof PACKAGE_FIL
     target: "claude-code",
     repositoryUrl: input.repositoryUrl || "not-connected",
     gitBranch: input.gitBranch,
-    sourceOfTruth: ["PRFAQ.md", "VALIDATED_USE_CASE.md", "PRD.md", "TRD.md", "SPEC_TRACE.json", "TECHNICAL_REQUIREMENTS.md", "KANBAN.json"],
+    sourceOfTruth: ["PRFAQ.md", "VALIDATED_USE_CASE.md", "PRD.md", "TRD.md", "SPEC_TRACE.json", "TRUTH_GRAPH.json", "VIBE_LOOP.json", "TECHNICAL_REQUIREMENTS.md", "KANBAN.json"],
     specVersion: input.specVersion,
     agentKit: {
       router: "@inngest/agent-kit",
@@ -188,6 +194,9 @@ Repository: ${input.repositoryUrl || "Connect a repository on the Studio's Conne
         .filter((s) => s.review !== "remove")
         .flatMap((s) => s.trace.map((t) => ({ section: s.title, label: t.label, detail: t.detail, type: t.type }))),
     ),
+    // The Product Truth Graph: one node per real record, edges only from explicit links and logged causes.
+    "TRUTH_GRAPH.json": json(input.truthGraph),
+    "VIBE_LOOP.json": json(input.vibeLoop),
     "SPEC_DIFF.md": `# Specification changes (version ${input.specVersion})\n\n${input.specDiff || "- First version of the specification."}\n`,
     "TECHNICAL_REQUIREMENTS.md": technical,
     "COMPONENT_MAP.json": json({ baseline: "shadcn/ui", components: input.components, rationale: "Mapped from the conversation, the capabilities and the validated use case by the UX / Component Mapper." }),
@@ -267,5 +276,16 @@ export function inspectPackage(files: Record<string, string>) {
   const annotationEdges = trace.filter((e) => (e as Record<string, unknown>)?.type === "annotation").length;
   if (annotationEdges && !annotations.length) traceErrors.push("annotation edges without any visual annotation (seeded provenance)");
   if (annotations.length && !annotationEdges) traceErrors.push("visual annotations without an annotation edge");
-  return { ok: !missing.length && !promptMissing.length && !annotationErrors.length && !traceErrors.length, missing, promptMissing, annotationErrors, traceErrors, traceEdges: trace.length };
+  // The truth graph holds only this product's records: no sample or placeholder nodes, no dangling edges.
+  const graphErrors: string[] = [];
+  try {
+    const g = JSON.parse(files["TRUTH_GRAPH.json"] ?? "{}") as { nodes?: { id?: string }[]; edges?: { from?: string; to?: string }[] };
+    const ids = new Set((g.nodes ?? []).map((n) => String(n.id)));
+    if ((g.nodes ?? []).length !== ids.size) graphErrors.push("duplicate node ids");
+    for (const n of g.nodes ?? []) if (!/^(usecase|(msg|doc|evidence|decision|cap|spec|backlog|ann|move|version):.+)$/.test(String(n.id))) graphErrors.push(`node ${String(n.id)} is not a Studio record (seeded or placeholder)`);
+    for (const e of g.edges ?? []) if (!ids.has(String(e.from)) || !ids.has(String(e.to))) graphErrors.push(`edge ${String(e.from)} -> ${String(e.to)} points outside the graph`);
+  } catch {
+    graphErrors.push("TRUTH_GRAPH.json is not JSON");
+  }
+  return { ok: !missing.length && !promptMissing.length && !annotationErrors.length && !traceErrors.length && !graphErrors.length, missing, promptMissing, annotationErrors, traceErrors, graphErrors, traceEdges: trace.length };
 }

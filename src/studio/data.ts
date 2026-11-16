@@ -1,4 +1,4 @@
-export type ViewId = 'overview' | 'conversation' | 'validation' | 'product' | 'evidence' | 'spec' | 'readiness' | 'brief' | 'pilot' | 'connections'
+export type ViewId = 'overview' | 'conversation' | 'validation' | 'product' | 'evidence' | 'truth' | 'spec' | 'readiness' | 'brief' | 'pilot' | 'connections'
 export type MessageRole = 'muse' | 'user' | 'signal'
 export type BacklogKind = 'capture' | 'epic' | 'distraction'
 
@@ -257,6 +257,7 @@ export const navItems: Array<{ id: ViewId; label: string; hint: string }> = [
   { id: 'validation', label: 'Validate use case', hint: 'Test the proof' },
   { id: 'product', label: 'Product shape', hint: 'Living PRFAQ' },
   { id: 'evidence', label: 'Evidence & signals', hint: 'Keep the why' },
+  { id: 'truth', label: 'Product Truth Graph', hint: 'See the meaning' },
   { id: 'spec', label: 'Living specification', hint: 'PRD + TRD, traced' },
   { id: 'readiness', label: 'Pilot readiness', hint: 'Find the ceiling' },
   { id: 'brief', label: 'Prototype brief', hint: 'Prepare Claude Code' },

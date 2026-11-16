@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { enqueue, agentsEnabled } from "@/lib/agent/runner";
+import { recordChange } from "@/lib/studio/truthlog";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -25,11 +26,13 @@ export async function POST(req: Request, { params }: Ctx) {
   const ev = await prisma.evidence.create({
     data: { useCaseId: id, source: LABEL[kind], type: kind === "interview" ? "interview" : "pilot", insight: text, confidence: kind === "metric" ? "high" : "medium", trace: "Pilot feedback → specification" },
   });
+  await recordChange(id, { node: `evidence:${ev.id}`, kind: "observed", summary: `${LABEL[kind]} from the pilot: “${text.slice(0, 160)}”`, after: text, by: "Pilot" });
   if (agentsEnabled())
     await enqueue(
       id,
       "pilot",
       `Pilot feedback (${LABEL[kind]}, evidence ${ev.id}): "${text}". Feed it back into the specification: update the PRD and TRD sections it bears on (set_spec_section with an evidence trace step naming it), adjust validation and readiness honestly, add a backlog item if something must change, and tell the owner in one line what it changed.`,
+      `evidence:${ev.id}`,
     );
   return NextResponse.json(ev, { status: 201 });
 }

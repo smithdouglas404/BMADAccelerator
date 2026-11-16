@@ -2,6 +2,7 @@
 // The Studio's live data: the server state for one product, polled, and adapters that turn it into the
 // shapes the design team's screens already use (data.ts and spec.ts types), so their components stay as
 // they are and show real products instead of the sample.
+import { ownerBacklogState } from '@/lib/studio/core'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BacklogItem, Capability, ConversationMessage, EvidenceItem, ExecutionItem, RecommendationItem } from './data'
 import type { SpecSection } from './spec'
@@ -20,7 +21,7 @@ export type LiveMessage = { id: string; role: string; agent: string; content: st
 export type LiveMember = { id: string; name: string; role: string }
 export type LiveEvidence = { id: string; source: string; type: string; insight: string; confidence: string; trace: string; createdAt: string }
 export type LiveRoute = { id: string; agent: string; action: string; state: string; detail: string }
-export type LiveFeedback = { id: string; comment: string; target: string; shape: string; status: string; imageUrl: string; createdAt: string }
+export type LiveFeedback = { id: string; comment: string; target: string; shape: string; status: string; imageUrl: string; createdAt: string; interpretation?: { observation?: string; behaviour?: string; acceptance?: string[]; component?: string; prd?: string[]; trd?: string[]; question?: string } }
 export type ReadinessFactor = { key: string; label: string; value: number; detail: string }
 export type LiveRevision = { id: string; version: number; reason: string; diff: string; createdAt: string }
 
@@ -110,10 +111,10 @@ export function toMessages(d: Live, me?: { name?: string }): StudioMessage[] {
   }))
 }
 
-export function toBacklog(d: Live): BacklogItem[] {
+export function toBacklog(d: Live): (BacklogItem & { ownerState: string })[] {
   return d.backlog
     .filter((b) => b.state !== 'suggested' && b.state !== 'probing')
-    .map((b) => ({ id: b.id, title: b.title, note: b.note, kind: b.kind, group: b.group || 'Unsorted signal', source: b.source, age: ago(b.createdAt) }))
+    .map((b) => ({ id: b.id, title: b.title, note: b.note, kind: b.kind, group: b.group || 'Unsorted signal', source: b.source, age: ago(b.createdAt), ownerState: ownerBacklogState(b) }))
 }
 
 export function toRecommendations(d: Live): RecommendationItem[] {

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { enqueue, agentsEnabled } from "@/lib/agent/runner";
 import { rememberDecision } from "@/lib/memory";
 import { changeImpact } from "@/lib/studio/impact";
+import { recordChange } from "@/lib/studio/truthlog";
 
 type Ctx = { params: Promise<{ id: string; did: string }> };
 
@@ -34,6 +35,8 @@ export async function PATCH(req: Request, { params }: Ctx) {
   if (meaningChanged) {
     const uc = await prisma.useCase.findUniqueOrThrow({ where: { id } });
     rememberDecision(uc, "muse", `Decision ${after.status}: ${after.text}${after.answer ? ` (answer: ${after.answer})` : ""}`, "studio:decision");
+    const kind = status === "rejected" ? "rejected" : status === "approved" && before.status !== "approved" ? "approved" : "changed";
+    await recordChange(id, { node: `decision:${did}`, kind, summary: `${by || "The owner"} ${kind === "changed" ? "changed" : kind} the decision${after.answer ? `: “${after.answer}”` : ""}`, before: `${before.text} (${before.status})`, after: `${after.text} (${after.status})`, by: by || "Owner" });
     const impact = await changeImpact(id, { decisionId: did });
     if (agentsEnabled()) {
       const touched = impact ? [...impact.prd, ...impact.trd].map((s) => `${s.ref} ${s.title}`).join(", ") : "";
@@ -41,6 +44,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
         id,
         "decision",
         `${by ? by : "The owner"} ${status === "rejected" ? "rejected" : "changed"} a decision (id ${did}): "${before.text}" (${before.status}) is now "${after.text}" (${after.status})${after.answer ? `, ${status === "rejected" ? "comment" : "answer"}: "${after.answer}"` : ""}. ${status === "rejected" ? "Do not build it; propose a better option if their comment points to one. " : ""}Carry it through the product truth: update the affected spec sections${touched ? ` (${touched})` : ""}, capabilities and backlog, and tell the owner in one line what it changed.`,
+        `decision:${did}`,
       );
     }
     return NextResponse.json({ decision: after, impact });

@@ -9,6 +9,7 @@ import { ROLES } from "@/lib/memory/lettaCore";
 import { IMAGE_LIMIT, imagesConfigured, makeImage } from "@/lib/images";
 import { SPEC_BASIS, SPEC_DEFS, SPEC_STATUSES, TRACE_TYPES, cleanTrace } from "@/lib/studio/spec";
 import { ensureSpec } from "@/lib/studio/state";
+import { nodesForIds, recordChange } from "@/lib/studio/truthlog";
 import { VALIDATION_SIGNALS, colorFor, numberItems, overallReadiness, slugify, specialistByKey, validationScore, type Validation } from "@/lib/studio/core";
 
 const ROLE_KEYS = ROLES.map((r) => r.key) as [string, ...string[]];
@@ -169,6 +170,18 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
           await ensureSpec(useCaseId);
           const cur = await prisma.specSection.findUniqueOrThrow({ where: { useCaseId_key: { useCaseId, key: a.key } } });
           const trace = cleanTrace([...(Array.isArray(cur.trace) ? cur.trace : []), ...a.trace]).slice(-12);
+          const changedText = !!a.content.trim() && a.content.trim() !== cur.content.trim();
+          if (changedText || (a.basis && a.basis !== cur.basis) || (a.status && a.status !== cur.status))
+            await recordChange(useCaseId, {
+              node: `spec:${a.key}`,
+              kind: cur.content.trim() ? "changed" : "added",
+              summary: `${speaker} ${cur.content.trim() ? "updated" : "wrote"} ${cur.ref} ${cur.title}${a.source ? ` (${a.source})` : ""}${a.basis && a.basis !== cur.basis ? `; now ${a.basis}` : ""}`,
+              before: changedText ? cur.content : `${cur.basis} · ${cur.status}`,
+              after: changedText ? a.content : `${a.basis ?? cur.basis} · ${a.status ?? cur.status}`,
+              causes: await nodesForIds(useCaseId, a.related),
+              by: speaker,
+              fromTurn: true,
+            });
           await prisma.specSection.update({
             where: { id: cur.id },
             data: {
@@ -228,6 +241,10 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
           };
           if (existing) await prisma.capability.update({ where: { id: existing.id }, data });
           else await prisma.capability.create({ data: { useCaseId, key, position: count, color: colorFor(count), readiness: a.readiness ?? 10, ...data } });
+          const was = ((existing?.items ?? []) as { id: string; state: string }[]).map((i) => `${i.id}:${i.state}`).join(",");
+          const now = items.map((i) => `${i.id}:${i.state}`).join(",");
+          if (!existing || was !== now || (a.readiness !== undefined && a.readiness !== existing.readiness))
+            await recordChange(useCaseId, { node: `cap:${key}`, kind: existing ? "changed" : "added", summary: `${speaker} ${existing ? "updated" : "laid out"} ${a.label}: ${items.filter((i) => i.state === "confirmed").length} confirmed, ${items.filter((i) => i.state === "assumed").length} inferred from leading products, ${items.filter((i) => i.state === "out").length} ruled out`, by: speaker, fromTurn: true });
           await prisma.useCase.update({ where: { id: useCaseId }, data: { floorSeq: seq, ...(u.focus ? {} : { focus: key }) } });
           return ok(`Capability "${a.label}" saved as ${key} with ${items.length} floor items.`);
         },
@@ -259,6 +276,7 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
             data: { useCaseId, text: a.text, status: a.status, capability: await capLabel(a.capability), words: a.words, options: a.options, agent: speaker, session: u.session, includeInBuild: a.status !== "open" },
           });
           if (a.status === "approved") rememberDecision(u, "muse", `${a.text}${a.words ? `\nThe owner said: "${a.words}"` : ""}`, "studio:decision");
+          await recordChange(useCaseId, { node: `decision:${d.id}`, kind: a.status === "approved" ? "approved" : "added", summary: a.status === "open" ? `${speaker} raised a checkpoint only a person can decide: ${a.text}` : a.status === "assumed" ? `${speaker} assumed: ${a.text} (they can correct it)` : `Recorded as approved: ${a.text}`, after: a.text, by: speaker, fromTurn: true });
           return ok(`Recorded ${d.id}.`);
         },
       ),
@@ -270,6 +288,7 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
           const d = await prisma.decision.findFirst({ where: { id, useCaseId } });
           if (!d) return ok("No such decision.");
           await prisma.decision.update({ where: { id }, data: { status, answer: answer || d.answer, text: text || d.text, includeInBuild: status !== "open", resolvedAt: new Date() } });
+          await recordChange(useCaseId, { node: `decision:${id}`, kind: status === "approved" ? "approved" : "changed", summary: `${status === "approved" ? "Settled" : "Updated"}: ${text || d.text}${answer ? ` (answer: ${answer})` : ""}`, before: `${d.text} (${d.status})`, after: `${text || d.text} (${status})`, by: speaker, fromTurn: true });
           if (answer) rememberAnswer(await uc(), "muse", d.text, answer);
           return ok();
         },
@@ -285,6 +304,7 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
           const b = await prisma.backlogItem.create({
             data: { useCaseId, title: a.title, note: a.reason, kind: "epic", group, source: "Muse recommendation", recKind: a.kind, probe: a.prompt, state: "suggested", hidden: a.kind === "workflow" ? "workflow" : "capability" },
           });
+          await recordChange(useCaseId, { node: `backlog:${b.id}`, kind: "added", summary: `${speaker} recommended: ${a.title}`, after: a.reason, by: speaker, fromTurn: true });
           return ok(`Recommended ${b.id}.`);
         },
       ),
@@ -294,6 +314,7 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
         { title: z.string().min(2), note: z.string().default(""), kind: z.enum(["capture", "epic", "distraction"]).default("capture"), capability: z.string().default(""), source: z.string().default("Working session") },
         async (a) => {
           const b = await prisma.backlogItem.create({ data: { useCaseId, title: a.title, note: a.note, kind: a.kind, group: (await capLabel(a.capability)) || "Unsorted signal", source: a.source } });
+          await recordChange(useCaseId, { node: `backlog:${b.id}`, kind: "added", summary: `${speaker} held a thought: ${a.title}`, by: speaker, fromTurn: true });
           return ok(`Held as ${b.id}.`);
         },
       ),
@@ -326,7 +347,43 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
               ...(a.mergeInto ? { note: `${a.note || b.note} · belongs with ${a.mergeInto}` } : {}),
             },
           });
+          if ((a.kind && a.kind !== b.kind) || (a.state && a.state !== b.state) || a.mergeInto)
+            await recordChange(useCaseId, {
+              node: `backlog:${b.id}`,
+              kind: a.kind === "distraction" ? "rejected" : "changed",
+              summary: a.kind === "distraction" ? `Parked as not this week: ${b.title}` : a.mergeInto ? `Belongs together with another item: ${b.title}` : `${b.title} is now ${a.state || a.kind}${group !== b.group ? ` under ${group}` : ""}`,
+              causes: a.mergeInto ? [`backlog:${a.mergeInto}`] : [],
+              by: speaker,
+              fromTurn: true,
+            });
           return ok();
+        },
+      ),
+      tool(
+        "interpret_annotation",
+        "Interpret a mark the owner made on the live prototype (a click, a circled region or the whole screen, with what they said). Keep their words as the observation and write the chain: the behaviour they want in plain words, two to four acceptance criteria (testable, Given/When/Then or plain), the component change (shadcn/ui names where it applies), the PRD section keys it changes and the TRD section keys it creates a technical consequence in, and one question if the meaning is unclear. Then update those sections with set_spec_section (an annotation trace step quoting their words).",
+        {
+          id: z.string().describe("The annotation id"),
+          behaviour: z.string().min(5).describe("What should happen or feel different, in the owner's plain language"),
+          acceptance: z.array(z.string().min(5)).min(1).max(6),
+          component: z.string().default(""),
+          prd: z.array(z.enum(SPEC_DEFS.filter((d) => d.tab === "prd").map((d) => d.key) as [string, ...string[]])).default([]),
+          trd: z.array(z.enum(SPEC_DEFS.filter((d) => d.tab === "trd").map((d) => d.key) as [string, ...string[]])).default([]),
+          question: z.string().default(""),
+        },
+        async (a) => {
+          const f = await prisma.feedback.findFirst({ where: { id: a.id, useCaseId } });
+          if (!f) return ok("No such annotation.");
+          const interpretation = { observation: f.comment, behaviour: a.behaviour, acceptance: a.acceptance, component: a.component, prd: a.prd, trd: a.trd, question: a.question };
+          await prisma.feedback.update({ where: { id: f.id }, data: { interpretation } });
+          await recordChange(useCaseId, {
+            node: `ann:${f.id}`,
+            kind: "interpreted",
+            summary: `${speaker} read the mark on ${f.target || "the product"}: ${a.behaviour}`,
+            after: [`Acceptance: ${a.acceptance.join(" | ")}`, a.component ? `Component: ${a.component}` : "", a.prd.length || a.trd.length ? `Changes: ${[...a.prd, ...a.trd].join(", ")}` : ""].filter(Boolean).join("\n"),
+            by: speaker,
+          });
+          return ok(`Interpreted. Now update ${[...a.prd, ...a.trd].join(", ") || "the sections it touches"} with set_spec_section (related: ["${f.id}"]).`);
         },
       ),
       tool(
@@ -335,6 +392,7 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
         { source: z.string().min(2), type: z.enum(["interview", "research", "uploaded", "conversation"]), insight: z.string().min(5), confidence: z.enum(["high", "medium", "open"]).default("medium"), trace: z.string().default("") },
         async (a) => {
           const e = await prisma.evidence.create({ data: { useCaseId, ...a } });
+          await recordChange(useCaseId, { node: `evidence:${e.id}`, kind: "added", summary: `${speaker} added evidence from ${a.source}: ${a.insight.slice(0, 160)}`, by: speaker, fromTurn: true });
           return ok(`Evidence ${e.id}.`);
         },
       ),
@@ -346,6 +404,7 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
           const u = await uc();
           const v = { ...((u.validation ?? {}) as Validation), [key]: { state, note } };
           await prisma.useCase.update({ where: { id: useCaseId }, data: { validation: v } });
+          await recordChange(useCaseId, { node: "usecase", kind: "changed", summary: `Validation signal “${key}” is now ${state}${note ? `: ${note}` : ""}`, by: speaker, fromTurn: true });
           return ok(`Use case confidence now ${validationScore(v)}%.`);
         },
       ),
@@ -419,6 +478,17 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
           const { runGenerate } = await import("@/lib/generate");
           void runGenerate(useCaseId).catch((e) => console.error("build", e));
           return ok("The build has started. Tell the owner in one line that a first version is on its way to the preview.");
+        },
+      ),
+      tool(
+        "show_preview",
+        "Build only: put the app as it stands now into the owner's live preview, so they can try it while you keep building. Call it once the main flow and the core screens run (aim for about ten minutes in), after \`npm run build\` passes, and again after each big step. The Studio restarts the preview from app/; it never stops your work.",
+        { reason: z.string().default("") },
+        async ({ reason }) => {
+          const { startPreview } = await import("@/lib/preview");
+          void startPreview(useCaseId).catch((e) => console.error("preview", e));
+          await prisma.message.create({ data: { useCaseId, role: "agent", agent: "Claude Code", content: `An early version is in the preview${reason ? `: ${reason}` : ""}. The rest is still being built.` } });
+          return ok("The preview is restarting from app/. Carry on building.");
         },
       ),
       tool(

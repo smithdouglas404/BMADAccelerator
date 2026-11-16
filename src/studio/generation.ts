@@ -21,6 +21,8 @@ export interface PrototypePackageInput {
   prd: Array<{ title: string; content: string; completeness: number; status: string; confidence: string }>
   trd: Array<{ title: string; content: string; completeness: number; status: string; confidence: string }>
   specTrace: Array<{ section: string; label: string; detail: string; type: string }>
+  truthGraph: { schema: unknown; nodes: unknown[]; edges: unknown[] }
+  vibeLoop: unknown[]
 }
 
 function json(value: unknown) {
@@ -34,7 +36,7 @@ export function assemblePrototypePackage(input: PrototypePackageInput) {
     generatedAt: new Date().toISOString(),
     target: 'claude-code',
     repositoryUrl: input.repositoryUrl || 'not-connected',
-    sourceOfTruth: ['PRFAQ.md', 'VALIDATED_USE_CASE.md', 'PRD.md', 'TRD.md', 'SPEC_TRACE.json', 'TECHNICAL_REQUIREMENTS.md', 'KANBAN.json'],
+    sourceOfTruth: ['PRFAQ.md', 'VALIDATED_USE_CASE.md', 'PRD.md', 'TRD.md', 'SPEC_TRACE.json', 'TRUTH_GRAPH.json', 'VIBE_LOOP.json', 'TECHNICAL_REQUIREMENTS.md', 'KANBAN.json'],
     agentKit: {
       router: '@inngest/agent-kit',
       workflows: input.agenticWorkflows,
@@ -56,6 +58,8 @@ export function assemblePrototypePackage(input: PrototypePackageInput) {
     'PRD.md': input.prd.map((section) => `## ${section.title}\n\n${section.content}\n\nCompleteness: ${section.completeness}% · ${section.status} · ${section.confidence} confidence\n`).join('\n'),
     'TRD.md': input.trd.map((section) => `## ${section.title}\n\n${section.content}\n\nCompleteness: ${section.completeness}% · ${section.status} · ${section.confidence} confidence\n`).join('\n'),
     'SPEC_TRACE.json': json(input.specTrace),
+    'TRUTH_GRAPH.json': json(input.truthGraph),
+    'VIBE_LOOP.json': json(input.vibeLoop),
     'CONVERSATION.json': json(input.messages),
     'BACKLOG.json': json(input.backlog),
     'PACKAGE_MANIFEST.json': json(packageManifest),

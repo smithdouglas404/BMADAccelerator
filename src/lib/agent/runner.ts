@@ -4,6 +4,7 @@ import path from "path";
 import { query, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { prisma } from "@/lib/db";
 import { workspacePath } from "@/lib/workspace";
+import { setTurnCauses } from "@/lib/studio/truthlog";
 import { provisionWorkspace, shadcnLookupDir, syncStudioSkills, writeIntake, STUDIO_SKILLS_DIR } from "@/lib/provision";
 import { agentModel } from "@/lib/docAgent";
 import { mcpServersFor, mcpSummary } from "@/lib/studio/mcp";
@@ -18,8 +19,16 @@ import { withContext } from "@/lib/memory/lettaCore";
 // recommendations, annotations, build notes) are combined into the next turn, in order.
 const running = new Set<string>();
 
-export async function enqueue(useCaseId: string, kind: string, prompt: string) {
-  await prisma.agentEvent.create({ data: { useCaseId, kind, prompt } });
+// `cause` is the Product Truth Graph node the turn answers (msg:…, ann:…, evidence:…), so every change the
+// Muse makes in that turn records why.
+/** Studio updates (a build finished, research came back) are marked as such, so the Muse never answers them as if a person spoke. */
+export function framed(e: { kind: string; prompt: string }) {
+  if (e.kind === "user") return e.prompt;
+  return `[Studio update, not a message from anyone on the product. Don't mention it as an update or event, and don't tell them nothing arrived: say only what it means for the product, or say nothing if it changes nothing they need to know.]\n\n${e.prompt}`;
+}
+
+export async function enqueue(useCaseId: string, kind: string, prompt: string, cause = "") {
+  await prisma.agentEvent.create({ data: { useCaseId, kind, prompt, cause } });
   void kick(useCaseId);
 }
 
@@ -59,8 +68,9 @@ export async function kick(useCaseId: string) {
         data: { agentBusy: true, agentStatus: "Thinking", agentError: "" },
       });
       let ok = true;
+      setTurnCauses(useCaseId, events.map((e) => e.cause).filter(Boolean));
       try {
-        await runTurn(useCaseId, events.map((e) => e.prompt).join("\n\n---\n\n"));
+        await runTurn(useCaseId, events.map(framed).join("\n\n---\n\n"));
       } catch (e) {
         ok = false;
         console.error("agent turn failed", e);
@@ -69,6 +79,7 @@ export async function kick(useCaseId: string) {
           data: { agentError: e instanceof Error ? e.message.slice(0, 500) : String(e) },
         });
       }
+      setTurnCauses(useCaseId, []);
       await prisma.agentEvent.updateMany({ where: { id: { in: ids } }, data: { status: ok ? "done" : "failed" } });
     }
   } finally {
@@ -154,6 +165,7 @@ async function runSdkTurnOnce(opts: {
   appendSystem: string;
   onSession: (id: string) => Promise<void>;
   onStatus: (s: string) => Promise<void>;
+  onTool?: (name: string, input: Record<string, unknown>) => void;
   tally: RunTally;
   maxTurns?: number;
   auth?: Auth;
@@ -208,6 +220,7 @@ async function runSdkTurnOnce(opts: {
     if (m.type === "assistant") {
       for (const block of m.message.content) {
         if (block.type === "text" && block.text.trim()) texts.push(block.text.trim());
+        if (block.type === "tool_use") opts.onTool?.(block.name, (block.input ?? {}) as Record<string, unknown>);
         const s = statusFor(block as { type: string; name?: string; input?: unknown });
         if (s && s !== lastStatus) {
           lastStatus = s;

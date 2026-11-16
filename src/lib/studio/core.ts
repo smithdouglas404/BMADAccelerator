@@ -56,27 +56,75 @@ export const BOARD_COLUMNS = [
 const AFFIRM =
   /^\s*(yes|yep|yeah|yup|sure|ok(ay)?|absolutely|definitely|exactly|correct|agreed|perfect|great|go ahead|do it|ship it|sounds good|that'?s (right|it)|that is (right|it)|love (it|that)|let'?s (do|go with) (it|that)|lets do it|keep (it|that)|approved?)\b/i;
 const HEDGE = /\b(but|except|however|not sure|maybe|unless|although|instead|rather)\b/i;
+// Words that only say yes again. Anything beyond these is new content: a thought to hold, not an approval.
+const ASSENT = new Set(
+  ("yes yep yeah yup sure ok okay absolutely definitely exactly correct agreed agree i perfect great good fine go ahead do it ship " +
+    "sounds that's thats is right love let's lets with keep approve approved please thanks thank you that this one works for me " +
+    "makes sense totally of course yes. sounds-good the plan idea suggestion recommendation go for")
+    .split(/\s+/),
+);
 
-/** "Every time you say yes, it's automatically an approval": a plain affirmative, without a hedge. */
+/**
+ * "Every time you say yes, it's automatically an approval": only a bare yes ("yes", "yeah, let's do that",
+ * "sounds good") approves. A yes that goes on to say something new ("yeah and tenants should send a
+ * photo") is a thought to hold in their words, never an approval of whatever was said last.
+ */
 export function isAffirmative(text: string): boolean {
   const t = text.trim();
-  if (!t || t.length > 280) return false;
-  return AFFIRM.test(t) && !HEDGE.test(t);
+  if (!t || t.length > 80) return false;
+  if (!AFFIRM.test(t) || HEDGE.test(t)) return false;
+  const words = t.toLowerCase().replace(/[^a-z'\s-]/g, " ").split(/\s+/).filter(Boolean);
+  return words.every((w) => ASSENT.has(w));
 }
 
-/** What a "yes" approves: the Muse's last proposal (its last question or sentence). */
+const OPEN_Q = /^(what|how|who|whom|which|why|when|where|tell me|describe|walk me|is there anything|anything else|in what)\b/i;
+const YES_NO_Q = /^(should|shall|do you want|would you like|want me to|can|could|may|is it ok(ay)? (to|if)|are you happy|happy (to|with)|ok(ay)? to|shall i|does (that|this) (sound|work|fit)|sound (right|good)|will that|would that|is that)\b/i;
+const SUGGEST = /\b(i(?: would|'d)? (?:suggest|recommend|propose)|my (suggestion|recommendation) (is|would be)|i'd go with|suggested?:|recommended?:)\s*/i;
+
+/**
+ * What a bare yes approves: a proposal the Muse actually made. That is a yes/no question it asked
+ * ("Should claimants upload photos?") or a suggestion it named ("I'd suggest photo upload first").
+ * An open question ("How does yours differ?"), an either/or question, or plain talk has nothing to
+ * approve, so this returns "" and the yes is held instead.
+ */
 export function proposalFrom(museText: string): string {
-  const t = museText.replace(/\s+/g, " ").trim();
+  const t = museText.replace(/\*\*/g, "").replace(/\s+/g, " ").trim();
   if (!t) return "";
   const sentences = t.split(/(?<=[.!?])\s+/).filter(Boolean);
-  const q = [...sentences].reverse().find((s) => s.endsWith("?"));
-  const pick = q ?? sentences[sentences.length - 1];
-  return pick
-    .replace(/^(so|and|then|ok|okay|good|great)[,\s]+/i, "")
-    .replace(/^(should|shall|do you want|would you like|can) (we|i|it|the product)\s+/i, "")
-    .replace(/\?$/, "")
-    .trim()
-    .slice(0, 300);
+  const clean = (x: string) => x.replace(/^(so|and|then|ok|okay|good|great)[,\s]+/i, "").trim();
+  const q = [...sentences].reverse().find((x) => x.endsWith("?"));
+  if (q) {
+    const c = clean(q);
+    if (OPEN_Q.test(c) || !YES_NO_Q.test(c) || /\bor\b/i.test(c)) {
+      // An open or either/or question; a suggestion made just before it still counts.
+      const s = [...sentences].reverse().find((x) => SUGGEST.test(x));
+      return s ? suggestionText(s) : "";
+    }
+    return c
+      .replace(YES_NO_Q, "")
+      .replace(/^(we|i|it|you|the product)\s+/i, "")
+      .replace(/\?$/, "")
+      .trim()
+      .slice(0, 300);
+  }
+  const s = [...sentences].reverse().find((x) => SUGGEST.test(x));
+  return s ? suggestionText(s) : "";
+}
+
+function suggestionText(s: string) {
+  const m = s.match(SUGGEST);
+  const rest = m ? s.slice((m.index ?? 0) + m[0].length) : s;
+  return rest.replace(/^(that|we|going with|starting with)\s+/i, "").replace(/[.!]$/, "").trim().slice(0, 300);
+}
+
+/** The option a message marks as its suggestion ("2. Photo upload (suggested)" or "I'd suggest 2"), if any. */
+export function suggestedOption(text: string): number | null {
+  const opts = numberedOptions(text);
+  const marked = opts.find((o) => /\b(suggested|recommended|my pick|suggestion)\b/i.test(o.label));
+  if (marked) return marked.n;
+  const m = text.match(/\b(?:i(?: would|'d)? (?:suggest|recommend|go with)|my (?:suggestion|recommendation|pick) (?:is|would be)|suggested|recommended)[:\s]+(?:option |number |#)?(\d{1,2})\b/i);
+  const n = m ? Number(m[1]) : null;
+  return n && opts.some((o) => o.n === n) ? n : null;
 }
 
 export const clip = (s: string, n = 58) => (s.length > n ? `${s.slice(0, n).trimEnd()}…` : s);
@@ -205,4 +253,18 @@ export function tidySpeech(text: string): string {
   t = t.replace(/\bi\b/g, "I");
   if (t && !/[.!?]$/.test(t)) t += ".";
   return t;
+}
+
+/**
+ * The five backlog states a product owner sees (the design team's correction pass). The finer states
+ * underneath (held, suggested, probing, ready, built; capture, epic, distraction) stay internal.
+ */
+export const OWNER_BACKLOG_STATES = ["Captured", "Needs context", "Shaping", "Ready to prototype", "Parked"] as const;
+export type OwnerBacklogState = (typeof OWNER_BACKLOG_STATES)[number];
+export function ownerBacklogState(b: { kind: string; state: string; recKind?: string }): OwnerBacklogState {
+  if (b.kind === "distraction") return "Parked";
+  if (b.state === "ready" || b.state === "built") return "Ready to prototype";
+  if (b.state === "probing" || (b.kind === "epic" && !b.recKind)) return "Shaping";
+  if (b.state === "suggested") return "Needs context";
+  return "Captured";
 }

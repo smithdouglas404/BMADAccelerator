@@ -5,6 +5,9 @@ import { workspacePath } from "@/lib/workspace";
 import { syncPreviewState } from "@/lib/preview";
 import { ROUTE_AGENTS, overallReadiness, validationScore, type Validation } from "./core";
 import { assemblePackage, type PackageInput } from "./package";
+import { truthExport } from "./truthlog";
+import { readInterpretation } from "./truth";
+import { truthGraphSchema } from "@/studio/graph";
 import { SPEC_DEFS, explainReadiness, specDiff, type SpecSnapshot } from "./spec";
 
 /** The four routes exist for every product, in order. */
@@ -147,6 +150,13 @@ export async function packageInput(useCaseId: string, opts: { frames?: boolean; 
     })),
     specVersion: uc.specRevisions[0]?.version ?? 0,
     specDiff: uc.specRevisions[0]?.diff ?? "",
+    truthGraph: { schema: truthGraphSchema, ...(await truthExport(useCaseId)) },
+    vibeLoop: uc.feedback.map((f) => {
+      const it = readInterpretation(f.interpretation);
+      const changes = [...(it.prd ?? []), ...(it.trd ?? [])];
+      const stage = f.status === "built" ? "regenerate" : changes.length && it.behaviour ? "shape" : it.behaviour ? "interpret" : f.comment ? "describe" : "select";
+      return { annotation: f.id, target: f.target || f.pageUrl || "product preview", shape: f.shape, stage, observation: it.observation || f.comment, behaviour: it.behaviour ?? "", acceptance: it.acceptance ?? [], component: it.component ?? "", changes, question: it.question ?? "" };
+    }),
   };
 }
 
@@ -177,11 +187,11 @@ export async function restoreSpec(useCaseId: string, version: number) {
 /** Assembles a fresh package (a new iteration) into the workspace's studio/package/ folder. */
 export async function writePackage(useCaseId: string) {
   const uc = await prisma.useCase.update({ where: { id: useCaseId }, data: { packageCount: { increment: 1 } } });
-  await reviseSpec(useCaseId, `Package iteration ${uc.packageCount}`);
+  const rev = await reviseSpec(useCaseId, `Package iteration ${uc.packageCount}`);
   const files = assemblePackage(await packageInput(useCaseId, { iteration: uc.packageCount }));
   const dir = workspacePath(uc.slug, "studio", "package");
   await fs.rm(dir, { recursive: true, force: true });
   await fs.mkdir(dir, { recursive: true });
   for (const [name, content] of Object.entries(files)) await fs.writeFile(path.join(dir, name), content);
-  return { iteration: uc.packageCount, dir, files };
+  return { iteration: uc.packageCount, version: rev.version, dir, files };
 }

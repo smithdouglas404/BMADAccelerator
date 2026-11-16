@@ -29,6 +29,7 @@ export const NAV_GROUPS: { title: string; items: { id: StudioView; label: string
     items: [
       { id: 'validation', label: 'Validate use case', hint: 'Test the proof' },
       { id: 'evidence', label: 'Evidence & signals', hint: 'Keep the why' },
+      { id: 'truth', label: 'Product Truth Graph', hint: 'See the meaning' },
       { id: 'readiness', label: 'Pilot readiness', hint: 'Find the ceiling' },
     ],
   },

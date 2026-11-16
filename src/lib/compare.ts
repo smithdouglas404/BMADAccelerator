@@ -93,7 +93,8 @@ export async function runControlBuild(useCaseId: string) {
     // Copy the screenshots next to ours, where the Muse reads them.
     const shotsTo = workspacePath(uc.slug, "studio", "control", "shots");
     await fs.rm(shotsTo, { recursive: true, force: true });
-    await fs.cp(path.join(dir, "shots"), shotsTo, { recursive: true }).catch(() => {});
+    // The control may save them in shots/ or app/shots/ (it ran the command from inside app/): take both.
+    for (const from of [path.join(dir, "shots"), path.join(dir, "app", "shots")]) await fs.cp(from, shotsTo, { recursive: true }).catch(() => {});
     await setStatus(uc.slug, { state: "judging", startedAt, version: uc.generateCount });
     if (agentsEnabled()) await enqueue(useCaseId, "compare", judgePrompt(uc.generateCount, controlDir(uc.slug)));
   } catch (e) {

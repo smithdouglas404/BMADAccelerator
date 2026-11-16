@@ -1,3 +1,4 @@
+import { recordChange } from "@/lib/studio/truthlog";
 import { promises as fs } from "fs";
 import path from "path";
 import { execFile } from "child_process";
@@ -9,6 +10,7 @@ import { onAppGenerated } from "@/lib/memory";
 import { workspacePath } from "@/lib/workspace";
 import { installDesignSkills, provisionWorkspace, syncStudioSkills, writeIntake } from "@/lib/provision";
 import { appDir, assignPort, startPreview, stopPreview } from "@/lib/preview";
+import { buildTimer } from "@/lib/buildTiming";
 import { enqueue, runSdkTurn, agentsEnabled } from "@/lib/agent/runner";
 import type { RunTally } from "@/lib/agent/tools";
 import { writePackage } from "@/lib/studio/state";
@@ -31,7 +33,7 @@ The floor rule:
 Design:
 - Read \`.claude/skills/frontend-design/SKILL.md\` and \`.claude/skills/frontend-design-direction/SKILL.md\` first. Write \`studio/design/direction.md\`: the category and three leading products you measure against, the audience and primary job, palette (4 to 6 named hex values) and typefaces with reasons, the home-page layout as a small ASCII wireframe, the signature detail. The category's conventions come first; a theme is an accent on top.
 - Real-looking imagery wherever a leading product would have it, made with \`mcp__studio__make_image\` (a limited number per run; draw if it isn't available). Pictures show what this product really deals with. Never copy a real brand, never show real people, never fetch images from outside.
-- Every build is on shadcn/ui (React, Vite, Tailwind CSS, Google web fonts): \`npx shadcn@latest init\`, then \`npx shadcn@latest add\` per component, themed so it looks like this product. The one override: an owner upload that defines its own design system or stack. Use the items in \`studio/package/COMPONENT_MAP.json\` plus whatever else the full product needs. The shadcn MCP tools (\`mcp__shadcn__*\`) find registry items and give install commands; run shadcn commands inside \`app/\`. Run \`mcp__shadcn__get_audit_checklist\` before your screenshot rounds.
+- Every build is on shadcn/ui (React, Vite, Tailwind CSS, Google web fonts): \`npx shadcn@latest init\`, then one \`npx shadcn@latest add a b c ...\` with every component you need at once (not one command per component), themed so it looks like this product. Motion (\`motion\`, the animation library, imported from \`motion/react\`) gives the interface its life: page and list transitions, presence for dialogs and toasts, small state changes. Keep it purposeful and quick, and respect \`prefers-reduced-motion\`. The one override: an owner upload that defines its own design system or stack. Use the items in \`studio/package/COMPONENT_MAP.json\` plus whatever else the full product needs. The shadcn MCP tools (\`mcp__shadcn__*\`) find registry items and give install commands; run shadcn commands inside \`app/\`. Run \`mcp__shadcn__get_audit_checklist\` before your screenshot rounds.
 
 Agents: build agents only where \`studio/package/AGENT_KIT_ROUTING.json\` or an approved decision asks for one (workflows, messages, alerts, recommendations, insights); fixed rules stay plain code. Use Inngest AgentKit (\`@inngest/agent-kit\`) only, following \`.claude/skills/studio-agentkit/SKILL.md\` and its references. Person-in-the-loop steps wait with \`step.waitForEvent\` behind an approval screen. Keys only from the environment (\`AGENT_PROVIDER\`, \`AGENT_MODEL\`); with no key, a labelled demo mode so every flow still works.
 
@@ -43,11 +45,13 @@ Running and safety (the only hard rules):
 - Health, safety, money, legal and AI wording must be honest.
 - Never kill processes by name or pattern (\`pkill -f\`, \`killall\`): your own command line contains words like "shadcn" and "claude". Run anything that could hang with \`timeout\` and no input, and stop only PIDs you started.
 
+Order of work, so the owner sees something early: first the main customer flow and the core screens with sample data, then \`npm run build\` and \`mcp__studio__show_preview\` (aim for about ten minutes in), then the rest of the floor, calling \`mcp__studio__show_preview\` again after each big step. Install once: add every package and component you know you need in one go, and don't reinstall between checks.
+
 Check it with your own eyes before you finish:
 1. Start it on a spare port (for example 4999).
 2. Screenshot every main page at desktop and phone size into \`studio/shots/\`: \`node ${SHOT} http://127.0.0.1:4999 <shots folder> / /other-page ...\`.
 3. Open each screenshot with Read and compare it with the three leading products in your direction. Anything they all have that this app lacks is a bug, unless the owner said no to it. Check hierarchy, type, spacing, imagery and the phone layout.
-4. Fix and repeat until it would stand next to them. At least two rounds. Then stop the app.
+4. Fix and repeat until it would stand next to them: one round on a first version (the owner reviews it next), at least two on later versions. Then stop the app.
 
 Talk to the owner only with \`mcp__studio__say\`, two or three short sentences in plain words. Plain text you write is not shown.`;
 
@@ -170,6 +174,8 @@ export async function runGenerate(useCaseId: string, opts: { redesign?: boolean;
       await fakeGenerate(uc, n, notesPath, tally);
     } else {
       await prisma.useCase.update({ where: { id: useCaseId }, data: { generateStatus: "Claude Code is building" } });
+      const timer = buildTimer();
+      try {
       await runSdkTurn({
         useCaseId,
         slug: uc.slug,
@@ -196,7 +202,12 @@ export async function runGenerate(useCaseId: string, opts: { redesign?: boolean;
         onStatus: async (s) => {
           await prisma.useCase.update({ where: { id: useCaseId }, data: { generateStatus: s } });
         },
+        onTool: (name, input) => timer.tool(name, input),
       });
+      } finally {
+        // Where the time went, for the owner and for making builds faster.
+        await fs.writeFile(workspacePath(uc.slug, "studio", "builds", `build-timing-${n}.json`), JSON.stringify(timer.report(), null, 2)).catch(() => {});
+      }
     }
     await prisma.useCase.update({ where: { id: useCaseId }, data: { generateStatus: "Starting the preview" } });
     await commitApp(appDir(uc.slug), n);
@@ -206,6 +217,13 @@ export async function runGenerate(useCaseId: string, opts: { redesign?: boolean;
     if (decisions.length) await prisma.decision.updateMany({ where: { id: { in: decisions.map((d) => d.id) } }, data: { builtInVersion: n } });
     if (items.length) await prisma.backlogItem.updateMany({ where: { id: { in: items.map((b) => b.id) } }, data: { state: "built", builtInVersion: n } });
     if (feedback.length) await prisma.feedback.updateMany({ where: { id: { in: feedback.map((f) => f.id) } }, data: { status: "built" } });
+    await recordChange(useCaseId, {
+      node: `version:${pkg.version}`,
+      kind: "built",
+      summary: `Claude Code built version ${n}${decisions.length || items.length || feedback.length ? ` from ${[decisions.length && `${decisions.length} decision${decisions.length === 1 ? "" : "s"}`, items.length && `${items.length} backlog item${items.length === 1 ? "" : "s"}`, feedback.length && `${feedback.length} mark${feedback.length === 1 ? "" : "s"} on the prototype`].filter(Boolean).join(", ")}` : ""}`,
+      causes: [...decisions.map((d) => `decision:${d.id}`), ...items.map((b) => `backlog:${b.id}`), ...feedback.map((f) => `ann:${f.id}`)],
+      by: "Claude Code",
+    });
     await prisma.move.updateMany({ where: { useCaseId, status: "building" }, data: { status: "review" } });
 
     const notes = await fs.readFile(workspacePath(uc.slug, notesPath), "utf8").catch(() => "");

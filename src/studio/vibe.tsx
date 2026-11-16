@@ -31,14 +31,16 @@ export function LiveFrame({ live, annotationMode, shape, onPick, tall = false }:
   const url = previewUrl(live.preview.port, '/')
   useEffect(() => setNonce((n) => n + 1), [live.generateCount, live.preview.running])
 
-  if (live.generateBusy || !live.preview.hasApp || !live.preview.running) {
+  // While a build runs, an early version the builder already put in the preview stays visible.
+  if (!live.preview.hasApp || !live.preview.running) {
+    const stopped = !live.generateBusy && live.preview.hasApp && !live.preview.starting
     return (
       <div className={`product-preview-shell live-empty ${tall ? 'is-tall' : ''}`}>
         <div className="preview-app-top"><span className="preview-kite">{live.name.toLowerCase()}.</span><span className="preview-preview-label">{live.generateBusy ? `building version ${live.generateCount + 1}` : 'no version yet'}</span><span className="preview-avatar">CC</span></div>
         <div className="live-empty-copy">
           <span className="live-pulse" />
-          <strong>{live.generateBusy ? live.generateStatus || 'Claude Code is building' : live.preview.hasApp ? 'Starting the preview…' : 'The first version builds from the floor'}</strong>
-          <small>{live.generateBusy ? 'The preview appears here the moment it runs.' : live.preview.hasApp ? 'One moment.' : 'Ask the Muse, or press “Build it now” on the prototype brief.'}</small>
+          <strong>{live.generateBusy ? live.generateStatus || 'Claude Code is building' : stopped ? `Version ${live.generateCount} is built; its preview is stopped` : live.preview.hasApp ? 'Starting the preview…' : 'The first version builds from the floor'}</strong>
+          <small>{live.generateBusy ? 'An early version appears here as soon as it runs.' : stopped ? <button type="button" className="annotate-trigger" onClick={() => void api(`/api/use-cases/${live.id}/preview`, { method: 'POST' })}>Start the preview</button> : live.preview.hasApp ? 'One moment.' : 'Ask the Muse, or press “Build it now” on the prototype brief.'}</small>
         </div>
       </div>
     )

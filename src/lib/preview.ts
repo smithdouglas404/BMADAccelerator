@@ -184,3 +184,10 @@ export async function syncPreviewState(uc: UseCase) {
   if (!running && !uc.generateBusy && !procs.has(uc.id) && !starting.has(uc.id)) void startPreview(uc.id);
   return { hasApp, port: uc.previewPort, running, starting: starting.has(uc.id) };
 }
+
+/** After the Studio restarts: start the preview of every product that has a built app. */
+export async function resumePreviews() {
+  if (process.env.BACC_NO_RESUME_PREVIEWS === "1") return;
+  const built = await prisma.useCase.findMany({ where: { generateCount: { gt: 0 }, generateBusy: false }, select: { id: true }, orderBy: { updatedAt: "desc" }, take: 29 });
+  for (const uc of built) await startPreview(uc.id).catch((e) => console.error("resume preview", uc.id, e));
+}
