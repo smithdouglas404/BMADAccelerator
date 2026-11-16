@@ -247,3 +247,9 @@ button.studio-row-main svg { grid-row: 1 / span 2; grid-column: 2; color: var(--
 .studio-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
 .studio-customer-filter { margin: 0 0 16px; flex-wrap: wrap; }
 .studio-product-resume { display: inline-flex; align-items: center; gap: 4px; margin-top: 10px; font-size: 12px; color: var(--acid); }
+
+/* A way home from any use case: the brand opens the list of all use cases, and a link says so. */
+a.studio-home-brand { color: inherit; text-decoration: none; padding-bottom: 12px; }
+.studio-home-link { display: inline-flex; align-items: center; gap: 6px; margin: 0 10px 14px; color: var(--muted); font-size: 11px; font-weight: 600; text-decoration: none; }
+.studio-home-link:hover { color: var(--acid); }
+@media (max-width: 760px) { .studio-home-link { margin-bottom: 10px; } }

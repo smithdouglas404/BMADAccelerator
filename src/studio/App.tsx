@@ -14,6 +14,7 @@ import {
   Settings2,
   Upload,
   UserRound,
+  ArrowLeft,
   ArrowRight,
   Bell,
   Check,
@@ -306,14 +307,15 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand-lockup">
+        <a className="brand-lockup studio-home-brand" href="/" title="All use cases">
           <div className="brand-mark"><span /><span /><span /></div>
           <div>
             <p className="eyebrow">agentic studio</p>
             <p className="brand-name">backward<span>.</span></p>
           </div>
           <span className="version-badge">0.1</span>
-        </div>
+        </a>
+        <a className="studio-home-link" href="/"><ArrowLeft size={13} /> All use cases</a>
 
         <ProductSwitcher live={live}>
           <span className="project-glyph">{initials(live.name).slice(0, 1)}</span>

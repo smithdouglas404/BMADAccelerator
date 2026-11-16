@@ -34,7 +34,7 @@ export function ProductSwitcher({ live, children }: { live: Live; children: Reac
             </a>
           ))}
           <a href="/new" role="menuitem"><span className="project-glyph"><Plus size={14} /></span><span className="project-switcher-copy"><strong>New product</strong><small>say it in a few lines</small></span></a>
-          <a href="/" role="menuitem" className="studio-switcher-all">All products <ArrowRight size={12} /></a>
+          <a href="/" role="menuitem" className="studio-switcher-all">All use cases <ArrowRight size={12} /></a>
         </div>
       )}
     </div>
