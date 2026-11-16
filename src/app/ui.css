@@ -121,6 +121,8 @@
   :where([data-ui], [data-slot]) :where(ul, ol) { list-style: none; padding: 0; }
   :where([data-ui], [data-slot]) :where(a) { color: inherit; text-decoration: inherit; }
   :where([data-ui], [data-slot]) :where(button, input, select, textarea) { font: inherit; color: inherit; background: transparent; }
+  :where([data-ui], [data-slot]) :where(button:not(:disabled), [role="button"]) { cursor: pointer; }
+  :where([data-slot="button"]:not(:disabled)) { cursor: pointer; }
   :where([data-ui], [data-slot]) :where(table) { border-collapse: collapse; }
   :where([data-ui], [data-slot]) :where(img, svg) { display: block; vertical-align: middle; }
   :where([data-slot]) :where(svg) { flex-shrink: 0; }

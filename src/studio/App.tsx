@@ -2,30 +2,27 @@
 import { useEffect, useMemo, useState } from 'react'
 import html2canvas from 'html2canvas'
 import {
-  RefreshCw,
   ArrowRight,
   Bell,
   Check,
   CircleHelp,
-  GitBranch,
-  Layers3,
   X,
 } from 'lucide-react'
 import {
   type Capability,
-  type ViewId,
   type RecommendationItem,
 } from './data'
 import { downloadPrototypeZip } from './generation'
-import { api, ago, toBacklog, toCapabilities, toEvidence, toExecution, toMessages, toRecommendations, toSpec, useLive, type Live, type StudioMessage } from './live'
+import { api, toBacklog, toCapabilities, toEvidence, toExecution, toMessages, toRecommendations, toSpec, useLive, type Live, type StudioMessage } from './live'
 import { captureLive, useVoice, type Pick } from './vibe'
 import { NextMove, PeopleMenu, talkingTo, useMe, type StudioView } from './flow'
 import { TruthGraphView, ObservationEffects } from './truth'
 import { AgentsView } from './agents'
 import { StoryMapView } from './storymap'
 import { BoardView } from './board'
-import { ObservationComposer, SyncPreview, ProvidersCard } from './extras'
+import { ObservationComposer } from './extras'
 import { PRODUCT_LINE } from '@/lib/brand'
+import { Button } from '@/components/ui/button'
 import { StudioFrame, StudioSidebar, StudioTopBar } from './shell'
 import { ConversationView } from './socra'
 import { OverviewView } from './overview'
@@ -33,6 +30,7 @@ import { SpecView } from './specview'
 import { BriefView } from './brief'
 import { ReviewView, PreviewCard, AnnotationPanel } from './review'
 import { ProductView, ValidationView, EvidenceView, ReadinessView } from './prove'
+import { ConnectionsView } from './connections'
 
 const viewTitles: Record<StudioView, string> = {
   review: 'Try & mark up',
@@ -262,7 +260,7 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
     }} />}>
       <StudioTopBar
         crumbs={<><span className="truncate">{live.name}</span><span aria-hidden>/</span><strong className="truncate font-semibold text-foreground">{viewTitles[activeView]}</strong></>}
-        actions={<><span className="hidden items-center gap-2 text-xs text-muted-foreground md:flex"><span className="size-2 rounded-full bg-primary" />{live.generateBusy ? live.generateStatus || 'Claude Code is building' : busy ? live.agentStatus || 'Socra is working' : 'All changes saved'}</span><button className="icon-button" type="button" aria-label="Notifications" onClick={() => changeView('conversation')}><Bell size={17} /></button><PeopleMenu live={live} me={me} setMe={setMe} setToast={setToast} /></>}
+        actions={<><span className="hidden items-center gap-2 text-xs text-muted-foreground md:flex"><span className="size-2 rounded-full bg-primary" />{live.generateBusy ? live.generateStatus || 'Claude Code is building' : busy ? live.agentStatus || 'Socra is working' : 'All changes saved'}</span><Button type="button" size="icon" variant="ghost" aria-label="Notifications" onClick={() => changeView('conversation')}><Bell className="size-5" /></Button><PeopleMenu live={live} me={me} setMe={setMe} setToast={setToast} /></>}
       />
       <div className="main-content">
         <NextMove live={live} changeView={changeView} />
@@ -289,7 +287,6 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
   )
 }
 
-type Act = (fn: () => Promise<unknown>, ok?: string) => Promise<void>
 
 
 
@@ -309,29 +306,3 @@ export default App
 
 
 
-function ConnectionsView({ live, act, setToast, changeView }: { live: Live; act: Act; setToast: (value: string) => void; changeView: (view: ViewId) => void }) {
-  const [repositoryUrl, setRepositoryUrl] = useState(live.repoUrl)
-  const [linearWorkspace, setLinearWorkspace] = useState(live.linearTeam)
-  const [gitSync, setGitSync] = useState<'idle' | 'syncing' | 'synced'>('idle')
-  const [linearSync, setLinearSync] = useState<'idle' | 'syncing' | 'synced'>('idle')
-  const [tick, setTick] = useState(0)
-  const sync = (kind: 'git' | 'linear') => {
-    const setter = kind === 'git' ? setGitSync : setLinearSync
-    setter('syncing')
-    setToast(kind === 'git' ? 'Preparing backlog records and spec diffs for a repository branch' : 'Projecting curated backlog and spec diffs into the optional Linear workspace')
-    void act(async () => {
-      try {
-        const r = await api<{ status?: string }>(`/api/use-cases/${live.id}/sync`, { json: { kind } })
-        setter('synced')
-        setToast(r.status || (kind === 'git' ? 'Git sync complete — backlog and spec diffs are traceable by source ID' : 'Linear sync complete — backlog and spec changes remain linked to Studio'))
-      } catch (e) {
-        setter('idle')
-        throw e
-      } finally {
-        setTick((t) => t + 1)
-      }
-    })
-  }
-  const syncState = gitSync === 'synced' || linearSync === 'synced' ? 'synced' : gitSync === 'syncing' || linearSync === 'syncing' ? 'syncing' : 'idle'
-  return <div className="page-wrap connections-page"><div className="page-intro"><div><p className="eyebrow">Connections · where the work goes next</p><h1>Keep the loop<br /><em>open.</em></h1><p>Claude Code can generate the first ZIP now. A connected repository gives the next iteration a durable home, while Linear can become an optional synchronized view of the same product truth.</p></div><div className="intro-actions"><span className="connection-status"><span className="live-pulse" /> Local workspace active</span><button className="button button-primary" type="button" onClick={() => changeView('brief')}>Back to prototype brief <ArrowRight size={16} /></button></div></div><div className="connections-grid"><section className="connection-card"><div className="connection-card-header"><span className="connection-logo github"><GitBranch size={18} /></span><div><p className="eyebrow">Source of truth</p><h2>Git repository</h2></div><span className="connection-badge">{live.connections.github && live.repoUrl ? 'Connected' : live.repoUrl ? 'URL saved' : 'Needs URL'}</span></div><p>Provide the repository URL where the generated package or future prototype branch should be pushed. {live.connections.github ? 'The GitHub token on Settings gives the Studio push permission; every build is pushed here automatically.' : 'Add a GitHub token on Settings (Models and keys) before the first real push.'}</p><label>Repository URL<input value={repositoryUrl} onChange={(event) => setRepositoryUrl(event.target.value)} placeholder="https://github.com/org/repository" /></label><div className="connection-actions"><button className="button button-primary" type="button" onClick={() => void act(() => api(`/api/use-cases/${live.id}`, { method: 'PATCH', json: { repoUrl: repositoryUrl.trim() } }), 'Repository URL saved — the next package can target this repository')}>Save repository</button><button className="button button-quiet" type="button" onClick={() => sync('git')}><RefreshCw size={14} /> {gitSync === 'syncing' ? 'Syncing…' : gitSync === 'synced' ? 'Synced' : 'Sync package'}</button></div><div className="connection-note"><CircleHelp size={14} /><span>{live.gitStatus ? `${live.gitStatus}${live.gitPushedAt ? ` · ${ago(live.gitPushedAt)}` : ''}` : 'Opinionated default: keep the generated ZIP as an auditable handoff, then commit the unpacked package to a dedicated prototype branch.'}</span></div></section><section className="connection-card"><div className="connection-card-header"><span className="connection-logo linear"><Layers3 size={18} /></span><div><p className="eyebrow">Optional synchronization</p><h2>Linear workspace</h2></div><span className={`connection-badge ${live.connections.linear ? '' : 'muted'}`}>{live.connections.linear ? 'Key on Settings' : 'Optional'}</span></div><p>If the team uses Linear, the Studio can synchronize capabilities, epics, and stories after the owner has shaped them. The Studio remains the conversational source of truth.</p><label>Linear team<input value={linearWorkspace} onChange={(event) => setLinearWorkspace(event.target.value)} placeholder="Team key or name, e.g. ENG" /></label><div className="connection-actions"><button className="button button-primary" type="button" onClick={() => void act(() => api(`/api/use-cases/${live.id}`, { method: 'PATCH', json: { linearTeam: linearWorkspace.trim() } }), 'Linear workspace saved — sync remains opt-in')}>Save workspace</button><button className="button button-quiet" type="button" onClick={() => sync('linear')}><RefreshCw size={14} /> {linearSync === 'syncing' ? 'Syncing…' : linearSync === 'synced' ? 'Synced' : 'Preview + sync map'}</button></div><div className="connection-note"><CircleHelp size={14} /><span>{live.linearStatus ? `${live.linearStatus}${live.linearSyncedAt ? ` · ${ago(live.linearSyncedAt)}` : ''}` : 'Sync should never erase the conversational context. It should only project the curated backlog and spec diffs into Linear.'}</span></div></section></div><SyncPreview live={live} syncState={syncState} refresh={tick} /><div className="connection-flow"><div><span className="eyebrow">The proposed loop</span><strong>Studio → Claude Code ZIP → Git branch → Pilot → optional Linear sync</strong></div><div className="connection-flow-nodes"><span>Product truth</span><ArrowRight size={14} /><span>Prototype package</span><ArrowRight size={14} /><span>Repository</span><ArrowRight size={14} /><span>Iteration</span></div></div><ProvidersCard /></div>
-}

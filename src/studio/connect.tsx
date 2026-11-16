@@ -37,21 +37,21 @@ export function ConsentPage({ problem, clientName, params, wantsWrite, customers
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); setBusy(false) }
   }
   return (
-    <div className="studio-page">
-      <div className="page-wrap" style={{ maxWidth: 560 }}>
-        <div className="page-intro"><div><p className="eyebrow">{PRODUCT}</p><h1>Connect<br /><em>{clientName || 'an assistant'}</em></h1><p>It will work on your use cases in your name. Approving, building and withdrawing always ask you first.</p></div></div>
-        {problem ? <section className="studio-card"><p>{problem}</p></section> : (
-          <section className="studio-card">
-            <div className="studio-kv">
-              <label>Your name<input value={person} onChange={(e) => setPerson(e.target.value)} placeholder="Doug" autoComplete="name" /></label>
-              <label>Your role<select value={role} onChange={(e) => setRole(e.target.value)}>{ROLES.map((r) => <option key={r}>{r}</option>)}</select></label>
-              <label>Which customer it may see<select value={customer} onChange={(e) => setCustomer(e.target.value)}><option value="">Every customer</option>{customers.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
-              <label>What it may do<select value={fit(role, scope)} disabled={role === 'Viewer'} onChange={(e) => { const v = e.target.value as Level; setScope(v); if (v === 'admin') setRole('Admin') }}>{LEVELS.map((l) => <option key={l.key} value={l.key}>{l.label}</option>)}</select></label>
-              <label>Connect code (Settings &gt; Connect in the Studio)<input value={code} onChange={(e) => setCode(e.target.value)} placeholder="6 letters" autoComplete="one-time-code" /></label>
-              {error && <p className="studio-muted" role="alert">{error}</p>}
-              <div className="studio-review-actions"><button type="button" className="button button-primary" disabled={busy || !person.trim() || !code.trim()} onClick={() => void send()}><ShieldCheck size={14} /> Allow</button><button type="button" className="button button-quiet" disabled={busy} onClick={() => void send(true)}>Don’t allow</button></div>
-            </div>
-          </section>
+    <div data-ui className="min-h-screen bg-background">
+      <div className="mx-auto grid w-full max-w-xl gap-6 px-4 py-12">
+        <div className="grid gap-2"><p className="text-sm font-medium text-primary">{PRODUCT}</p><h1 className="text-2xl font-semibold">Connect {clientName || 'an assistant'}</h1><p className="text-base text-muted-foreground">It will work on your use cases in your name. Approving, building and withdrawing always ask you first.</p></div>
+        {problem ? <Section title="This link can’t be used"><SectionBody><p className="text-base">{problem}</p></SectionBody></Section> : (
+          <Section title="Who it works for, and what it may do">
+            <SectionBody>
+              <Field id="oauth-person" label="Your name"><Input id="oauth-person" value={person} onChange={(e) => setPerson(e.target.value)} placeholder="Your name" autoComplete="name" /></Field>
+              <Field id="oauth-role" label="Your role"><Select value={role} onValueChange={setRole}><SelectTrigger id="oauth-role" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent></Select></Field>
+              <Field id="oauth-customer" label="Which customer it may see"><Select value={customer || '__all'} onValueChange={(v) => setCustomer(v === '__all' ? '' : v)}><SelectTrigger id="oauth-customer" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="__all">Every customer</SelectItem>{customers.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></Field>
+              <Field id="oauth-scope" label="What it may do"><Select value={fit(role, scope)} disabled={role === 'Viewer'} onValueChange={(v) => { const l = v as Level; setScope(l); if (l === 'admin') setRole('Admin') }}><SelectTrigger id="oauth-scope" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{LEVELS.map((l) => <SelectItem key={l.key} value={l.key}>{l.label}</SelectItem>)}</SelectContent></Select></Field>
+              <Field id="oauth-code" label="Connect code" hint="From Settings > Connect in the Studio."><Input id="oauth-code" value={code} onChange={(e) => setCode(e.target.value)} placeholder="6 letters" autoComplete="one-time-code" /></Field>
+              {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
+              <div className="flex flex-wrap gap-2"><Button type="button" disabled={busy || !person.trim() || !code.trim()} onClick={() => void send()} className="gap-1.5"><ShieldCheck className="size-4" /> Allow</Button><Button type="button" variant="outline" disabled={busy} onClick={() => void send(true)}>Don’t allow</Button></div>
+            </SectionBody>
+          </Section>
         )}
       </div>
     </div>

@@ -3,8 +3,11 @@
 // (from styles.css, which stays byte-identical to their drop) and sit below their content; the few new
 // classes are in studio-extras.css.
 import { useEffect, useState, type ReactNode } from 'react'
-import { ArrowRight, Check, Mic, Play, Plus } from 'lucide-react'
+import { ArrowRight, Mic, Plus } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { api, type Live } from './live'
+import { Section, SectionBody } from './kit'
 
 type Act = (fn: () => Promise<unknown>, ok?: string) => Promise<void>
 type ProductRow = { id: string; name: string; stageLabel: string; readiness: number; busy: boolean }
@@ -91,45 +94,18 @@ export function ObservationComposer({ live, act }: { live: Live; act: Act }) {
     const t = text.trim()
     if (t.length < 2) return
     setText('')
-    void act(() => api(`/api/use-cases/${live.id}/observations`, { json: { kind, text: t } }), 'Pilot feedback added — Socra is carrying it into the spec')
+    void act(() => api(`/api/use-cases/${live.id}/observations`, { json: { kind, text: t } }), 'Pilot feedback added. Socra is carrying it into the spec')
   }
   return (
-    <section className="studio-card studio-observe">
-      <div className="stack-header"><div><p className="eyebrow">Pilot feedback loop</p><h3>What happened when people used it?</h3></div><Mic size={16} /></div>
-      <div className="evidence-filters">{OBS.map(([k, label]) => <button key={k} type="button" className={kind === k ? 'is-active' : ''} onClick={() => setKind(k)}>{label}</button>)}</div>
-      <div className="capture-input"><input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') send() }} placeholder={kind === 'felt-wrong' ? 'This felt wrong because…' : 'What you saw, measured or heard…'} /><button type="button" onClick={send} aria-label="Add pilot feedback"><Plus size={16} /></button></div>
-    </section>
+    <Section title="What happened when people used it?" description="Pilot feedback goes straight back into the spec." action={<Mic className="size-4 text-muted-foreground" />}>
+      <SectionBody>
+        <div role="group" aria-label="Kind of feedback" className="flex flex-wrap gap-1.5">{OBS.map(([k, label]) => <Button key={k} type="button" size="sm" variant={kind === k ? 'secondary' : 'ghost'} aria-pressed={kind === k} onClick={() => setKind(k)}>{label}</Button>)}</div>
+        <div className="flex gap-2"><Input aria-label="Pilot feedback" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') send() }} placeholder={kind === 'felt-wrong' ? 'This felt wrong because…' : 'What you saw, measured or heard…'} /><Button type="button" onClick={send} disabled={text.trim().length < 2} className="gap-1.5"><Plus className="size-4" /> Add</Button></div>
+      </SectionBody>
+    </Section>
   )
 }
 
-type Preview = { backlog: { id: string; title: string; group: string; synced: boolean }[]; gitDiffs: { id: string; file: string; summary: string; from: string; to: string }[]; linearDiffs: { id: string }[]; gitRecords: number; linearRecords: number }
 
-/** The team's projection preview, filled from what the next sync would really send. */
-export function SyncPreview({ live, syncState, refresh }: { live: Live; syncState: 'idle' | 'syncing' | 'synced'; refresh: number }) {
-  const [p, setP] = useState<Preview | null>(null)
-  useEffect(() => {
-    void api<Preview>(`/api/use-cases/${live.id}/sync`, { cache: 'no-store' }).then(setP).catch(() => setP(null))
-  }, [live.id, refresh, live.updatedAt])
-  const backlog = p?.backlog ?? []
-  const diffs = p?.gitDiffs ?? []
-  return (
-    <section className="sync-preview-card"><div className="sync-preview-head"><div><p className="eyebrow">Automatic projection preview</p><h2>What would push from Studio</h2><p>{p ? `${p.gitRecords} records already in Git · ${p.linearRecords} in Linear. Re-syncing never duplicates them.` : 'Reading what the next sync would send…'}</p></div><span className={`sync-state ${syncState}`}><span />{syncState === 'synced' ? 'synced' : syncState === 'syncing' ? 'projecting…' : 'ready to project'}</span></div><div className="sync-preview-grid"><div><span className="eyebrow">Backlog records · {backlog.length}</span>{backlog.slice(0, 8).map((item) => <div className="sync-record" key={item.id}><span className="sync-record-dot backlog" /><div><strong>{item.title}</strong><small>{item.id} · {item.group || 'Unsorted signal'}</small></div>{item.synced && <Check size={13} />}</div>)}</div><div><span className="eyebrow">Specification diffs · {diffs.length}</span>{diffs.length === 0 && <div className="sync-record"><span className="sync-record-dot spec" /><div><strong>No spec changes since the last sync</strong><small>prototype/spec is up to date</small></div></div>}{diffs.slice(0, 8).map((diff) => <div className="sync-record" key={diff.id}><span className="sync-record-dot spec" /><div><strong>{diff.summary}</strong><small>{diff.file} · {diff.from} → {diff.to}</small></div></div>)}</div></div></section>
-  )
-}
 
-/** Which coding agent builds the pilot: Claude Code today; the others are on the way. */
-export function ProvidersCard() {
-  const rows = [
-    ['Claude Code', 'Builds every version from the package, on your Claude plan', 'Active'],
-    ['Cursor', 'Same package, opened as a Cursor background agent', 'Coming'],
-    ['Devin', 'Same package, handed to a Devin session', 'Coming'],
-    ['Antigravity', 'Same package, run in Google Antigravity', 'Coming'],
-  ]
-  return (
-    <section className="connection-card studio-providers">
-      <div className="connection-card-header"><span className="connection-logo github"><Play size={18} /></span><div><p className="eyebrow">Implementation agent</p><h2>Who builds the pilot</h2></div><a className="connection-badge" href="/settings">Settings</a></div>
-      <div className="studio-list">{rows.map(([name, detail, state]) => <div key={name} className="studio-list-row"><div className="studio-row-main"><strong>{name}</strong><small>{detail}</small></div><span className={`connection-badge ${state === 'Active' ? '' : 'muted'}`}>{state}</span></div>)}</div>
-    </section>
-  )
-}
 

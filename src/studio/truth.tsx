@@ -312,8 +312,12 @@ export function ObservationEffects({ live }: { live: Live }) {
   const truth = useTruth(live)
   const seen = (truth?.nodes ?? []).filter((n) => n.id.startsWith('evidence:') && n.source === 'prototype').slice(0, 5)
   if (!truth || !seen.length) return null
-  return <section className="studio-card"><div className="stack-header"><div><p className="eyebrow">What the pilot taught</p><h3>Observations and what they changed</h3></div><History size={16} /></div><div className="studio-list">{seen.map((n) => {
-    const out = truth.edges.filter((e) => e.from === n.id).map((e) => truth.nodes.find((x) => x.id === e.to)?.title).filter(Boolean)
-    return <div className="studio-list-row" key={n.id}><span className="studio-row-main"><strong>{n.title}</strong><small>{out.length ? `Changed: ${out.join(', ')}` : 'Socra is carrying it into the PRD and TRD…'}</small></span></div>
-  })}</div></section>
+  return (
+    <Section title="What the pilot taught" description="Observations from the pilot and what they changed." action={<History className="size-4 text-muted-foreground" />}>
+      {seen.map((n) => {
+        const out = truth.edges.filter((e) => e.from === n.id).map((e) => truth.nodes.find((x) => x.id === e.to)?.title).filter(Boolean)
+        return <Row key={n.id} title={n.title} detail={out.length ? `Changed: ${out.join(', ')}` : 'Socra is carrying it into the PRD and TRD…'} />
+      })}
+    </Section>
+  )
 }
