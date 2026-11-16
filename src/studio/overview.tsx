@@ -146,7 +146,7 @@ export function HeldThoughts({ live, act, me, selected, items, capture, setCaptu
             <div className="grid min-w-0 flex-1 basis-64 gap-1">
               <div className="flex flex-wrap items-baseline gap-x-2"><p className="text-base font-medium">{item.title}</p><span className="text-xs text-muted-foreground">{item.age}</span></div>
               {item.note && item.note !== item.title && <p className="text-sm text-muted-foreground">{item.note}</p>}
-              {item.annotationId && <a className="block max-w-56 overflow-hidden rounded-lg border border-border" href={`/api/feedback/${item.annotationId}/image`} target="_blank" rel="noreferrer"><img src={`/api/feedback/${item.annotationId}/image`} alt="The marked-up screen" loading="lazy" className="w-full" /></a>}
+              {item.annotationId && <a className="block max-w-56 overflow-hidden rounded-lg border border-border" href={`/api/feedback/${item.annotationId}/image`} target="_blank" rel="noreferrer"><img src={`/api/feedback/${item.annotationId}/image`} alt="The marked-up screen" loading="lazy" className="w-full" onError={(e) => { (e.currentTarget.parentElement as HTMLElement).style.display = 'none' }} /></a>}
               <div className="flex flex-wrap items-center gap-1.5"><StatusBadge tone={k.tone}>{item.ownerState || k.label}</StatusBadge><span className="text-xs text-muted-foreground">{[item.group, item.source].filter(Boolean).join(' · ')}</span></div>
             </div>
             <div className="flex items-center gap-1">

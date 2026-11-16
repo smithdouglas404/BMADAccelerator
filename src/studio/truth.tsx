@@ -307,21 +307,6 @@ function MarkSteps({ mark }: { mark: Live['feedback'][number] }) {
 }
 
 /** The interpretation chain of one mark: region, observation, behaviour, acceptance criteria, component change, spec. */
-export function MarkChain({ mark }: { mark: Live['feedback'][number] }) {
-  const it = mark.interpretation ?? {}
-  const changes = [...(it.prd ?? []), ...(it.trd ?? [])]
-  return <span className="studio-chain">
-    <span><em>Region</em>{mark.shape === 'circle' ? 'Circled' : mark.shape === 'full-screen' ? 'Whole screen' : 'Pointed at'} {mark.target ? mark.target.replace(/^Circled /, '') : 'the product'}</span>
-    <span><em>Observation</em>“{it.observation || mark.comment}”</span>
-    {it.behaviour ? <span><em>Behaviour</em>{it.behaviour}</span> : <span><em>Behaviour</em>Socra is reading what this means…</span>}
-    {!!it.acceptance?.length && <span><em>Acceptance</em>{it.acceptance.join(' · ')}</span>}
-    {it.component && <span><em>Component</em>{it.component}</span>}
-    {changes.length > 0 && <span><em>Changes</em>{changes.join(', ')}</span>}
-    {it.question && <span><em>Question</em>{it.question}</span>}
-    <span><em>Build</em>{mark.status === 'built' ? 'In the latest version' : 'Goes into the next build'}</span>
-  </span>
-}
-
 /** Under a pilot observation: what it changed in the product truth. */
 export function ObservationEffects({ live }: { live: Live }) {
   const truth = useTruth(live)

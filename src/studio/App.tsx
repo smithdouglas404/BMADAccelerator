@@ -6,7 +6,6 @@ import {
   Code2,
   Database,
   ExternalLink,
-  MousePointer2,
   RefreshCw,
   Upload,
   UserRound,
@@ -20,7 +19,6 @@ import {
   GitBranch,
   Layers3,
   Lightbulb,
-  Maximize2,
   Mic,
   MoreHorizontal,
   MoveUpRight,
@@ -34,16 +32,15 @@ import {
 import {
   type BacklogItem,
   type Capability,
-  type ConversationMessage,
   type ViewId,
   type EvidenceItem,
   type RecommendationItem,
 } from './data'
 import { downloadPrototypeZip } from './generation'
-import { api, ago, previewUrl, toBacklog, toCapabilities, toEvidence, toExecution, toMessages, toRecommendations, toSpec, useLive, type Live, type StudioMessage } from './live'
-import { LiveFrame, captureLive, useVoice, type Pick } from './vibe'
+import { api, ago, toBacklog, toCapabilities, toEvidence, toExecution, toMessages, toRecommendations, toSpec, useLive, type Live, type StudioMessage } from './live'
+import { captureLive, useVoice, type Pick } from './vibe'
 import { NextMove, PeopleMenu, talkingTo, useMe, type StudioView } from './flow'
-import { TruthGraphView, MarkChain, ObservationEffects } from './truth'
+import { TruthGraphView, ObservationEffects } from './truth'
 import { AgentsView } from './agents'
 import { StoryMapView } from './storymap'
 import { BoardView } from './board'
@@ -54,6 +51,7 @@ import { ConversationView } from './socra'
 import { OverviewView } from './overview'
 import { SpecView } from './specview'
 import { BriefView } from './brief'
+import { ReviewView, PreviewCard, AnnotationPanel } from './review'
 
 const viewTitles: Record<StudioView, string> = {
   review: 'Try & mark up',
@@ -335,66 +333,6 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
 
 type Act = (fn: () => Promise<unknown>, ok?: string) => Promise<void>
 
-type OverviewProps = {
-  live: Live
-  product: Live
-  onPick: (p: Pick) => void
-  messages: ConversationMessage[]
-  selected: Capability
-  capabilities: Capability[]
-  readiness: Record<string, number>
-  overallReadiness: number
-  approvalCount: number
-  backlog: BacklogItem[]
-  focusCapability: (capability: Capability) => void
-  changeView: (view: ViewId) => void
-  capture: string
-  setCapture: (value: string) => void
-  captureIdea: () => void
-  visibleBacklog: BacklogItem[]
-  showAllBacklog: boolean
-  setShowAllBacklog: (value: boolean) => void
-  curate: (id: string, kind: BacklogItem['kind'] | 'edit' | 'withdraw') => void
-  previewMode: 'home' | 'thread'
-  setPreview: (mode: 'home' | 'thread') => void
-  toast: string
-  setToast: (value: string) => void
-  annotationMode: boolean
-  setAnnotationMode: (value: boolean) => void
-  annotationTarget: string
-  setAnnotationTarget: (value: string) => void
-  annotationNote: string
-  setAnnotationNote: (value: string) => void
-  isListening: boolean
-  toggleVoice: () => void
-  addAnnotation: () => void
-  captureFrame: (mode?: 'surface' | 'screen') => void
-  capturedFrame: string
-  annotationShape: 'object' | 'circle' | 'full-screen'
-  setAnnotationShape: (value: 'object' | 'circle' | 'full-screen') => void
-}
-
-type ReviewProps = globalThis.Pick<OverviewProps, 'live' | 'previewMode' | 'setPreview' | 'setToast' | 'annotationMode' | 'setAnnotationMode' | 'setAnnotationTarget' | 'annotationTarget' | 'annotationNote' | 'setAnnotationNote' | 'isListening' | 'toggleVoice' | 'addAnnotation' | 'captureFrame' | 'capturedFrame' | 'annotationShape' | 'setAnnotationShape' | 'onPick'> & { changeView: (view: StudioView) => void }
-
-/** The live product, full width: click or circle what should change, say why, and it goes to Socra. */
-function ReviewView({ live, previewMode, setPreview, setToast, annotationMode, setAnnotationMode, setAnnotationTarget, annotationTarget, annotationNote, setAnnotationNote, isListening, toggleVoice, addAnnotation, captureFrame, capturedFrame, annotationShape, setAnnotationShape, onPick, changeView }: ReviewProps) {
-  const marks = live.feedback.slice(0, 6)
-  return <div className="page-wrap studio-review-page"><div className="page-intro"><div><p className="eyebrow eyebrow-with-dot"><span className="status-dot" />Vibe review</p><h1>Try it. Point at <em>what’s wrong.</em></h1><p>Use the product as a customer would. Press Annotate, click or circle the part you mean, and say what should change. Socra turns it into the next build.</p></div><div className="intro-actions"><button className="button button-primary" type="button" onClick={() => setAnnotationMode(!annotationMode)}><MousePointer2 size={16} /> {annotationMode ? 'Stop annotating' : 'Annotate'}</button><span>{live.feedback.length} {live.feedback.length === 1 ? 'mark' : 'marks'} so far</span></div></div><section className="section-block"><PreviewCard live={live} mode={previewMode} setPreview={setPreview} setToast={setToast} annotationMode={annotationMode} setAnnotationMode={setAnnotationMode} onSelectTarget={setAnnotationTarget} annotationShape={annotationShape} onPick={onPick} tall /><AnnotationPanel {...{ annotationMode, setAnnotationMode, annotationTarget, annotationNote, setAnnotationNote, isListening, toggleVoice, addAnnotation, captureFrame, capturedFrame, annotationShape, setAnnotationShape }} /></section>{marks.length > 0 && <section className="section-block"><div className="section-heading"><div><p className="eyebrow">Your marks</p><h2>What you asked to change</h2></div><button className="text-button" type="button" onClick={() => changeView('brief')}>Build the next version <ArrowRight size={15} /></button></div><div className="studio-list">{marks.map((f) => <div className="studio-list-row" key={f.id}><span className="studio-row-main"><strong>{f.comment}</strong><small>{f.target} · {ago(f.createdAt)}</small></span><span className="studio-review-chip">{f.status}</span><MarkChain mark={f} /></div>)}</div></section>}</div>
-}
-
-
-function PreviewCard({ live, mode, setPreview, setToast, annotationMode = false, setAnnotationMode, onSelectTarget, annotationShape = 'object', onPick, tall = false }: { live: Live; mode: 'home' | 'thread'; setPreview: (mode: 'home' | 'thread') => void; setToast: (value: string) => void; annotationMode?: boolean; setAnnotationMode?: (value: boolean) => void; onSelectTarget?: (value: string) => void; annotationShape?: AnnotationShape; onPick?: (p: Pick) => void; tall?: boolean }) {
-  const held = live.backlog.filter((b) => b.kind === 'capture' && b.state !== 'suggested' && b.state !== 'probing').slice(-1)[0]
-  const holdAs = (kind: BacklogItem['kind']) => {
-    if (!held) return
-    void api(`/api/use-cases/${live.id}/backlog/${held.id}`, { method: 'PATCH', json: { kind, group: kind === 'distraction' ? undefined : live.capabilities.find((c) => c.key === live.focus)?.label } })
-      .then(() => setToast(kind === 'distraction' ? 'Parked without losing the thought' : 'Kept in the product shape'))
-      .catch((e: Error) => setToast(e.message))
-  }
-  const open = previewUrl(live.preview.port, '/')
-  return <div className={`preview-card ${tall ? 'is-tall' : ''}`}><div className="preview-header"><div><p className="eyebrow">Vibe → visible product</p><h3>What {live.name} feels like in the hand</h3>{open && <span className="studio-open-app-row"><a className="studio-open-app" href={`/use-cases/${live.id}/try`} target="_blank" rel="noopener noreferrer">Try it full screen and mark it up <MoveUpRight size={12} /></a><a className="studio-open-app is-quiet" href={open} target="_blank" rel="noopener noreferrer">{open.replace(/^https?:\/\//, '').replace(/\/$/, '')}</a></span>}</div><div className="preview-tools"><button className={`annotate-trigger ${annotationMode ? 'is-active' : ''}`} type="button" onClick={() => setAnnotationMode?.(!annotationMode)}><MousePointer2 size={13} /> {annotationMode ? (annotationShape === 'circle' ? 'Drag a circle' : 'Click a surface') : 'Annotate'}</button><button className="icon-button subtle" type="button" onClick={() => (open ? window.open(`/use-cases/${live.id}/try`, '_blank', 'noopener') : setToast('The product opens full-screen once its first version runs'))} aria-label="Expand product preview"><Maximize2 size={15} /></button></div></div><div className="preview-tabs"><button className={mode === 'home' ? 'is-active' : ''} onClick={() => setPreview('home')} type="button">Entry moment</button><button className={mode === 'thread' ? 'is-active' : ''} onClick={() => setPreview('thread')} type="button">Held thought</button></div>{mode === 'home' ? <LiveFrame live={live} annotationMode={annotationMode} shape={annotationShape} tall={tall} onPick={(p) => { onSelectTarget?.(p.kind === 'region' ? 'Circled region' : 'Selected surface'); onPick?.(p) }} /> : <div className="product-preview-shell held-thread"><div className="preview-app-top"><span className="preview-kite">{live.name.toLowerCase()}.</span><span className="preview-preview-label">held thought</span><span className="preview-avatar">PO</span></div><div className="held-quote"><span>“</span><p>{held ? held.title : 'Nothing is waiting. Every thought you have had already has a home.'}</p><small>{held ? `captured ${ago(held.createdAt)} · Socra is listening` : 'capture one any time from the sidebar or your phone'}</small></div>{held && <div className="thread-actions"><button type="button" onClick={() => holdAs('epic')}>Keep with {live.name}</button><button type="button" onClick={() => holdAs('distraction')}>Let it wait</button></div>}</div>}</div>
-}
-
 type ProductProps = { live: Live; act: Act; selected: Capability; capabilities: Capability[]; backlog: BacklogItem[]; visibleBacklog: BacklogItem[]; showAllBacklog: boolean; setShowAllBacklog: (value: boolean) => void; curate: (id: string, kind: BacklogItem['kind'] | 'edit' | 'withdraw') => void; capture: string; setCapture: (value: string) => void; captureIdea: () => void; approvalCount: number; changeView: (view: ViewId) => void; toast: string; setToast: (value: string) => void }
 
 function ProductView({ live, act, selected, capabilities: caps, backlog, visibleBacklog, showAllBacklog, setShowAllBacklog, curate, capture, setCapture, captureIdea, approvalCount, changeView, setToast }: ProductProps) {
@@ -486,7 +424,4 @@ function ConnectionsView({ live, act, setToast, changeView }: { live: Live; act:
   }
   const syncState = gitSync === 'synced' || linearSync === 'synced' ? 'synced' : gitSync === 'syncing' || linearSync === 'syncing' ? 'syncing' : 'idle'
   return <div className="page-wrap connections-page"><div className="page-intro"><div><p className="eyebrow">Connections · where the work goes next</p><h1>Keep the loop<br /><em>open.</em></h1><p>Claude Code can generate the first ZIP now. A connected repository gives the next iteration a durable home, while Linear can become an optional synchronized view of the same product truth.</p></div><div className="intro-actions"><span className="connection-status"><span className="live-pulse" /> Local workspace active</span><button className="button button-primary" type="button" onClick={() => changeView('brief')}>Back to prototype brief <ArrowRight size={16} /></button></div></div><div className="connections-grid"><section className="connection-card"><div className="connection-card-header"><span className="connection-logo github"><GitBranch size={18} /></span><div><p className="eyebrow">Source of truth</p><h2>Git repository</h2></div><span className="connection-badge">{live.connections.github && live.repoUrl ? 'Connected' : live.repoUrl ? 'URL saved' : 'Needs URL'}</span></div><p>Provide the repository URL where the generated package or future prototype branch should be pushed. {live.connections.github ? 'The GitHub token on Settings gives the Studio push permission; every build is pushed here automatically.' : 'Add a GitHub token on Settings (Models and keys) before the first real push.'}</p><label>Repository URL<input value={repositoryUrl} onChange={(event) => setRepositoryUrl(event.target.value)} placeholder="https://github.com/org/repository" /></label><div className="connection-actions"><button className="button button-primary" type="button" onClick={() => void act(() => api(`/api/use-cases/${live.id}`, { method: 'PATCH', json: { repoUrl: repositoryUrl.trim() } }), 'Repository URL saved — the next package can target this repository')}>Save repository</button><button className="button button-quiet" type="button" onClick={() => sync('git')}><RefreshCw size={14} /> {gitSync === 'syncing' ? 'Syncing…' : gitSync === 'synced' ? 'Synced' : 'Sync package'}</button></div><div className="connection-note"><CircleHelp size={14} /><span>{live.gitStatus ? `${live.gitStatus}${live.gitPushedAt ? ` · ${ago(live.gitPushedAt)}` : ''}` : 'Opinionated default: keep the generated ZIP as an auditable handoff, then commit the unpacked package to a dedicated prototype branch.'}</span></div></section><section className="connection-card"><div className="connection-card-header"><span className="connection-logo linear"><Layers3 size={18} /></span><div><p className="eyebrow">Optional synchronization</p><h2>Linear workspace</h2></div><span className={`connection-badge ${live.connections.linear ? '' : 'muted'}`}>{live.connections.linear ? 'Key on Settings' : 'Optional'}</span></div><p>If the team uses Linear, the Studio can synchronize capabilities, epics, and stories after the owner has shaped them. The Studio remains the conversational source of truth.</p><label>Linear team<input value={linearWorkspace} onChange={(event) => setLinearWorkspace(event.target.value)} placeholder="Team key or name, e.g. ENG" /></label><div className="connection-actions"><button className="button button-primary" type="button" onClick={() => void act(() => api(`/api/use-cases/${live.id}`, { method: 'PATCH', json: { linearTeam: linearWorkspace.trim() } }), 'Linear workspace saved — sync remains opt-in')}>Save workspace</button><button className="button button-quiet" type="button" onClick={() => sync('linear')}><RefreshCw size={14} /> {linearSync === 'syncing' ? 'Syncing…' : linearSync === 'synced' ? 'Synced' : 'Preview + sync map'}</button></div><div className="connection-note"><CircleHelp size={14} /><span>{live.linearStatus ? `${live.linearStatus}${live.linearSyncedAt ? ` · ${ago(live.linearSyncedAt)}` : ''}` : 'Sync should never erase the conversational context. It should only project the curated backlog and spec diffs into Linear.'}</span></div></section></div><SyncPreview live={live} syncState={syncState} refresh={tick} /><div className="connection-flow"><div><span className="eyebrow">The proposed loop</span><strong>Studio → Claude Code ZIP → Git branch → Pilot → optional Linear sync</strong></div><div className="connection-flow-nodes"><span>Product truth</span><ArrowRight size={14} /><span>Prototype package</span><ArrowRight size={14} /><span>Repository</span><ArrowRight size={14} /><span>Iteration</span></div></div><ProvidersCard /></div>
-}
-function AnnotationPanel({ annotationMode, setAnnotationMode, annotationTarget, annotationNote, setAnnotationNote, isListening, toggleVoice, addAnnotation, captureFrame, capturedFrame, annotationShape, setAnnotationShape }: { annotationMode: boolean; setAnnotationMode: (value: boolean) => void; annotationTarget: string; annotationNote: string; setAnnotationNote: (value: string) => void; isListening: boolean; toggleVoice: () => void; addAnnotation: () => void; captureFrame: (mode?: 'surface' | 'screen') => void; capturedFrame: string; annotationShape: 'object' | 'circle' | 'full-screen'; setAnnotationShape: (value: 'object' | 'circle' | 'full-screen') => void }) {
-  return <div className={`annotation-panel ${annotationMode || annotationTarget ? 'is-open' : ''}`}><div className="annotation-panel-top"><div><p className="eyebrow">Vibe annotation layer</p><h3>Point at the part you want to change.</h3></div><button className="icon-button subtle" type="button" onClick={() => setAnnotationMode(false)} aria-label="Close annotation mode"><X size={15} /></button></div><p className="annotation-copy">Click a part of the live product, or drag a circle around a region, and describe what you’re seeing. Your note becomes a backlog signal with the captured frame attached.</p><div className="annotation-target-row"><span className="annotation-pin"><MousePointer2 size={14} /></span><span>{annotationTarget || 'No surface selected yet'}</span>{annotationTarget && <span className="selected-chip"><Check size={12} /> selected</span>}</div><div className="annotation-modes"><span className="eyebrow">Capture context</span><button className={annotationShape === 'object' ? 'is-active' : ''} type="button" onClick={() => setAnnotationShape('object')}><MousePointer2 size={12} /> Object</button><button className={annotationShape === 'circle' ? 'is-active' : ''} type="button" onClick={() => setAnnotationShape('circle')}><CircleHelp size={12} /> Circle region</button><button className={annotationShape === 'full-screen' ? 'is-active' : ''} type="button" onClick={() => setAnnotationShape('full-screen')}><Maximize2 size={12} /> Full screen</button></div><div className="annotation-composer"><textarea value={annotationNote} onChange={(event) => setAnnotationNote(event.target.value)} placeholder="What should feel different here?" rows={2} /><div className="annotation-actions"><button className={`voice-button ${isListening ? 'is-listening' : ''}`} type="button" onClick={toggleVoice}><Mic size={14} /> {isListening ? 'Listening…' : 'Add voice note'}</button><div><button className="button button-quiet button-small" type="button" onClick={() => captureFrame(annotationShape === 'full-screen' ? 'screen' : 'surface')}><Maximize2 size={13} /> {annotationShape === 'full-screen' ? 'Capture screen' : annotationShape === 'circle' ? 'Capture circle' : 'Capture frame'}</button><button className="button button-primary button-small" type="button" onClick={addAnnotation} disabled={!annotationNote.trim()}>Add to backlog <ArrowRight size={13} /></button></div></div></div>{capturedFrame && <div className="captured-frame"><img src={capturedFrame} alt="Captured product preview frame" /><span>Frame attached to the annotation</span></div>}</div>
 }
