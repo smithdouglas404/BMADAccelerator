@@ -7,7 +7,7 @@ import { api, ago } from './live'
 import { useVoice } from './vibe'
 import { useMe } from './flow'
 
-type ProductRow = { id: string; name: string; statement: string; category: string; stageLabel: string; readiness: number; versions: number; thoughts: number; decisions: number; busy: boolean; updatedAt: string }
+type ProductRow = { id: string; name: string; statement: string; category: string; stageLabel: string; customer: string; businessArea: string; lastView: string; readiness: number; versions: number; thoughts: number; decisions: number; busy: boolean; updatedAt: string }
 
 export function StudioTop({ active }: { active?: 'home' | 'new' | 'settings' | 'capture' }) {
   return (
@@ -30,9 +30,14 @@ function Shell({ active, children }: { active: 'home' | 'new' | 'settings' | 'ca
   return <div className="studio-page"><StudioTop active={active} />{children}</div>
 }
 
+export const BUSINESS_AREAS = ['Finance', 'IT', 'HR', 'Operations', 'Sales', 'Marketing', 'Customer service', 'Legal / Compliance', 'Supply chain'] as const
+
 export function HomePage() {
   const [rows, setRows] = useState<ProductRow[] | null>(null)
   const [error, setError] = useState('')
+  const [customer, setCustomer] = useState('')
+  const customers = [...new Set((rows ?? []).map((r) => r.customer || 'No customer yet'))].sort()
+  const shown = (rows ?? []).filter((r) => !customer || (r.customer || 'No customer yet') === customer)
   useEffect(() => {
     void api<ProductRow[]>('/api/use-cases', { cache: 'no-store' }).then(setRows).catch((e: Error) => setError(e.message))
   }, [])
@@ -44,15 +49,17 @@ export function HomePage() {
           <div className="intro-actions"><a className="button button-primary" href="/new" style={{ textDecoration: 'none' }}><Plus size={15} /> New product</a><span>{rows ? `${rows.length} products` : ''}</span></div>
         </div>
         {error && <p className="studio-muted">{error}</p>}
+        {customers.length > 1 && <div className="truth-filters studio-customer-filter"><button type="button" className={!customer ? 'is-active' : ''} onClick={() => setCustomer('')}>Every customer</button>{customers.map((c) => <button type="button" key={c} className={customer === c ? 'is-active' : ''} onClick={() => setCustomer(c)}>{c}</button>)}</div>}
         <div className="studio-products">
-          {rows?.length === 0 && <div className="empty-column">No products yet. Start one in a few lines.</div>}
-          {rows?.map((r) => (
-            <a key={r.id} className="studio-product" href={`/use-cases/${r.id}`}>
-              <span className="eyebrow">{r.category || r.stageLabel}</span>
+          {rows?.length === 0 && <div className="empty-column">No use cases yet. Start one in a few lines.</div>}
+          {shown.map((r) => (
+            <a key={r.id} className="studio-product" href={`/use-cases/${r.id}${r.lastView ? `?view=${r.lastView}` : ''}`}>
+              <span className="eyebrow">{[r.customer, r.businessArea].filter(Boolean).join(' · ') || r.category || r.stageLabel}</span>
               <h3>{r.name}</h3>
               <p>{r.statement}</p>
               <div className="ceiling-track"><span style={{ width: `${r.readiness}%`, background: 'var(--acid)' }} /></div>
               <div className="studio-product-meta"><span>{r.readiness}% ready</span><span>{r.versions} versions</span><span>{r.thoughts} thoughts</span><span>{r.busy ? 'working…' : `updated ${ago(r.updatedAt)}`}</span></div>
+              <span className="studio-product-resume">Pick up where you left off <ArrowRight size={12} /></span>
             </a>
           ))}
         </div>
@@ -63,17 +70,27 @@ export function HomePage() {
 
 export function NewProductPage() {
   const [description, setDescription] = useState('')
+  const [customer, setCustomer] = useState('')
+  const [useCase, setUseCase] = useState('')
+  const [area, setArea] = useState('')
+  const [areaOther, setAreaOther] = useState('')
+  const [summary, setSummary] = useState('')
+  const [known, setKnown] = useState<string[]>([])
+  useEffect(() => {
+    void api<ProductRow[]>('/api/use-cases', { cache: 'no-store' }).then((r) => setKnown([...new Set(r.map((x) => x.customer).filter(Boolean))].sort())).catch(() => undefined)
+  }, [])
   const [files, setFiles] = useState<File[]>([])
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [me] = useMe()
   const voice = useVoice(true, (t) => setDescription((d) => `${d}${d ? '\n' : ''}${t}`), setNote, { clean: true })
   const start = async () => {
-    if (!description.trim() && !files.length) return setNote('Say or type a few lines about what you want to make, or add a document that describes it.')
+    if (!description.trim() && !summary.trim() && !files.length) return setNote('Say or type a few lines about what you want to make, or add a document that describes it.')
     setBusy(true)
     try {
-      const said = description.trim() || `Here is what I have so far: ${files.map((f) => f.name).join(', ')}.`
-      const uc = await api<{ id: string }>('/api/use-cases', { json: { description: said, author: me } })
+      const said = description.trim() || (files.length ? `Here is what I have so far: ${files.map((f) => f.name).join(', ')}.` : '')
+      const businessArea = area === 'Other' ? areaOther.trim() || 'Other' : area
+      const uc = await api<{ id: string }>('/api/use-cases', { json: { description: said, name: useCase.trim(), customer: customer.trim(), businessArea, summary: summary.trim(), author: me } })
       if (files.length) {
         const form = new FormData()
         files.forEach((f) => form.append('files', f))
@@ -93,6 +110,13 @@ export function NewProductPage() {
       <div className="page-wrap">
         <div className="page-intro"><div><p className="eyebrow eyebrow-with-dot"><span className="status-dot" />A new product</p><h1>Say it the way<br />you’d <em>say it.</em></h1><p>A few lines is enough, and a business case or a deck helps if you have one. Socra works out what kind of product it is, names it, lays out everything the leading products of that kind have, and asks you what only you can answer. Its specialists join in as the product takes shape.</p></div></div>
         <div className="studio-form">
+          <div className="studio-form-grid">
+            <label>Customer<input value={customer} onChange={(e) => setCustomer(e.target.value)} list="studio-customers" placeholder="Who it’s for, e.g. Acme Insurance" /><datalist id="studio-customers">{known.map((c) => <option key={c} value={c} />)}</datalist></label>
+            <label>Use case name<input value={useCase} onChange={(e) => setUseCase(e.target.value)} placeholder="Optional: Socra suggests one" /></label>
+            <label>Business area<select value={area} onChange={(e) => setArea(e.target.value)}><option value="">Choose one</option>{BUSINESS_AREAS.map((a) => <option key={a} value={a}>{a}</option>)}<option value="Other">Other</option></select></label>
+            {area === 'Other' && <label>Which area?<input value={areaOther} onChange={(e) => setAreaOther(e.target.value)} placeholder="Say it in your words" /></label>}
+          </div>
+          <label>Short description<input value={summary} onChange={(e) => setSummary(e.target.value)} maxLength={300} placeholder="One or two lines: the problem and who has it" /></label>
           <label>What do you want to make?<textarea rows={7} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Who it’s for, what it should let them do, anything you already know… or just the idea in one line." autoFocus /></label>
           <div className="studio-form-row">
             <button type="button" className={`voice-button ${voice.listening ? 'is-listening' : ''}`} onClick={voice.toggle} disabled={voice.working}><Mic size={14} /> {voice.listening ? 'Listening… press again to stop' : voice.working ? 'Writing it down…' : 'Say it instead'}</button>
@@ -101,7 +125,7 @@ export function NewProductPage() {
           </div>
           {files.length > 0 && <div className="studio-files">{files.map((f, i) => <span key={`${f.name}-${i}`}>{f.name}<button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles(files.filter((_, j) => j !== i))}>×</button></span>)}</div>}
           {note && <p className="studio-muted">{note}</p>}
-          <div className="studio-form-row"><button type="button" className="button button-primary" disabled={busy || voice.listening} onClick={() => void start()}>{busy ? 'Opening the room…' : 'Start with Socra'} <ArrowRight size={15} /></button><small className="studio-muted">You can name it later; Socra suggests a name.</small></div>
+          <div className="studio-form-row"><button type="button" className="button button-primary" disabled={busy || voice.listening} onClick={() => void start()}>{busy ? 'Opening the room…' : 'Start with Socra'} <ArrowRight size={15} /></button><small className="studio-muted">Each customer’s use cases, documents, memory and agents are kept apart.</small></div>
         </div>
       </div>
     </Shell>

@@ -12,7 +12,8 @@ import { ensureRoutes } from "@/lib/studio/state";
 import { LimitError, authEnv, authOrder, claudeConfigured, limitMessage, type Auth } from "@/lib/agent/auth";
 import { studioTools, type RunTally } from "./tools";
 import { fakeAgentTurn } from "./fake";
-import { recallForTurn, startMemoryJobs } from "@/lib/memory";
+import { recallForTurn, searchMemory, startMemoryJobs } from "@/lib/memory";
+import { resumeBrief } from "@/lib/studio/resume";
 import { withContext } from "@/lib/memory/lettaCore";
 
 // One Socra turn at a time per product. Queued events (messages, captures, pulled-forward
@@ -129,7 +130,7 @@ async function runSdkTurnResuming(opts: TurnOpts) {
   } catch (e) {
     if (e instanceof LimitError || !opts.resume || opts.tally.spoke > 0) throw e;
     console.error("resume failed, starting a fresh session", e);
-    return runSdkTurnOnce({ ...opts, resume: "" });
+    return runSdkTurnOnce({ ...opts, resume: "", prompt: opts.freshPrompt ?? opts.prompt });
   }
 }
 
@@ -143,7 +144,7 @@ export async function runSdkTurn(opts: TurnOpts) {
       if (i === 0) return await runSdkTurnResuming({ ...opts, auth });
       // A session started under another sign-in may not resume; the Studio holds the state anyway.
       return await runSdkTurnOnce({ ...opts, auth }).catch((err) =>
-        err instanceof LimitError ? Promise.reject(err) : runSdkTurnOnce({ ...opts, auth, resume: "" }),
+        err instanceof LimitError ? Promise.reject(err) : runSdkTurnOnce({ ...opts, auth, resume: "", prompt: opts.freshPrompt ?? opts.prompt }),
       );
     } catch (e) {
       if (!(e instanceof LimitError) || i + 1 >= order.length) throw e;
@@ -166,6 +167,8 @@ async function runSdkTurnOnce(opts: {
   onSession: (id: string) => Promise<void>;
   onStatus: (s: string) => Promise<void>;
   onTool?: (name: string, input: Record<string, unknown>) => void;
+  /** The prompt to use if the session can't be resumed: it carries the conversation (resume.ts). */
+  freshPrompt?: string;
   tally: RunTally;
   maxTurns?: number;
   auth?: Auth;
@@ -250,7 +253,13 @@ async function runTurn(useCaseId: string, prompt: string) {
   // Recall once per turn: what earlier products taught (Mem0) and each role's top lessons (Letta).
   await prisma.useCase.update({ where: { id: useCaseId }, data: { agentStatus: "Remembering earlier products" } });
   const recalled = await recallForTurn(fresh, prompt).catch(() => "");
-  prompt = withContext(prompt, recalled);
+  // Coming back after a long gap, or without a session: the record of the conversation leads the turn.
+  const resume = await resumeInput(fresh, prompt).catch(() => null);
+  const briefNow = resume ? resumeBrief({ ...resume, sessionLost: !fresh.claudeSessionId }) : "";
+  const briefLost = resume ? resumeBrief({ ...resume, sessionLost: true }) : "";
+  const base = prompt;
+  prompt = withContext(briefNow ? `${briefNow}\n\n---\n\n${base}` : base, recalled);
+  const freshPrompt = withContext(briefLost ? `${briefLost}\n\n---\n\n${base}` : base, recalled);
   await prisma.useCase.update({ where: { id: useCaseId }, data: { agentStatus: "Thinking" } });
 
   if (process.env.BACC_FAKE_AGENT === "1" && !claudeConfigured()) {
@@ -262,6 +271,7 @@ async function runTurn(useCaseId: string, prompt: string) {
       slug: fresh.slug,
       prompt,
       resume: fresh.claudeSessionId,
+      freshPrompt,
       appendSystem: `${await museInstructions()}${connectorNote ? `\n\n${connectorNote}` : ""}`,
       tally,
       onSession: async (id) => {
@@ -284,3 +294,27 @@ async function runTurn(useCaseId: string, prompt: string) {
 export const START_PROMPT = `[opening] The owner just described a new product. Their own words, documents and choices are in studio/intake.md; their uploads, with text versions, are in studio/uploads/.
 
 Open the studio now, as your skill's "The opening" section says: name the category, write the product in one breath, the capability floor (four to eight capabilities, at least 30 items, everything the leading products of this kind have), the first PRFAQ, the evidence and validation you already have, and five to eight recommendations; start the first build; send your whole team out in parallel; then greet the owner in one short message with the single most important question and your suggested answer. Speed matters: the owner should see their product's shape within a minute and a working first version within minutes.`;
+
+/** What the "where we left off" brief needs, read from the Studio's record of this product. */
+async function resumeInput(uc: { id: string; name: string; customer: string; businessArea: string; description: string }, prompt: string) {
+  const [messages, open, approved, held, last] = await Promise.all([
+    prisma.message.findMany({ where: { useCaseId: uc.id, role: { in: ["user", "muse", "agent"] } }, orderBy: { createdAt: "asc" }, select: { role: true, agent: true, author: true, content: true, createdAt: true } }),
+    prisma.decision.findMany({ where: { useCaseId: uc.id, status: "open" }, orderBy: { createdAt: "asc" }, select: { text: true, createdAt: true } }),
+    prisma.decision.findMany({ where: { useCaseId: uc.id, status: "approved" }, orderBy: { createdAt: "asc" }, select: { text: true } }),
+    prisma.backlogItem.findMany({ where: { useCaseId: uc.id, kind: "capture", state: "held" }, orderBy: { createdAt: "asc" }, select: { title: true } }),
+    prisma.useCase.findUnique({ where: { id: uc.id }, select: { generateCount: true, lastGeneratedAt: true } }),
+  ]);
+  const remembered = (await searchMemory(`${uc.name}. ${prompt}`.slice(0, 1500), { onlyUseCase: uc.id, limit: 6 }).catch(() => [])).map((h) => h.memory);
+  return {
+    now: new Date(),
+    name: uc.name,
+    customer: uc.customer,
+    businessArea: uc.businessArea,
+    messages,
+    openDecisions: open,
+    approved,
+    held,
+    lastBuild: last?.generateCount ? { version: last.generateCount, at: last.lastGeneratedAt } : null,
+    remembered,
+  };
+}

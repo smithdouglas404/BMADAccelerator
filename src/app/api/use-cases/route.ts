@@ -20,6 +20,9 @@ export async function GET() {
       statement: u.statement || u.description.slice(0, 200),
       category: u.category,
       stageLabel: u.stageLabel,
+      customer: u.customer,
+      businessArea: u.businessArea,
+      lastView: u.lastView,
       // The same one number the product's own screens show.
       readiness: explainReadiness({
         sections: u.spec,
@@ -43,6 +46,10 @@ const CreateBody = z.object({
   // Optional: Socra names the product from what they said; until then it has a working name.
   name: z.string().trim().max(120).default(""),
   description: z.string().max(20000).default(""),
+  // The new use case form: who it is for, where in their business, and a short description.
+  customer: z.string().trim().max(120).default(""),
+  businessArea: z.string().trim().max(120).default(""),
+  summary: z.string().trim().max(2000).default(""),
   author: z.object({ name: z.string().max(80).default(""), role: z.string().max(60).default("Product owner") }).optional(),
 });
 
@@ -50,16 +57,22 @@ const CreateBody = z.object({
 export async function POST(req: Request) {
   const parsed = CreateBody.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: "Say a few words about the product." }, { status: 400 });
-  const { description, author } = parsed.data;
+  const { author, customer, businessArea, summary } = parsed.data;
+  // What Socra reads first: their own words, with the form's facts in front of them.
+  const facts = [customer && `Customer: ${customer}`, businessArea && `Business area: ${businessArea}`, parsed.data.name && `Use case: ${parsed.data.name}`, summary && `In short: ${summary}`].filter(Boolean).join("\n");
+  const description = [facts, parsed.data.description.trim()].filter(Boolean).join("\n\n");
   if (!parsed.data.name && !description.trim()) return NextResponse.json({ error: "Say a few words about the product." }, { status: 400 });
-  const name = parsed.data.name || workingName(description);
-  const slug = slugify(name);
+  const name = parsed.data.name || workingName(summary || parsed.data.description || description);
+  const slug = slugify(customer ? `${customer} ${name}` : name);
   await ensureWorkspace(slug);
   const uc = await prisma.useCase.create({
     data: {
       slug,
       name,
       description,
+      customer,
+      businessArea,
+      summary,
       messages: description ? { create: { role: "user", agent: "You", content: description, author: author?.name ?? "", authorRole: author?.role ?? "" } } : undefined,
       members: author?.name ? { create: { name: author.name, role: author.role } } : undefined,
     },

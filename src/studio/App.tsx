@@ -169,6 +169,8 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
     setActiveView(view)
     setTruthNode(view === 'truth' ? node : '')
     try { window.history.replaceState(null, '', `?view=${view}${view === 'truth' && node ? `&node=${encodeURIComponent(node)}` : ''}`) } catch { /* ignore */ }
+    // Remembered on the product, so opening it again (from any device) picks up here.
+    void fetch(`/api/use-cases/${live.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lastView: view }) }).catch(() => undefined)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 

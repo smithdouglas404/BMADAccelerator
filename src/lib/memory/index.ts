@@ -22,7 +22,10 @@ const client = process.env.MEM0_BASE_URL ? new Mem0RestClient(process.env.MEM0_B
 export const memory = new AgentMemory({ client, log: (m) => console.warn(m) });
 export const memoryConfigured = () => memory.configured;
 
-type UseCaseRef = { id: string; name: string };
+type UseCaseRef = { id: string; name: string; customer?: string };
+
+/** Customers are kept apart: memory from one customer's use cases is never recalled for another's. */
+const customerKey = (c?: string) => (c ?? "").trim().toLowerCase();
 
 const clip = (s: string, n = 3000) => (s.length > n ? `${s.slice(0, n)}...` : s);
 const nameOf = (agent: string) => {
@@ -42,7 +45,7 @@ function save(agent: string, uc: UseCaseRef, kind: MemoryKind, text: string, sou
     .remember({
       text,
       scope: scope(agent, uc),
-      metadata: { kind, role: ownerKey(agent), agent_role: ownerKey(agent), source, use_case: uc.id, use_case_title: uc.name, ...extra },
+      metadata: { kind, role: ownerKey(agent), agent_role: ownerKey(agent), source, use_case: uc.id, use_case_title: uc.name, customer: customerKey(uc.customer), ...extra },
     })
     .then(async (r) => {
       if (r.ok) return;
@@ -52,7 +55,7 @@ function save(agent: string, uc: UseCaseRef, kind: MemoryKind, text: string, sou
         const retry = await client
           .add([{ role: "user", content: text }], {
             app_id: s.appId, agent_id: s.agentId, user_id: s.userId, run_id: s.runId, infer: false,
-            metadata: { kind, agent_role: ownerKey(agent), source, use_case: uc.id, use_case_title: uc.name, ...extra, infer_failed: true },
+            metadata: { kind, agent_role: ownerKey(agent), source, use_case: uc.id, use_case_title: uc.name, customer: customerKey(uc.customer), ...extra, infer_failed: true },
           })
           .then(() => true, () => false);
         if (retry) return;
@@ -97,7 +100,7 @@ function label(h: MemoryHit) {
 }
 
 /** Searches every use case's memory; hits from `excludeUseCase` are left out (its own files hold them). */
-export async function searchMemory(query: string, opts: { role?: string; kinds?: MemoryKind[]; excludeUseCase?: string; limit?: number; runId?: string } = {}) {
+export async function searchMemory(query: string, opts: { role?: string; kinds?: MemoryKind[]; excludeUseCase?: string; onlyUseCase?: string; customer?: string; limit?: number; runId?: string } = {}) {
   if (!memory.configured || !query.trim()) return [] as MemoryHit[];
   const agents = opts.role && roleFor(opts.role) ? [memAgentId(opts.role)] : [...ROLES.map((r) => r.memAgentId)];
   const hits = await memory.recall(query.slice(0, 2000), {
@@ -106,7 +109,16 @@ export async function searchMemory(query: string, opts: { role?: string; kinds?:
     kinds: opts.kinds,
     limit: (opts.limit ?? 6) + 6,
   });
-  return hits.filter((h) => !opts.excludeUseCase || (h.metadata as Record<string, unknown> | undefined)?.use_case !== opts.excludeUseCase).slice(0, opts.limit ?? 6);
+  return hits
+    .filter((h) => {
+      const md = (h.metadata ?? {}) as Record<string, unknown>;
+      if (opts.excludeUseCase && md.use_case === opts.excludeUseCase) return false;
+      if (opts.onlyUseCase && md.use_case !== opts.onlyUseCase) return false;
+      // Another use case's memory only from the same customer (records from before customers count as none).
+      if (opts.customer !== undefined && md.use_case !== opts.onlyUseCase && customerKey(String(md.customer ?? "")) !== customerKey(opts.customer)) return false;
+      return true;
+    })
+    .slice(0, opts.limit ?? 6);
 }
 
 export function formatHits(hits: MemoryHit[]) {
@@ -121,8 +133,8 @@ export async function recallForTurn(uc: UseCaseRef & { description?: string }, p
   const parts: string[] = [];
   try {
     const query = `${uc.name}. ${uc.description ?? ""}\n${prompt}`.slice(0, 1500);
-    const hits = await searchMemory(query, { excludeUseCase: uc.id, limit: 6, runId: `turn-${uc.id}-${Date.now()}` });
-    if (hits.length) parts.push(`From earlier use cases (Mem0):\n${formatHits(hits)}`);
+    const hits = await searchMemory(query, { excludeUseCase: uc.id, customer: uc.customer ?? "", limit: 6, runId: `turn-${uc.id}-${Date.now()}` });
+    if (hits.length) parts.push(`From this customer's other use cases (Mem0):\n${formatHits(hits)}`);
   } catch (e) {
     console.warn("memory recall failed", e);
   }

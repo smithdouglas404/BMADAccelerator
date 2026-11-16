@@ -16,6 +16,13 @@ model UseCase {
   name              String
   // The owner's own first words about the product, kept verbatim.
   description       String    @default("")
+  // Who it is for and where in their business: each customer's use cases are kept apart (memory, agents).
+  customer          String    @default("")
+  businessArea      String    @default("")
+  // The short description from the new use case form (the vibing box is description).
+  summary           String    @default("")
+  // Where the person was last, so opening it again picks up there.
+  lastView          String    @default("")
   // The product in one breath (Whole product view).
   statement         String    @default("")
   category          String    @default("")

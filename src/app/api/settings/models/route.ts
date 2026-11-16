@@ -1,3 +1,4 @@
+import { pushKeys } from "@/lib/agentService";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { loadSettingsIntoEnv, removeKey, saveKey, saveModel, settingsStatus } from "@/lib/settings";
@@ -22,7 +23,11 @@ export async function PUT(req: Request) {
   await loadSettingsIntoEnv();
   const b = parsed.data;
   try {
-    if (b.action === "key") await saveKey(b.env, b.value);
+    if (b.action === "key") {
+      await saveKey(b.env, b.value);
+      // The shared agent service's agents use the same keys (sent inside the Docker network, never shown).
+      void pushKeys().catch(() => undefined);
+    }
     else if (b.action === "removeKey") await removeKey(b.env);
     else await saveModel(b.role, b.model);
   } catch (e) {

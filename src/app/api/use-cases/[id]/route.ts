@@ -31,6 +31,10 @@ const PatchBody = z
     gitBranch: z.string().trim().min(1).max(120).regex(/^[\w./-]+$/),
     linearTeam: z.string().max(120),
     skills: z.array(z.string().max(80)).max(400),
+    customer: z.string().trim().max(120),
+    businessArea: z.string().trim().max(120),
+    summary: z.string().max(2000),
+    lastView: z.string().max(40).regex(/^[a-z-]*$/),
   })
   .partial();
 
@@ -40,7 +44,13 @@ export async function PATCH(req: Request, { params }: Ctx) {
   if (!parsed.success) return NextResponse.json({ error: "That change isn't valid." }, { status: 400 });
   const before = await prisma.useCase.findUnique({ where: { id } });
   if (!before) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const { skills, validation, focus, prfaq, ...fields } = parsed.data;
+  const { skills, validation, focus, prfaq, lastView, ...fields } = parsed.data;
+  // Remembering where someone was is not a change to the product: it keeps the product's own updated time.
+  if (lastView !== undefined && !Object.keys(fields).length && !skills && !validation && !focus && prfaq === undefined) {
+    await prisma.useCase.update({ where: { id }, data: { lastView, updatedAt: before.updatedAt } });
+    return NextResponse.json({ ok: true });
+  }
+  if (lastView !== undefined) (fields as Record<string, unknown>).lastView = lastView;
   if (skills) {
     await prisma.useCaseSkill.deleteMany({ where: { useCaseId: id } });
     if (skills.length) await prisma.useCaseSkill.createMany({ data: skills.map((skillId) => ({ useCaseId: id, skillId })) });

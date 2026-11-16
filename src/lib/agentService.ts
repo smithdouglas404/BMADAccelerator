@@ -65,7 +65,8 @@ export async function syncAgents(useCaseId: string): Promise<{ ok: boolean; note
 }
 
 /** The model keys saved on Settings, for the service's agents. Sent inside the Docker network only. */
-async function pushKeys() {
+export async function pushKeys() {
+  if (!agentServiceConfigured()) return;
   const keys: Record<string, string> = {};
   for (const k of ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY"]) if (process.env[k]) keys[k] = process.env[k]!;
   if (Object.keys(keys).length) await admin("PUT", "/v1/admin/keys", keys);
