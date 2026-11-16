@@ -21,10 +21,8 @@ import {
   Filter,
   Flame,
   GitBranch,
-  History,
   Layers3,
   Lightbulb,
-  ListFilter,
   Maximize2,
   Mic,
   MoreHorizontal,
@@ -35,7 +33,6 @@ import {
   Sparkles,
   Target,
   Timer,
-  Wand2,
   X,
   PenLine,
 } from 'lucide-react'
@@ -45,7 +42,6 @@ import {
   type ConversationMessage,
   type ViewId,
   type EvidenceItem,
-  type ExecutionItem,
   type RecommendationItem,
 } from './data'
 import { downloadPrototypeZip } from './generation'
@@ -56,11 +52,12 @@ import { TruthGraphView, MarkChain, ObservationEffects } from './truth'
 import { AgentsView } from './agents'
 import { StoryMapView } from './storymap'
 import { BoardView } from './board'
-import { StudioMarkdown, SpecReviewTools, ImpactPanel, VersionHistory, ReadinessFactors, DecisionRegister, ObservationComposer, SyncPreview, ProvidersCard, BuildHistory } from './extras'
+import { StudioMarkdown, ReadinessFactors, DecisionRegister, ObservationComposer, SyncPreview, ProvidersCard, BuildHistory } from './extras'
 import { PRODUCT_LINE } from '@/lib/brand'
 import { StudioFrame, StudioSidebar, StudioTopBar } from './shell'
 import { ConversationView } from './socra'
 import { OverviewView } from './overview'
+import { SpecView } from './specview'
 
 const viewTitles: Record<StudioView, string> = {
   review: 'Try & mark up',
@@ -421,71 +418,7 @@ function BacklogList({ items, curate }: { items: BacklogItem[]; curate: (id: str
 
 type ReadinessProps = { live: Live; capabilities: Capability[]; readiness: Record<string, number>; overallReadiness: number; selected: Capability; focusCapability: (capability: Capability) => void; changeView: (view: ViewId) => void }
 
-type LiveSpecSection = ReturnType<typeof toSpec>[number]
-type SpecViewProps = {
-  live: Live
-  act: Act
-  reload: () => Promise<void>
-  changeView: (view: StudioView, node?: string) => void
-  setToast: (value: string) => void
-  specSections: LiveSpecSection[]
-  messages: ConversationMessage[]
-  evidence: EvidenceItem[]
-  backlog: BacklogItem[]
-  execution: ExecutionItem[]
-}
 
-function SpecView({ live, act, changeView, setToast, specSections }: SpecViewProps) {
-  const whyChanged = (node: string) => changeView('truth', node)
-  const [tab, setTab] = useState<'prd' | 'trd'>('prd')
-  const [selectedId, setSelectedId] = useState(specSections[0]?.id ?? '')
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(specSections[0]?.content ?? '')
-  const [reviewMode, setReviewMode] = useState(false)
-  const sections = specSections.filter((section) => section.tab === tab)
-  const selected = sections.find((section) => section.id === selectedId) ?? sections[0]
-  const tabPercent = (t: 'prd' | 'trd') => { const s = specSections.filter((section) => section.tab === t && section.review !== 'remove'); return s.length ? Math.round(s.reduce((sum, section) => sum + section.completeness, 0) / s.length) : 0 }
-  const progress = tabPercent(tab)
-  const chooseSection = (section: LiveSpecSection) => {
-    setSelectedId(section.id)
-    setDraft(section.content)
-    setEditing(false)
-  }
-  const selectTab = (nextTab: 'prd' | 'trd') => {
-    setTab(nextTab)
-    const next = specSections.find((section) => section.tab === nextTab)
-    if (next) chooseSection(next)
-  }
-  if (!selected) return <div className="page-wrap spec-page"><div className="empty-column">The living specification is being laid out. One moment.</div></div>
-  const review = (choice: 'keep' | 'revise' | 'challenge' | 'remove' | '', note = '') =>
-    act(() => api(`/api/use-cases/${live.id}/spec/${selected.key}`, { method: 'PATCH', json: { review: choice, note } }), choice === 'keep' ? `${selected.title} accepted into the living ${tab.toUpperCase()} — its provenance stays attached` : choice === 'remove' ? `${selected.title} removed — its evidence and conversation are kept` : choice ? `${selected.title} sent back to Socra to ${choice}` : `${selected.title} back in play`)
-  const acceptInference = () => { setEditing(false); void review('keep'); if (reviewMode) nextOpen() }
-  const saveRevision = () => {
-    setEditing(false)
-    void act(() => api(`/api/use-cases/${live.id}/spec/${selected.key}`, { method: 'PATCH', json: { content: draft, review: 'revise', note: 'Edited in the owner’s own words' } }), `Revision saved for ${selected.title} — downstream impact is ready to review`)
-  }
-  const setStatus = (status: string) => void act(() => api(`/api/use-cases/${live.id}/spec/${selected.key}`, { method: 'PATCH', json: { status } }), `${selected.title} is now ${status.replace(/-/g, ' ')}`)
-  const nextOpen = () => {
-    const queue = sections.filter((s) => !s.review && s.basis !== 'confirmed')
-    const i = queue.findIndex((s) => s.id === selected.id)
-    const n = queue[(i + 1) % Math.max(1, queue.length)] ?? sections[(sections.indexOf(selected) + 1) % sections.length]
-    if (n) chooseSection(n)
-  }
-  const traceAction = (type: string) => {
-    if (type === 'conversation') changeView('conversation')
-    if (type === 'evidence') changeView('evidence')
-    if (type === 'backlog') changeView('product')
-    if (type === 'execution') changeView('pilot')
-    if (type === 'annotation') changeView('overview')
-  }
-  return <div className="page-wrap spec-page">
-    <div className="page-intro spec-intro"><div><p className="eyebrow eyebrow-with-dot"><span className="status-dot" />The specification is alive</p><h1>See what the product<br /><em>is becoming.</em></h1><p>Socra turns conversation, evidence, and vibe annotations into a real spec — while keeping every inference inspectable and reversible.</p></div><div className="spec-intro-side"><div className="spec-progress"><span className="eyebrow">{tab === 'prd' ? 'PRD' : 'TRD'} completeness</span><strong>{progress}%</strong><div className="progress-track"><span style={{ width: `${progress}%` }} /></div><small>{sections.filter((section) => section.status !== 'draft').length} of {sections.length} sections have a shaped signal</small></div><button className="button button-primary" type="button" onClick={() => changeView('brief')}><PackageOpen size={15} /> Package the living spec</button></div></div>
-    <div className="spec-tabs"><button className={tab === 'prd' ? 'is-active' : ''} type="button" onClick={() => selectTab('prd')}><FileText size={14} /> Product requirements <span>{tabPercent('prd')}%</span></button><button className={tab === 'trd' ? 'is-active' : ''} type="button" onClick={() => selectTab('trd')}><Code2 size={14} /> Technical requirements <span>{tabPercent('trd')}%</span></button></div>
-    <div className="spec-layout"><aside className="spec-rail"><div className="rail-heading"><div><span className="eyebrow">{tab.toUpperCase()} sections</span><h3>Working outline</h3></div><ListFilter size={15} /></div>{sections.map((section) => <button className={`spec-section-item ${selected.id === section.id ? 'is-active' : ''} ${section.review === 'remove' ? 'is-removed' : ''}`} key={section.id} type="button" onClick={() => chooseSection(section)}><span className={`spec-signal ${section.status} ${section.confidence}`} /><span className="spec-section-copy"><strong>{section.title}</strong><small>{section.ref} · {section.kicker}</small></span><span className="spec-section-percent">{section.completeness}%</span></button>)}<div className="spec-rail-note"><Sparkles size={14} /><p><strong>Inference is visible.</strong> Nothing becomes “confirmed” just because Socra suggested it.</p></div></aside><section className="spec-document"><div className="spec-doc-header"><div><p className="eyebrow">{selected.ref} · {selected.kicker}</p><h2>{selected.title}</h2></div><div className="spec-doc-actions"><span className={`spec-status ${selected.status}`}>{selected.status}</span><span className={`confidence ${selected.confidence}`}>{selected.confidence} confidence</span></div></div><div className="spec-content-card"><div className="spec-content-meta"><span><Timer size={13} /> Updated from {selected.source} · {ago(selected.updatedAt)}</span><span>{selected.completeness}% complete</span></div>{editing ? <textarea className="spec-editor" value={draft} onChange={(event) => setDraft(event.target.value)} rows={7} /> : <div className="spec-body-copy">{selected.content ? <StudioMarkdown text={selected.content} /> : <p>Not yet researched. Ask Socra to probe, or write it in your own words.</p>}</div>}<div className="spec-action-row">{editing ? <><button className="button button-primary button-small" type="button" onClick={saveRevision}><Check size={13} /> Save revision</button><button className="button button-quiet button-small" type="button" onClick={() => setEditing(false)}>Cancel</button></> : <><button className="button button-primary button-small" type="button" onClick={acceptInference}><Check size={13} /> Accept inference</button><button className="button button-quiet button-small" type="button" onClick={() => { setDraft(selected.content); setEditing(true) }}><Wand2 size={13} /> Revise language</button><button className="button button-quiet button-small" type="button" onClick={() => void review('challenge', 'Challenged in review')} title="Ask Socra what this rests on"><CircleHelp size={13} /> Challenge</button>{selected.review === 'remove' ? <button className="button button-quiet button-small" type="button" onClick={() => void review('')}>Bring it back</button> : <button className="button button-quiet button-small" type="button" onClick={() => void review('remove', 'Removed in review')}><X size={13} /> Remove</button>}<button className="text-button" type="button" onClick={() => whyChanged(`spec:${selected.key}`)} title="Every change to this section and what caused it"><History size={13} /> Why did this change?</button><button className="text-button" type="button" onClick={() => changeView('conversation')}>Ask Socra to probe <ArrowRight size={13} /></button></>}</div></div><SpecReviewTools section={selected} onStatus={setStatus} reviewMode={reviewMode} setReviewMode={setReviewMode} onNext={nextOpen} /><div className="spec-related-row"><span className="eyebrow">Related records</span>{selected.related.length ? selected.related.map((id) => <button type="button" className="related-chip" key={id} onClick={() => { const s = specSections.find((x) => x.ref === id || x.key === id); if (s) { setTab(s.tab); chooseSection(s) } }}><Target size={11} /> {id}</button>) : <span className="empty-related">No linked record yet — that is a gap worth probing.</span>}</div><div className="spec-gap-card"><div><span className="eyebrow">What would make this stronger?</span><strong>{selected.confidence === 'open' ? 'This section needs a human decision or new evidence.' : selected.completeness < 70 ? 'One more focused question could raise confidence.' : 'The shape is strong enough to carry into a thin slice.'}</strong></div><button className="button button-quiet button-small" type="button" onClick={() => changeView(selected.confidence === 'open' ? 'conversation' : 'validation')}>{selected.confidence === 'open' ? 'Open the question' : 'Review validation'} <ArrowRight size={13} /></button></div></section><aside className="trace-rail"><div className="rail-heading"><div><span className="eyebrow">Provenance rail</span><h3>How this got here</h3></div><Network size={15} /></div><p className="trace-intro">Real-time inference tracing keeps product meaning connected to technical motion.</p><div className="trace-list">{selected.trace.length === 0 && <p className="trace-intro">No trace yet: nothing has been said or found about this section.</p>}{selected.trace.map((step, index) => <button className="trace-step" key={`${selected.id}-${index}`} type="button" onClick={() => traceAction(step.type)}><span className={`trace-dot ${step.type}`}><span /></span><span className="trace-step-copy"><small>{index + 1} · {step.label}</small><strong>{step.detail}</strong></span><ArrowRight size={13} /></button>)}</div><div className="trace-footer"><CircleHelp size={14} /><span><strong>Open loop</strong>{selected.completeness < 70 ? ' One unanswered question is holding this section below pilot-ready.' : ' This section can now inform the next prototype move.'}</span></div></aside></div>
-    <ImpactPanel live={live} sectionKey={selected.key} />
-    <VersionHistory live={live} act={act} />
-  </div>
-}
 
 function ReadinessView({ live, capabilities: caps, readiness, overallReadiness, selected, focusCapability, changeView }: ReadinessProps) {
   return <div className="page-wrap readiness-page"><div className="page-intro"><div><p className="eyebrow eyebrow-with-dot"><span className="status-dot" />Readiness is a conversation</p><h1>Find the ceiling,<br />not a false finish line.</h1><p>A capability is ready when the product can make a promise and keep it. The percentages are signals for where to look next — not grades for the team.</p></div><div className="readiness-hero-score"><div className="eyebrow">Current honest read</div><strong>{overallReadiness}%</strong><span>ready for a thin-slice pilot</span></div></div><div className="readiness-detail-grid"><section className="ceiling-card"><div className="ceiling-header"><div><p className="eyebrow">Capability ceiling</p><h2>What still needs to become true</h2></div><span className="ceiling-legend"><span className="legend-dot ready" />ready <span className="legend-dot open" />needs conversation</span></div><div className="ceiling-list">{caps.map((capability) => <div className="ceiling-row" key={capability.id}><div className="ceiling-row-title"><span className="capability-color" style={{ background: capability.color }} /><div><strong>{capability.label}</strong><small>{capability.kicker}</small></div><strong className="ceiling-number">{readiness[capability.id] ?? capability.readiness}%</strong></div><div className="ceiling-track"><span style={{ width: `${readiness[capability.id] ?? capability.readiness}%`, background: capability.color }} /><i style={{ left: `${readiness[capability.id] ?? capability.readiness}%` }} /></div><p>{capability.description}</p><div className="ceiling-row-footer"><span><MoveUpRight size={13} /> {capability.delta}</span><button type="button" onClick={() => focusCapability(capability)}>Work the edge <ArrowRight size={13} /></button></div></div>)}</div></section><aside className="readiness-aside"><div className="ceiling-callout"><span className="signal-icon"><Flame size={16} /></span><p><strong>The next honest move</strong>{selected.label} has the clearest path to a meaningful pilot moment. Socra is ready to help you sharpen its promise.</p><button className="button button-primary full-width" type="button" onClick={() => focusCapability(selected)}>Open this capability <ArrowRight size={15} /></button></div><div className="readiness-principles"><p className="eyebrow">How the Studio decides</p><div><span>01</span><p><strong>Promise before output</strong>Make sure the customer experience is clear before the build gets busy.</p></div><div><span>02</span><p><strong>Trace every move</strong>Every story should point back to a capability and a decision.</p></div><div><span>03</span><p><strong>Invite the human at the edge</strong>Questions belong in the conversation, not hidden in a workflow.</p></div></div><button className="button button-quiet full-width" type="button" onClick={() => changeView('pilot')}><GitBranch size={15} /> See the traceable build lane</button></aside></div><ReadinessFactors live={live} /></div>
