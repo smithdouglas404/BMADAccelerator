@@ -154,6 +154,9 @@ export function ConnectTab({ setToast }: { setToast: (s: string) => void }) {
     const r = scope === 'admin' ? 'Admin' : role === 'Admin' ? 'Product owner' : role
     try { await api('/api/settings/connect', { json: { action: 'access', id, scope: fit(r, scope), role: r } }); setToast('Access changed. It applies to the next call.'); load() } catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
   }
+  const setPerson = async (id: string, person: string) => {
+    try { await api('/api/settings/connect', { json: { action: 'person', id, person: person.trim() } }); setToast(person.trim() ? `Its changes are now recorded as ${person.trim()}.` : 'Name cleared.'); load() } catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
+  }
   const revoke = async (id: string) => { await api('/api/settings/connect', { json: { action: 'revoke', id } }); load() }
   const MUSE_TEXT = "Every 15 minutes, call the Socra Studio connector's whats_waiting tool. For every question waiting, tell me the product name, Socra's question and its numbered options, and which one Socra suggests. When I answer, call answer with that product's use_case_id and my words (a number picks that option). If answer comes back needing confirmation, show me the preview and send the same call again with confirm: true only after I say yes. Don't approve, build or withdraw anything unless I ask for it in that message."
   return (
@@ -196,6 +199,7 @@ export function ConnectTab({ setToast }: { setToast: (s: string) => void }) {
         <div className="studio-list">{info.tokens.map((t) => (
           <div key={t.id} className="studio-list-row">
             <div className="studio-row-main"><strong>{t.name}</strong><small>{t.person || 'no name'} · {t.role} · {t.levelLabel ?? (t.scope === 'write' ? 'look and change' : 'look only')} · {t.customer || 'every customer'} · {t.viaOAuth ? 'signed in' : `token ${t.prefix}…`} · last used {when(t.lastUsedAt)}</small></div>
+            <input aria-label={`Name ${t.name} acts in`} defaultValue={t.person} placeholder="Acts in the name of…" style={{ maxWidth: 160 }} onBlur={(e) => { if (e.target.value.trim() !== t.person) void setPerson(t.id, e.target.value) }} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }} />
             <select aria-label={`What ${t.name} may do`} value={t.level ?? (t.scope as Level)} onChange={(e) => void setAccess(t.id, e.target.value as Level, t.role)}>{LEVELS.map((l) => <option key={l.key} value={l.key}>{l.label.split(' (')[0]}</option>)}</select>
             <button type="button" className="icon-button subtle" aria-label={`Remove access for ${t.name}`} onClick={() => void revoke(t.id)}><Trash2 size={13} /></button>
           </div>
