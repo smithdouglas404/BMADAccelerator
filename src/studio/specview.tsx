@@ -29,8 +29,8 @@ const TRACE_DOT: Record<string, string> = { conversation: 'bg-primary', evidence
 /** Markdown from Socra, in the new type scale. */
 export function Prose({ text, className }: { text: string; className?: string }) {
   return (
-    <div className={cn('text-base leading-relaxed [&_.quote-callout]:my-3 [&_.quote-callout]:border-l-2 [&_.quote-callout]:border-primary [&_.quote-callout]:pl-3 [&_.quote-callout>span]:hidden [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:font-mono [&_code]:text-sm [&_h3]:mt-4 [&_h3]:mb-1.5 [&_h3]:text-lg [&_h3]:font-semibold [&_li]:mb-1 [&_p]:mb-3 [&_p]:text-foreground [&_li]:text-foreground [&_p]:text-base [&_li]:text-base [&_ul]:mb-3 [&_ul]:list-disc [&_ul]:pl-5', className)}>
-      <StudioMarkdown text={text} />
+    <div className={cn('text-base leading-relaxed [&_.quote-callout]:my-3 [&_.quote-callout]:border-l-2 [&_.quote-callout]:border-primary [&_.quote-callout]:pl-3 [&_.quote-callout>span]:hidden [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:font-mono [&_code]:text-sm [&_h3]:mt-5 [&_h3]:mb-2 [&_h3]:text-lg [&_h3]:font-semibold [&_h3[data-level=1]]:text-xl [&_h3[data-level=2]]:text-xl [&_h3:first-child]:mt-0 [&_em]:text-muted-foreground [&_li]:mb-1 [&_p]:mb-3 [&_p]:text-foreground [&_li]:text-foreground [&_p]:text-base [&_li]:text-base [&_ul]:mb-3 [&_ul]:list-disc [&_ul]:pl-5', className)}>
+      <StudioMarkdown text={text} bare />
     </div>
   )
 }

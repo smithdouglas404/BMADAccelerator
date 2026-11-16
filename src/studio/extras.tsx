@@ -3,7 +3,7 @@
 // (from styles.css, which stays byte-identical to their drop) and sit below their content; the few new
 // classes are in studio-extras.css.
 import { useEffect, useState, type ReactNode } from 'react'
-import { ArrowRight, Check, Mic, Play, Plus, Sparkles } from 'lucide-react'
+import { ArrowRight, Check, Mic, Play, Plus } from 'lucide-react'
 import { api, type Live } from './live'
 
 type Act = (fn: () => Promise<unknown>, ok?: string) => Promise<void>
@@ -41,7 +41,8 @@ export function ProductSwitcher({ live, children }: { live: Live; children: Reac
 }
 
 /** Plain markdown (headings, lists, quotes, paragraphs) rendered without HTML injection. */
-export function StudioMarkdown({ text }: { text: string }) {
+/** Socra's markdown. `bare` leaves out the older styles.css look so the new screens style it themselves. */
+export function StudioMarkdown({ text, bare = false }: { text: string; bare?: boolean }) {
   const blocks: ReactNode[] = []
   const lines = text.replace(/\r/g, '').split('\n')
   let list: string[] = []
@@ -55,7 +56,7 @@ export function StudioMarkdown({ text }: { text: string }) {
   for (const raw of lines) {
     const line = raw.trimEnd()
     const h = line.match(/^(#{1,4})\s+(.*)$/)
-    if (h) { flush(); blocks.push(<h3 key={`h${blocks.length}`} className={`studio-md-h${h[1].length}`}>{inline(h[2])}</h3>); continue }
+    if (h) { flush(); blocks.push(<h3 key={`h${blocks.length}`} className={bare ? undefined : `studio-md-h${h[1].length}`} data-level={h[1].length}>{inline(h[2])}</h3>); continue }
     const li = line.match(/^\s*(?:[-*]|\d+[.)])\s+(.*)$/)
     if (li) { if (para.length) { const p = para; para = []; blocks.push(<p key={`p${blocks.length}`}>{inline(p.join(' '))}</p>) } list.push(li[1]); continue }
     const q = line.match(/^>\s?(.*)$/)
@@ -65,32 +66,15 @@ export function StudioMarkdown({ text }: { text: string }) {
     para.push(line.trim())
   }
   flush()
-  return <div className="studio-md">{blocks}</div>
+  return <div className={bare ? undefined : 'studio-md'}>{blocks}</div>
 }
 
 function inline(s: string): ReactNode[] {
-  return s.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).filter(Boolean).map((part, i) =>
-    part.startsWith('**') ? <strong key={i}>{part.slice(2, -2)}</strong> : part.startsWith('`') ? <code key={i}>{part.slice(1, -1)}</code> : <span key={i}>{part}</span>,
+  return s.split(/(\*\*[^*]+\*\*|`[^`]+`|\b_[^_]+_\b|\*[^*\s][^*]*\*)/g).filter(Boolean).map((part, i) =>
+    part.startsWith('**') ? <strong key={i}>{part.slice(2, -2)}</strong> : part.startsWith('`') ? <code key={i}>{part.slice(1, -1)}</code> : /^(_[^_]+_|\*[^*]+\*)$/.test(part) ? <em key={i}>{part.slice(1, -1)}</em> : <span key={i}>{part}</span>,
   )
 }
 
-/** Explainable readiness: the factors behind the one number. */
-export function ReadinessFactors({ live }: { live: Live }) {
-  return (
-    <section className="studio-card studio-factors">
-      <div className="stack-header"><div><p className="eyebrow">Explainable readiness · {live.readiness.overall}%</p><h3>What the number is made of</h3></div><Sparkles size={16} /></div>
-      <div className="studio-list">
-        {live.readiness.factors.map((f) => (
-          <div key={f.key} className="studio-factor">
-            <div><strong>{f.label}</strong><span>{f.value}%</span></div>
-            <div className="ceiling-track"><span style={{ width: `${f.value}%`, background: 'var(--acid)' }} /></div>
-            <small>{f.detail}</small>
-          </div>
-        ))}
-      </div>
-    </section>
-  )
-}
 
 const OBS = [
   ['observation', 'Observation'],

@@ -2,38 +2,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import html2canvas from 'html2canvas'
 import {
-  Bot,
-  Code2,
-  Database,
-  ExternalLink,
   RefreshCw,
-  Upload,
-  UserRound,
   ArrowRight,
   Bell,
   Check,
   CircleHelp,
-  FileText,
-  Filter,
-  Flame,
   GitBranch,
   Layers3,
-  Lightbulb,
-  Mic,
-  MoreHorizontal,
-  MoveUpRight,
-  Network,
-  Plus,
-  Sparkles,
-  Timer,
   X,
-  PenLine,
 } from 'lucide-react'
 import {
-  type BacklogItem,
   type Capability,
   type ViewId,
-  type EvidenceItem,
   type RecommendationItem,
 } from './data'
 import { downloadPrototypeZip } from './generation'
@@ -44,7 +24,7 @@ import { TruthGraphView, ObservationEffects } from './truth'
 import { AgentsView } from './agents'
 import { StoryMapView } from './storymap'
 import { BoardView } from './board'
-import { StudioMarkdown, ReadinessFactors, ObservationComposer, SyncPreview, ProvidersCard } from './extras'
+import { ObservationComposer, SyncPreview, ProvidersCard } from './extras'
 import { PRODUCT_LINE } from '@/lib/brand'
 import { StudioFrame, StudioSidebar, StudioTopBar } from './shell'
 import { ConversationView } from './socra'
@@ -52,6 +32,7 @@ import { OverviewView } from './overview'
 import { SpecView } from './specview'
 import { BriefView } from './brief'
 import { ReviewView, PreviewCard, AnnotationPanel } from './review'
+import { ProductView, ValidationView, EvidenceView, ReadinessView } from './prove'
 
 const viewTitles: Record<StudioView, string> = {
   review: 'Try & mark up',
@@ -68,12 +49,6 @@ const viewTitles: Record<StudioView, string> = {
   storymap: 'Story map',
   connections: 'Connections',
   agents: 'Agents',
-}
-
-const kindLabels: Record<BacklogItem['kind'], string> = {
-  capture: 'new thought',
-  epic: 'capability signal',
-  distraction: 'parked for later',
 }
 
 const EMPTY_CAPABILITY: Capability = { id: '', label: 'Whole product', kicker: 'Finding its shape', readiness: 0, delta: 'new', description: 'Socra is reading what you said and laying out everything the leading products of this kind have.', signal: 'The floor is being laid. Keep talking: nothing needs to be a ticket yet.', color: '#d7f58b' }
@@ -102,7 +77,6 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
   const [capture, setCapture] = useState('')
   const [toast, setToast] = useState('')
   const [previewMode, setPreviewMode] = useState<'home' | 'thread'>('home')
-  const [showAllBacklog, setShowAllBacklog] = useState(false)
   const [technicalOpen, setTechnicalOpen] = useState(false)
   const [annotationMode, setAnnotationMode] = useState(false)
   const [annotationTarget, setAnnotationTarget] = useState('')
@@ -132,7 +106,6 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
   const selected = capabilities.find((capability) => capability.id === live.focus) ?? capabilities[0] ?? EMPTY_CAPABILITY
   const overallReadiness = live.readiness.overall
   const approvalCount = live.decisions.filter((d) => d.status === 'approved').length
-  const visibleBacklog = showAllBacklog ? backlog : backlog.slice(0, 3)
   const validationChecks = useMemo(() => Object.fromEntries(['problem', 'customer', 'evidence', 'proof', 'thinSlice'].map((k) => [k, live.validation?.[k]?.state === 'confirmed'])), [live.validation])
   const validationScore = live.validationScore
   const generationVersion = live.packageCount
@@ -193,21 +166,6 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
     if (!text) return
     setCapture('')
     void act(() => api(`/api/use-cases/${live.id}/capture`, { json: { text, source: 'Studio sidebar' } }), 'Added to the ambient backlog — Socra will find its pattern')
-  }
-
-  const curate = (itemId: string, kind: BacklogItem['kind'] | 'edit' | 'withdraw') => {
-    const by = me.name || me.role
-    if (kind === 'edit') {
-      const item = live.backlog.find((b) => b.id === itemId)
-      const title = window.prompt('Change it in your own words. Socra carries the change through the spec and the board.', item?.title ?? '')
-      if (title && title.trim() && title.trim() !== item?.title) void act(() => api(`/api/use-cases/${live.id}/backlog/${itemId}`, { method: 'PATCH', json: { title: title.trim(), by } }), 'Changed: Socra is carrying it through')
-      return
-    }
-    if (kind === 'withdraw') {
-      if (window.confirm('Withdraw this? It stays in the history, and Socra takes it out of the spec and the board.')) void act(() => api(`/api/use-cases/${live.id}/backlog/${itemId}`, { method: 'PATCH', json: { withdraw: true, by } }), 'Withdrawn, and kept in the history')
-      return
-    }
-    void act(() => api(`/api/use-cases/${live.id}/backlog/${itemId}`, { method: 'PATCH', json: { kind, group: kind === 'distraction' ? undefined : selected.label } }), kind === 'distraction' ? 'Parked without losing the thought' : 'Curated into the active capability')
   }
 
   const setPreview = (mode: 'home' | 'thread') => {
@@ -314,7 +272,7 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
         {activeView === 'conversation' && <ConversationView {...{ live, act, me, talkTo, setTalkTo, voice: composerVoice, selected, capabilities, messages, draft, setDraft, sendMessage, focusCapability, setToast, changeView }} preview={<PreviewCard live={live} mode={previewMode} setPreview={setPreview} setToast={setToast} onPick={onPick} />} />}
         {activeView === 'review' && <ReviewView {...{ live, previewMode, setPreview, setToast, annotationMode, setAnnotationMode, setAnnotationTarget, annotationTarget, annotationNote, setAnnotationNote, isListening, toggleVoice, addAnnotation, captureFrame, capturedFrame, annotationShape, setAnnotationShape, onPick, changeView }} />}
         {activeView === 'validation' && <ValidationView {...{ live, validationChecks, validationScore, toggleValidation, role, setRole, recommendationState, askRecommendation, changeView, setTechnicalOpen, technicalOpen, agentRoutes, probeQuestion }} />}
-        {activeView === 'product' && <ProductView {...{ live, act, selected, capabilities, backlog, visibleBacklog, showAllBacklog, setShowAllBacklog, curate, capture, setCapture, captureIdea, approvalCount, changeView, toast, setToast }} />}
+        {activeView === 'product' && <ProductView {...{ live, act, me, selected, backlog, capture, setCapture, captureIdea, approvalCount, changeView }} />}
         {activeView === 'evidence' && <EvidenceView {...{ live, act, evidence, changeView, role, setRole, setToast }} />}
         {activeView === 'agents' && <AgentsView live={live} me={me} setToast={setToast} />}
         {activeView === 'truth' && <TruthGraphView key={truthNode || 'all'} live={live} changeView={changeView} setToast={setToast} focusNode={truthNode} />}
@@ -333,69 +291,21 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
 
 type Act = (fn: () => Promise<unknown>, ok?: string) => Promise<void>
 
-type ProductProps = { live: Live; act: Act; selected: Capability; capabilities: Capability[]; backlog: BacklogItem[]; visibleBacklog: BacklogItem[]; showAllBacklog: boolean; setShowAllBacklog: (value: boolean) => void; curate: (id: string, kind: BacklogItem['kind'] | 'edit' | 'withdraw') => void; capture: string; setCapture: (value: string) => void; captureIdea: () => void; approvalCount: number; changeView: (view: ViewId) => void; toast: string; setToast: (value: string) => void }
-
-function ProductView({ live, act, selected, capabilities: caps, backlog, visibleBacklog, showAllBacklog, setShowAllBacklog, curate, capture, setCapture, captureIdea, approvalCount, changeView, setToast }: ProductProps) {
-  const [editing, setEditing] = useState(false)
-  const [prfaqDraft, setPrfaqDraft] = useState(live.prfaq)
-  const savePrfaq = () => { setEditing(false); void act(() => api(`/api/use-cases/${live.id}`, { method: 'PATCH', json: { prfaq: prfaqDraft } }), 'PRFAQ saved in your words — Socra will carry it into the spec') }
-  const waiting = backlog.filter((b) => b.kind === 'capture').length
-  const decisions = live.decisions.slice(-8)
-  void caps
-  return <div className="page-wrap product-page"><div className="page-intro"><div><p className="eyebrow">The living product shape</p><h1>Keep the dream visible<br />as it becomes specific.</h1><p>The PRFAQ is not a document at the end of the process. It is the shared surface where the original voice, approved decisions, and open questions can sit together.</p></div><div className="intro-actions"><button className="button button-primary" type="button" onClick={() => changeView('conversation')}>Keep shaping <ArrowRight size={16} /></button><span>{approvalCount} approvals carried forward</span></div></div><div className="product-shape-grid"><section className="prfaq-card"><div className="prfaq-toolbar"><div className="doc-title"><span className="doc-icon"><FileText size={16} /></span><span><strong>PRFAQ / {live.slug}-v0.{live.packageCount}</strong><small>living · last touched {ago(live.prfaqUpdatedAt ?? live.updatedAt)}</small></span></div><div className="toolbar-actions"><span className="locked-chip"><Check size={12} /> working truth</span>{editing ? <><button className="button button-primary button-small" type="button" onClick={savePrfaq}><Check size={13} /> Save</button><button className="button button-quiet button-small" type="button" onClick={() => setEditing(false)}>Cancel</button></> : <button className="icon-button subtle" type="button" onClick={() => { setPrfaqDraft(live.prfaq); setEditing(true) }} aria-label="Edit the PRFAQ" title="Edit in your own words"><MoreHorizontal size={16} /></button>}</div></div><div className="prfaq-content"><div className="doc-kicker">{live.audience ? `FOR ${live.audience.toUpperCase()}` : 'FOR THE CUSTOMER THE MUSE IS STILL NAMING'}</div><h2>{live.statement || live.name}</h2><p className="doc-lede">{live.description}</p><div className="doc-divider" />{editing ? <textarea className="spec-editor" value={prfaqDraft} onChange={(event) => setPrfaqDraft(event.target.value)} rows={18} /> : live.prfaq ? <StudioMarkdown text={live.prfaq} /> : <div className="doc-section"><div className="doc-section-label"><span>01</span><strong>Why customers care</strong></div><div><p>Socra writes the press release and FAQ from your conversation. It appears here as soon as there is enough to say honestly.</p>{live.customerQuote && <div className="quote-callout"><span>“</span><p>{live.customerQuote.replace(/[“”]/g, '')}</p></div>}</div></div>}<div className="doc-section"><div className="doc-section-label"><span>{live.prfaq ? '··' : '02'}</span><strong>Decisions captured</strong></div><div className="decision-list">{decisions.length === 0 && <div className="open-question"><CircleHelp size={14} /><span>No decisions yet. A plain “yes” to Socra carries its proposal forward.</span><small>open with Socra</small></div>}{decisions.map((d) => <div key={d.id} className={d.status === 'approved' ? '' : 'open-question'}>{d.status === 'approved' ? <Check size={14} /> : <CircleHelp size={14} />}<span>{d.text}</span><small>{d.status === 'approved' ? 'approved' : d.status === 'assumed' ? 'assumed · say no to change it' : 'open with Socra'} · {ago(d.createdAt)}</small></div>)}</div></div></div></section><aside className="product-shape-aside"><div className="shape-summary"><div className="aside-block-header"><span className="eyebrow">Shape signal</span><Sparkles size={15} /></div><strong>{waiting ? `${waiting} ${waiting === 1 ? 'thought is' : 'thoughts are'} waiting to find a home.` : 'Every thought you have had has a home.'}</strong><p>{selected.signal}</p><button className="button button-small" type="button" onClick={() => changeView('conversation')}>Ask Socra <ArrowRight size={14} /></button></div><div className="curation-card"><div className="curation-header"><div><p className="eyebrow">Curated backlog</p><h3>{backlog.length} signals, held gently</h3></div><Filter size={15} /></div><BacklogList items={visibleBacklog} curate={curate} /><button className="text-button center-button" type="button" onClick={() => setShowAllBacklog(!showAllBacklog)}>{showAllBacklog ? 'Show fewer signals' : 'See every signal'} <ArrowRight size={14} /></button></div><div className="capture-card"><div><span className="capture-orb"><Mic size={15} /></span><div><strong>Catch the next thought</strong><small>It does not need to be useful yet.</small></div></div><div className="capture-input"><input id="ambient-capture" value={capture} onChange={(event) => setCapture(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') captureIdea() }} placeholder="I keep thinking about…" /><button type="button" onClick={captureIdea} aria-label="Add thought"><Plus size={16} /></button></div></div></aside></div></div>
-}
-
-
-function BacklogList({ items, curate }: { items: BacklogItem[]; curate: (id: string, kind: BacklogItem['kind'] | 'edit' | 'withdraw') => void }) {
-  return <div className="backlog-items">{items.map((item) => <div className="backlog-item" key={item.id}><div className={`backlog-kind ${item.kind}`}><span>{item.kind === 'capture' ? <Lightbulb size={14} /> : item.kind === 'epic' ? <Layers3 size={14} /> : <Timer size={14} />}</span></div><div className="backlog-item-copy"><div><strong>{item.title}</strong><span className="backlog-age">{item.age}</span></div><p>{item.note}</p>{(item as BacklogItem & { annotationId?: string }).annotationId && <a className="studio-markup-thumb" href={`/api/feedback/${(item as BacklogItem & { annotationId?: string }).annotationId}/image`} target="_blank" rel="noreferrer"><img src={`/api/feedback/${(item as BacklogItem & { annotationId?: string }).annotationId}/image`} alt="The marked-up screen" loading="lazy" /></a>}<div className="backlog-tags"><span>{(item as BacklogItem & { ownerState?: string }).ownerState ?? kindLabels[item.kind]}</span><span>{item.group}</span><span>{item.source}</span></div></div><div className="backlog-actions"><button type="button" onClick={() => curate(item.id, 'epic')} title="Group as capability"><Layers3 size={14} /></button><button type="button" onClick={() => curate(item.id, 'distraction')} title="Park for later"><Timer size={14} /></button><button type="button" onClick={() => curate(item.id, 'edit')} title="Change it"><PenLine size={14} /></button><button type="button" onClick={() => curate(item.id, 'withdraw')} title="Withdraw (kept in history)"><X size={14} /></button></div></div>)}</div>
-}
-
-type ReadinessProps = { live: Live; capabilities: Capability[]; readiness: Record<string, number>; overallReadiness: number; selected: Capability; focusCapability: (capability: Capability) => void; changeView: (view: ViewId) => void }
 
 
 
-function ReadinessView({ live, capabilities: caps, readiness, overallReadiness, selected, focusCapability, changeView }: ReadinessProps) {
-  return <div className="page-wrap readiness-page"><div className="page-intro"><div><p className="eyebrow eyebrow-with-dot"><span className="status-dot" />Readiness is a conversation</p><h1>Find the ceiling,<br />not a false finish line.</h1><p>A capability is ready when the product can make a promise and keep it. The percentages are signals for where to look next — not grades for the team.</p></div><div className="readiness-hero-score"><div className="eyebrow">Current honest read</div><strong>{overallReadiness}%</strong><span>ready for a thin-slice pilot</span></div></div><div className="readiness-detail-grid"><section className="ceiling-card"><div className="ceiling-header"><div><p className="eyebrow">Capability ceiling</p><h2>What still needs to become true</h2></div><span className="ceiling-legend"><span className="legend-dot ready" />ready <span className="legend-dot open" />needs conversation</span></div><div className="ceiling-list">{caps.map((capability) => <div className="ceiling-row" key={capability.id}><div className="ceiling-row-title"><span className="capability-color" style={{ background: capability.color }} /><div><strong>{capability.label}</strong><small>{capability.kicker}</small></div><strong className="ceiling-number">{readiness[capability.id] ?? capability.readiness}%</strong></div><div className="ceiling-track"><span style={{ width: `${readiness[capability.id] ?? capability.readiness}%`, background: capability.color }} /><i style={{ left: `${readiness[capability.id] ?? capability.readiness}%` }} /></div><p>{capability.description}</p><div className="ceiling-row-footer"><span><MoveUpRight size={13} /> {capability.delta}</span><button type="button" onClick={() => focusCapability(capability)}>Work the edge <ArrowRight size={13} /></button></div></div>)}</div></section><aside className="readiness-aside"><div className="ceiling-callout"><span className="signal-icon"><Flame size={16} /></span><p><strong>The next honest move</strong>{selected.label} has the clearest path to a meaningful pilot moment. Socra is ready to help you sharpen its promise.</p><button className="button button-primary full-width" type="button" onClick={() => focusCapability(selected)}>Open this capability <ArrowRight size={15} /></button></div><div className="readiness-principles"><p className="eyebrow">How the Studio decides</p><div><span>01</span><p><strong>Promise before output</strong>Make sure the customer experience is clear before the build gets busy.</p></div><div><span>02</span><p><strong>Trace every move</strong>Every story should point back to a capability and a decision.</p></div><div><span>03</span><p><strong>Invite the human at the edge</strong>Questions belong in the conversation, not hidden in a workflow.</p></div></div><button className="button button-quiet full-width" type="button" onClick={() => changeView('pilot')}><GitBranch size={15} /> See the traceable build lane</button></aside></div><ReadinessFactors live={live} /></div>
-}
+
+
+
+
 
 
 
 export default App
 
 
-function RoleSwitcher({ role, setRole }: { role: 'owner' | 'engineer'; setRole: (role: 'owner' | 'engineer') => void }) {
-  return <div className="role-switcher"><span className="eyebrow">Workspace lens</span><div><button className={role === 'owner' ? 'is-active' : ''} type="button" onClick={() => setRole('owner')}><UserRound size={13} /> Product owner</button><button className={role === 'engineer' ? 'is-active' : ''} type="button" onClick={() => setRole('engineer')}><Code2 size={13} /> Product engineer</button></div></div>
-}
 
-function ValidationView({ live, validationChecks, validationScore, toggleValidation, role, setRole, recommendationState, askRecommendation, changeView, setTechnicalOpen, technicalOpen, agentRoutes, probeQuestion }: { live: Live; validationChecks: Record<string, boolean>; validationScore: number; toggleValidation: (key: string) => void; role: 'owner' | 'engineer'; setRole: (role: 'owner' | 'engineer') => void; recommendationState: RecommendationItem[]; askRecommendation: (recommendation: RecommendationItem) => void; changeView: (view: ViewId) => void; setTechnicalOpen: (value: boolean) => void; technicalOpen: boolean; agentRoutes: Array<{ id: string; agent: string; action: string; state: string; detail: string }>; probeQuestion: string }) {
-  const checks = [
-    { id: 'problem', label: 'The customer problem is specific', detail: `We know what feels broken before ${live.name} enters the room.` },
-    { id: 'customer', label: 'The first customer is named', detail: 'The owner can describe who needs this now, not everyone who might want it.' },
-    { id: 'evidence', label: 'Evidence is attached to the claim', detail: 'Conversation, research, and uploaded notes point to the same pattern.' },
-    { id: 'proof', label: 'The proof point is observable', detail: 'We can tell when the customer has felt the promise.' },
-    { id: 'thinSlice', label: 'A thin slice is possible', detail: 'The first pilot can prove one meaningful customer moment.' },
-  ]
-  return <div className="page-wrap validation-page"><div className="page-intro"><div><p className="eyebrow eyebrow-with-dot"><span className="status-dot" />A use case is ready when it can make a promise</p><h1>Validate the use case<br /><em>before</em> you build around it.</h1><p>Socra turns the conversation, evidence, and open questions into a recommendation. It does not create a gate. It tells you what would make the next prototype honest.</p></div><div className="intro-actions"><RoleSwitcher {...{ role, setRole }} /><button className="button button-primary" type="button" onClick={() => changeView('brief')}>Prepare prototype brief <ArrowRight size={16} /></button></div></div><div className="validation-grid"><section className="validation-card"><div className="validation-score-row"><div><p className="eyebrow">Use case readiness</p><h2>{validationScore}%</h2><p>{validationScore >= 80 ? 'Strong enough to prototype the thin slice.' : 'Keep probing the proof point before you widen the build.'}</p></div><div className="score-orbit"><div><strong>{validationScore}%</strong><small>confidence</small></div></div></div><div className="validation-checks">{checks.map((check) => <button className={`validation-check ${validationChecks[check.id] ? 'is-done' : ''}`} key={check.id} type="button" onClick={() => toggleValidation(check.id)}><span className="check-box">{validationChecks[check.id] && <Check size={13} />}</span><span><strong>{check.label}</strong><small>{live.validation?.[check.id]?.note || check.detail}</small></span><span className="check-status">{validationChecks[check.id] ? 'confirmed' : 'probe this'}</span></button>)}</div></section><aside className="validation-aside"><div className="recommendation-stack"><div className="stack-header"><div><p className="eyebrow">Socra recommendations</p><h3>Questions worth pulling forward</h3></div><Sparkles size={16} /></div>{recommendationState.length === 0 && <p className="trace-intro">Socra pulls considerations, workflows and human pauses forward here as it learns the product.</p>}{recommendationState.map((recommendation) => <button className="recommendation-card" type="button" key={recommendation.id} onClick={() => askRecommendation(recommendation)}><div className={`recommendation-kind ${recommendation.kind}`}>{recommendation.kind === 'workflow' ? <Network size={14} /> : recommendation.kind === 'hitl' ? <UserRound size={14} /> : <CircleHelp size={14} />}</div><div><strong>{recommendation.title}</strong><p>{recommendation.reason}</p><small>Ask this in Socra conversation <ArrowRight size={12} /></small></div></button>)}</div><div className="technical-signal-card"><div className="stack-header"><div><p className="eyebrow">Quiet technical interpretation</p><h3>The system is noticing patterns</h3></div><Bot size={16} /></div>{probeQuestion && <div className="probe-question"><span className="signal-icon"><CircleHelp size={14} /></span><p><strong>Probe now</strong>{probeQuestion}</p></div>}<p>{live.techNotes[0] || 'Without making the owner learn agent vocabulary, Socra notes where a workflow could run on its own and where a person must pause it before meaning changes.'}</p><button className="text-button" type="button" onClick={() => setTechnicalOpen(!technicalOpen)}>{technicalOpen ? 'Hide technical read' : 'Inspect technical read'} <ArrowRight size={14} /></button>{technicalOpen && <div className="technical-drawer"><div><span className="technical-dot active" /><strong>Agentic workflow candidate</strong><small>{recommendationState.find((r) => r.kind === 'workflow')?.title ?? live.backlog.find((b) => b.recKind === 'workflow')?.title ?? 'None suggested yet'} · Inngest Agent Kit router</small></div><div><span className="technical-dot hitl" /><strong>Human-in-the-loop point</strong><small>{recommendationState.find((r) => r.kind === 'hitl')?.title ?? live.backlog.find((b) => b.recKind === 'hitl')?.title ?? 'The owner approves every change of meaning'}</small></div><div><span className="technical-dot ui" /><strong>UI surface suggestion</strong><small>{live.components.length ? `shadcn/ui ${live.components.slice(0, 4).map((c) => c.name).join(' + ')}` : 'shadcn/ui, chosen once the PRD has a shape'}</small></div>{live.techNotes.slice(1, 4).map((n) => <div key={n}><span className="technical-dot ui" /><strong>Technical note</strong><small>{n}</small></div>)}</div>}</div><div className="routing-mini"><p className="eyebrow">Agent Kit route</p>{agentRoutes.slice(0, 3).map((route, index) => <div className="routing-row" key={route.id}><span className={`route-node ${route.state}`} />{index < 2 && <span className="route-line" />}<span><strong>{route.agent}</strong><small>{route.action}</small></span><span className="route-state">{route.state}</span></div>)}</div></aside></div></div>
-}
 
-function EvidenceView({ live, act, evidence, changeView, role, setRole, setToast }: { live: Live; act: Act; evidence: EvidenceItem[]; changeView: (view: ViewId) => void; role: 'owner' | 'engineer'; setRole: (role: 'owner' | 'engineer') => void; setToast: (value: string) => void }) {
-  const [filter, setFilter] = useState<'all' | 'interview' | 'research' | 'uploaded'>('all')
-  const addEvidence = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? [])
-    event.target.value = ''
-    if (!files.length) return
-    const form = new FormData()
-    files.forEach((f) => form.append('files', f))
-    form.append('kind', filter === 'interview' || filter === 'research' ? filter : 'uploaded')
-    setToast(`${files.map((f) => f.name).join(', ')} added to the evidence library — Socra is reading it`)
-    void act(async () => {
-      const res = await fetch(`/api/use-cases/${live.id}/documents`, { method: 'POST', body: form })
-      if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error || 'The upload did not go through')
-    })
-  }
-  const shown = filter === 'all' ? evidence : evidence.filter((e) => e.type === filter)
-  return <div className="page-wrap evidence-page"><div className="page-intro"><div><p className="eyebrow">Evidence library · everything Socra is allowed to believe</p><h1>Keep the “why”<br />close to the work.</h1><p>Upload research, attach an interview, or let a conversation become evidence. Every signal stays traceable to the use case, PRFAQ, or a decision.</p></div><div className="intro-actions"><RoleSwitcher {...{ role, setRole }} /><label className="button button-primary file-button"><Upload size={15} /> Add research<input type="file" multiple accept=".md,.txt,.pdf,.docx,.csv,.json,.png,.jpg,.jpeg" onChange={addEvidence} /></label></div></div><div className="evidence-toolbar"><div><span className="eyebrow">{evidence.length} sources connected</span><strong>Confidence grows when signals agree.</strong></div><div className="evidence-filters">{([['all', 'All evidence'], ['interview', 'Interviews'], ['research', 'Research'], ['uploaded', 'Uploads']] as const).map(([k, label]) => <button key={k} className={filter === k ? 'is-active' : ''} type="button" onClick={() => setFilter(k)}>{label}</button>)}</div></div><div className="evidence-grid">{shown.length === 0 && <div className="empty-column">No sources here yet. Upload research, or let the conversation become evidence.</div>}{shown.map((item) => <article className="evidence-card" key={item.id}><div className="evidence-card-top"><span className={`evidence-type ${item.type}`}>{item.type}</span><span className={`confidence ${item.confidence}`}>{item.confidence === 'high' ? <Check size={11} /> : item.confidence === 'medium' ? <CircleHelp size={11} /> : <Timer size={11} />} {item.confidence}</span></div><h3>{item.insight}</h3><div className="evidence-source"><FileText size={13} /><span><strong>{item.source}</strong><small>{item.trace}</small></span></div><button className="text-button" type="button" onClick={() => setToast(`Trace: ${item.trace || 'connected to the product shape'}`)}>See trace <ExternalLink size={12} /></button></article>)}</div><div className="evidence-footer"><div><span className="signal-icon"><Database size={15} /></span><p><strong>Socra’s rule</strong>Research can inform the conversation, but it cannot silently become a requirement. The owner still decides what belongs.</p></div><button className="button button-quiet" type="button" onClick={() => changeView('validation')}>Use evidence to validate <ArrowRight size={14} /></button></div></div>
-}
 
 
 
