@@ -15,7 +15,7 @@ export function PageHeader({ title, description, actions }: { title: string; des
         <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
         {description && <p className="text-base text-muted-foreground">{description}</p>}
       </div>
-      {actions && <div className="flex items-center gap-2">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
   )
 }
@@ -31,13 +31,13 @@ export function Section({ title, description, action, children, className, id }:
         </div>
         {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
       </header>
-      {children !== undefined && <div className="grid">{children}</div>}
+      {children !== undefined && <div className="grid min-w-0 grid-cols-1">{children}</div>}
     </section>
   )
 }
 
 export function SectionBody({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn('grid gap-4 px-5 py-4', className)}>{children}</div>
+  return <div className={cn('grid min-w-0 grid-cols-1 gap-4 px-5 py-4', className)}>{children}</div>
 }
 
 /** A row in a section's list: title and detail on the left, controls on the right. */

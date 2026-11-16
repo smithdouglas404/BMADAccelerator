@@ -67,7 +67,7 @@ export function ConversationView({ live, act, me, talkTo, setTalkTo, voice, sele
   }, [count, live.agentBusy])
 
   return (
-    <div data-ui className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-6 md:px-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
+    <div data-ui className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-6 px-4 py-6 md:px-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <div className="grid min-w-0 content-start gap-5">
         <PageHeader title="Work with Socra" description="Talk in your own words. Socra and its team pull out what the product needs, and a yes turns it into a decision." />
 
