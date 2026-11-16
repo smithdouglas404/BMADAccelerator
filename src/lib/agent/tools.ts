@@ -262,13 +262,14 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
       ),
       tool(
         "record_decision",
-        "Record a decision in the human-in-the-loop register. status 'approved' when the owner agreed (a yes is an approval: never ask 'do you want to approve this?'), 'assumed' when you assumed it for them (they can correct it), 'open' when only the owner can decide it (options: two to four choices, the first being your suggestion). Keep their original words in 'words'. An approved decision goes into the next build.",
+        "Record a decision in the human-in-the-loop register. status 'approved' when the owner agreed (a yes is an approval: never ask 'do you want to approve this?'), 'assumed' when you assumed it for them (they can correct it), 'open' when only the owner can decide it (options: two to four choices, the first being your suggestion). Keep their original words in 'words'. An approved decision goes into the next build. When it changes an earlier decision or assumption (a new answer, a correction), name the earlier ones' ids in 'replaces': they are closed as replaced, so nothing left contradicts it.",
         {
           text: z.string().min(3),
           status: z.enum(["approved", "assumed", "open"]),
           capability: z.string().default(""),
           words: z.string().default(""),
           options: z.array(z.object({ label: z.string(), value: z.string() })).default([]),
+          replaces: z.array(z.string()).default([]),
         },
         async (a) => {
           const u = await uc();
@@ -277,7 +278,13 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
           });
           if (a.status === "approved") rememberDecision(u, "muse", `${a.text}${a.words ? `\nThe owner said: "${a.words}"` : ""}`, "studio:decision");
           await recordChange(useCaseId, { node: `decision:${d.id}`, kind: a.status === "approved" ? "approved" : "added", summary: a.status === "open" ? `${speaker} raised a checkpoint only a person can decide: ${a.text}` : a.status === "assumed" ? `${speaker} assumed: ${a.text} (they can correct it)` : `Recorded as approved: ${a.text}`, after: a.text, by: speaker, fromTurn: true });
-          return ok(`Recorded ${d.id}.`);
+          // An answer that changes an earlier decision closes it, so the spec and the build never see both.
+          const old = a.replaces.length ? await prisma.decision.findMany({ where: { useCaseId, id: { in: a.replaces }, NOT: { id: d.id } } }) : [];
+          for (const o of old) {
+            await prisma.decision.update({ where: { id: o.id }, data: { status: "rejected", includeInBuild: false, resolvedAt: new Date(), answer: `Replaced by: ${a.text}`.slice(0, 4000) } });
+            await recordChange(useCaseId, { node: `decision:${o.id}`, kind: "changed", summary: `Replaced by a newer decision: ${a.text}`, before: `${o.text} (${o.status})`, after: "replaced", causes: [`decision:${d.id}`], by: speaker, fromTurn: true });
+          }
+          return ok(`Recorded ${d.id}.${old.length ? ` Replaced ${old.length} earlier decision${old.length === 1 ? "" : "s"}.` : ""}`);
         },
       ),
       tool(

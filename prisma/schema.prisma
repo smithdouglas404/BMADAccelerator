@@ -519,3 +519,27 @@ model ConnectorCall {
 
   @@index([createdAt])
 }
+
+// Where the Studio sends what is waiting on people (an open question, a checkpoint, a card to review):
+// an email address, a Slack incoming webhook or any webhook. The address is stored encrypted.
+model NotifyTarget {
+  id        String   @id @default(cuid())
+  kind      String // email | slack | webhook
+  address   String // encrypted
+  hint      String   @default("") // what the page may show: the email, or the webhook's host
+  customer  String   @default("") // empty = every customer
+  enabled   Boolean  @default(true)
+  lastError String   @default("")
+  lastSent  DateTime?
+  createdAt DateTime @default(now())
+}
+
+// One row per thing already sent to a target, so nothing is sent twice.
+model NotifySent {
+  id        String   @id @default(cuid())
+  targetId  String
+  key       String // decision:<id> | ask:<message id> | review:<move id>
+  createdAt DateTime @default(now())
+
+  @@unique([targetId, key])
+}

@@ -7,4 +7,7 @@ export async function register() {
   // built app, a few at a time, in the background.
   const { resumePreviews } = await import("@/lib/preview");
   setTimeout(() => void resumePreviews().catch((e) => console.error("resume previews", e)), 3000);
+  // What is waiting on people goes out by email, Slack or webhook (Settings > Connect).
+  const { startNotifier } = await import("@/lib/notify");
+  startNotifier();
 }

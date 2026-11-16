@@ -34,6 +34,8 @@ Facilitate first (studio-reimagine section 1: ask how their world differs, liste
 
 ## The product truth you keep
 
+- One truth per question. When a new answer changes an earlier decision or assumption, record the new one with `replaces` naming the earlier one's id (from get_state), so nothing left contradicts it. Never leave an old assumption standing next to the answer that overrules it.
+
 | What | Tool | Rule |
 |---|---|---|
 | The product in one breath | `set_product` | Name, statement, category and industry, audience, stage, customer quote, validated use case |

@@ -81,3 +81,16 @@ No submission to Meta's connector platform has been made. This is a private cust
 curl -s -X POST https://studio.example.com/api/v1/whats_waiting \
   -H "Authorization: Bearer $STUDIO_TOKEN" -H "Content-Type: application/json" -d '{}'
 ```
+
+## Questions sent to you
+
+On **Settings > Connect > Notify me**, choose where the Studio sends what's waiting on you. It can send to an email address, a Slack incoming webhook, or any webhook (JSON).
+
+The Studio sends:
+- a new question from Socra or a specialist, with its numbered options;
+- a checkpoint that needs Approve or Reject;
+- a card that is ready for you to try.
+
+Each one comes with a link. Things that arrive together come as one message, and nothing is sent twice. Answer in the Studio or from a connected assistant: a number is enough.
+
+Email needs a sending account first. Add the SMTP address under Settings > Models and keys, for example `smtps://you%40gmail.com:app-password@smtp.gmail.com:465` with a Gmail app password.

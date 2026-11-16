@@ -6,6 +6,7 @@ import { truthView } from "@/lib/studio/truthlog";
 import { BOARD_LABEL, type BoardStatus } from "@/lib/studio/board";
 import { agentsView } from "@/lib/agentService";
 import { TOOLS, gate, inScope, needsConfirm, type ToolName } from "./catalog";
+import { asksSomething, questionOf } from "@/lib/notifyFormat";
 import type { Access } from "./tokens";
 import { POST as createUseCase } from "@/app/api/use-cases/route";
 import { POST as captureRoute } from "@/app/api/use-cases/[id]/capture/route";
@@ -105,6 +106,18 @@ async function preview(tool: ToolName, input: Record<string, unknown>, ucId: str
   return {};
 }
 
+/** Socra's latest question in each conversation that nobody has answered yet. */
+async function socraAsks(ids: string[], names: Map<string, string>) {
+  const out: { use_case_id: string; use_case?: string; question: string; options: string[]; asked: string }[] = [];
+  for (const id of ids) {
+    const m = await prisma.message.findFirst({ where: { useCaseId: id, role: { in: ["muse", "user"] } }, orderBy: { createdAt: "desc" } });
+    if (!m || m.role !== "muse" || !asksSomething(m.content)) continue;
+    const q = questionOf(brand(m.content));
+    out.push({ use_case_id: id, use_case: names.get(id), question: q.question, options: q.options, asked: day(m.createdAt) });
+  }
+  return out;
+}
+
 async function lastSocra(ucId: string) {
   const m = await prisma.message.findFirst({ where: { useCaseId: ucId, role: { in: ["muse", "agent"] } }, orderBy: { createdAt: "desc" } });
   return m ? brand(m.content).slice(0, 1500) : "";
@@ -134,6 +147,7 @@ async function run(tool: ToolName, input: Record<string, unknown>, uc: Awaited<R
       return {
         decisions: w.open.map((d) => ({ use_case_id: d.useCaseId, use_case: names.get(d.useCaseId), decision_id: d.id, question: brand(d.text), from: brand(d.agent), options: d.options, since: day(d.createdAt) })),
         to_review: w.review.map((m) => ({ use_case_id: m.useCaseId, use_case: names.get(m.useCaseId), card_id: m.id, card: m.title, why: m.moveReason })),
+        socra_asks: await socraAsks(rows.map((r) => r.id), names),
         builds_running: rows.filter((r) => r.generateBusy).map((r) => ({ use_case_id: r.id, use_case: names.get(r.id), status: r.generateStatus })),
       };
     }

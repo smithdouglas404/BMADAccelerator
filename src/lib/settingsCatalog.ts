@@ -33,6 +33,7 @@ export const OTHER_KEYS: { env: string; name: string }[] = [
   { env: "ELEVENLABS_API_KEY", name: "ElevenLabs (voice)" },
   { env: "LINEAR_API_KEY", name: "Linear (tracker)" },
   { env: "GITHUB_TOKEN", name: "GitHub (push the pilot to your repository)" },
+  { env: "SMTP_URL", name: "Email sending (SMTP, for notifications: smtps://user:app-password@smtp.example.com:465)" },
 ];
 
 export type Role = {

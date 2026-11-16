@@ -2,7 +2,7 @@
 // Connecting from outside: the OAuth consent page an assistant opens, and Settings > Connect (addresses,
 // connect code, tokens for OpenAPI connectors and scripts, and the log of every call).
 import { useEffect, useState } from 'react'
-import { Check, Copy, KeyRound, Link2, ScrollText, ShieldCheck, Trash2 } from 'lucide-react'
+import { Bell, Check, Copy, KeyRound, Link2, ScrollText, Send, ShieldCheck, Trash2 } from 'lucide-react'
 import { api } from './live'
 import { PRODUCT_NAME as PRODUCT } from '@/lib/brand'
 
@@ -55,6 +55,37 @@ type Info = {
   tools: { name: string; title: string; write: boolean }[]
   tokens: { id: string; name: string; prefix: string; scope: string; customer: string; person: string; role: string; viaOAuth: boolean; lastUsedAt: string | null; createdAt: string }[]
   calls: { id: string; person: string; tool: string; via: string; outcome: string; note: string; createdAt: string }[]
+  notify: { id: string; kind: 'email' | 'slack' | 'webhook'; hint: string; customer: string; enabled: boolean; lastError: string; lastSent: string | null }[]
+  emailReady: boolean
+}
+
+const KIND_LABEL = { email: 'Email', slack: 'Slack', webhook: 'Webhook' } as const
+
+function Notify({ info, reload, setToast }: { info: Info; reload: () => void; setToast: (s: string) => void }) {
+  const [form, setForm] = useState({ kind: 'email' as 'email' | 'slack' | 'webhook', address: '', customer: '' })
+  const post = async (json: Record<string, unknown>, done?: string) => {
+    try { await api('/api/settings/connect', { json }); if (done) setToast(done); reload() } catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
+  }
+  return (
+    <section className="studio-card">
+      <div className="stack-header"><div><p className="eyebrow">Notify me · {info.notify.length}</p><h3>Send what’s waiting on you</h3></div><Bell size={16} /></div>
+      <p className="studio-muted">When a question, a checkpoint or something to try is waiting on you, the Studio sends it with its numbered options and a link, within a couple of minutes. Several at once arrive as one message, and nothing is sent twice.</p>
+      <div className="studio-list">{info.notify.map((t) => (
+        <div key={t.id} className="studio-list-row">
+          <div className="studio-row-main"><strong>{KIND_LABEL[t.kind]} · {t.hint}</strong><small>{t.customer || 'every customer'} · last sent {when(t.lastSent)}{t.lastError ? ` · didn’t send: ${t.lastError}` : ''}</small></div>
+          <label className="studio-toggle"><input type="checkbox" checked={t.enabled} onChange={(e) => void post({ action: 'notify_toggle', id: t.id, enabled: e.target.checked })} /> on</label>
+          <div className="studio-review-actions"><button type="button" className="button button-quiet button-small" onClick={() => void post({ action: 'notify_test', id: t.id }, 'Test sent. Check that it arrived.')}><Send size={13} /> Send a test</button><button type="button" className="icon-button subtle" aria-label="Stop sending here" onClick={() => void post({ action: 'notify_remove', id: t.id })}><Trash2 size={13} /></button></div>
+        </div>
+      ))}</div>
+      <div className="studio-kv" style={{ marginTop: 12 }}>
+        <label>Send to<select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value as typeof form.kind })}><option value="email">Email</option><option value="slack">Slack (incoming webhook)</option><option value="webhook">Any webhook (JSON)</option></select></label>
+        <label>{form.kind === 'email' ? 'Email address' : 'Webhook address (stored encrypted, never shown again)'}<input type={form.kind === 'email' ? 'email' : 'password'} autoComplete="off" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder={form.kind === 'email' ? 'you@company.com' : 'https://hooks.slack.com/services/…'} /></label>
+        <label>Customer<input value={form.customer} onChange={(e) => setForm({ ...form, customer: e.target.value })} placeholder="Every customer" /></label>
+        {form.kind === 'email' && !info.emailReady && <p className="studio-muted">Email needs a sending account first: add the SMTP address under Settings &gt; Models and keys (for Gmail, an app password).</p>}
+        <button type="button" className="button button-primary button-small" disabled={!form.address.trim()} onClick={() => void post({ action: 'notify_add', ...form }, 'Added. Use “Send a test” to check it.').then(() => setForm({ ...form, address: '' }))}><Bell size={14} /> Send here</button>
+      </div>
+    </section>
+  )
 }
 
 const when = (s: string | null) => (s ? new Date(s).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'never')
@@ -98,6 +129,7 @@ export function ConnectTab({ setToast }: { setToast: (s: string) => void }) {
         {!info.isPublic && <p className="studio-muted">This Studio is only reachable on this computer. Claude Desktop and Claude Code can connect here; claude.ai, ChatGPT and Meta Muse need a public address first (see the guide in docs/CONNECT.md).</p>}
         <p className="studio-muted">{info.tools.length} tools: {info.tools.map((t) => t.title).join(' · ')}. Approving, building, withdrawing, reopening and sending a card back always show a preview and wait for a yes.</p>
       </section>
+      <Notify info={info} reload={load} setToast={setToast} />
       <section className="studio-card">
         <div className="stack-header"><div><p className="eyebrow">Connect code</p><h3>For signing in from an assistant</h3></div><ShieldCheck size={16} /></div>
         <p className="studio-muted">When an assistant opens the Studio’s sign-in page, type this code there. It works once, for ten minutes.</p>
