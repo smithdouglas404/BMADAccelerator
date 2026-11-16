@@ -1,5 +1,5 @@
 import path from "path";
-import { LINK_KINDS, LINK_LABEL, MAX_SUGGESTED_PER_STORY, maySuggest } from "@/lib/studio/storymap";
+import { LINK_KINDS, LINK_LABEL, MAX_SUGGESTED_PER_STORY, maySuggest, wouldCycle } from "@/lib/studio/storymap";
 import { tool, createSdkMcpServer } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
@@ -532,13 +532,16 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
           const exists = async (r: string) => (r.startsWith("move:") ? !!(await prisma.move.findFirst({ where: { id: r.slice(5), useCaseId } })) : !!(await prisma.backlogItem.findFirst({ where: { id: r.slice(8), useCaseId } })));
           if (!(await exists(from)) || !(await exists(to))) return ok("One of those isn't a story or recommendation in this product. Use ids from get_state.");
           const all = await prisma.storyLink.findMany({ where: { useCaseId } });
+          if (from === to || wouldCycle(all, from, to, a.kind)) return ok("That would make a circle (or link a story to itself): each would wait on the other.");
           if (!a.confirmed) {
             const may = maySuggest(all, from, to, a.kind);
             if (!may.ok) return ok(may.why);
           }
           const status = a.confirmed ? "confirmed" : "suggested";
           const l = await prisma.storyLink.upsert({ where: { useCaseId_from_to_kind: { useCaseId, from, to, kind: a.kind } }, create: { useCaseId, from, to, kind: a.kind, status, why: a.why, by: speaker }, update: { status, why: a.why || undefined, by: speaker } });
-          await recordChange(useCaseId, { node: from, kind: "changed", summary: `${speaker} ${a.confirmed ? "linked" : "suggested a link:"} ${from} ${LINK_LABEL[a.kind]} ${to}${a.why ? `, because ${a.why}` : ""}`, after: `${LINK_LABEL[a.kind]} ${to} (${status})`, causes: [to], by: speaker, fromTurn: true });
+          const title = async (r: string) => (r.startsWith("move:") ? (await prisma.move.findFirst({ where: { id: r.slice(5), useCaseId } }))?.title : (await prisma.backlogItem.findFirst({ where: { id: r.slice(8), useCaseId } }))?.title) ?? r;
+          const [fromTitle, toTitle] = [await title(from), await title(to)];
+          await recordChange(useCaseId, { node: from, kind: "changed", summary: `${speaker} ${a.confirmed ? "linked" : "suggested a link:"} “${fromTitle}” ${LINK_LABEL[a.kind]} “${toTitle}”${a.why ? `, because ${a.why}` : ""}`, after: `${LINK_LABEL[a.kind]} “${toTitle}” (${status})`, causes: [to], by: speaker, fromTurn: true });
           return ok(`Link ${l.id} (${status}).`);
         },
       ),
