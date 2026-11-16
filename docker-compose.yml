@@ -189,6 +189,10 @@ services:
     restart: unless-stopped
     depends_on:
       - app
+    # Reachable from this computer only (127.0.0.1): an existing Cloudflare tunnel on this computer points a
+    # hostname at http://localhost:8088. Nothing else on the network can reach it directly.
+    ports:
+      - "127.0.0.1:${CONNECTOR_GATE_PORT:-8088}:8080"
     volumes:
       - ./connector-gate/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./connector-gate/pass.conf:/etc/nginx/pass.conf:ro
