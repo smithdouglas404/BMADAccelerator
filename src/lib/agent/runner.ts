@@ -1,5 +1,5 @@
-import { promises as fs } from "fs";
 import { STUDIO_TEAM } from "./team";
+import { coreInstructions } from "./instructions";
 import path from "path";
 import { query, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { prisma } from "@/lib/db";
@@ -78,8 +78,7 @@ export async function kick(useCaseId: string) {
 }
 
 export async function museInstructions() {
-  const md = await fs.readFile(path.join(STUDIO_SKILLS_DIR, "studio-muse", "SKILL.md"), "utf8");
-  return md.replace(/^---[\s\S]*?---\s*/, "");
+  return coreInstructions(STUDIO_SKILLS_DIR);
 }
 
 function statusFor(block: { type: string; name?: string; input?: unknown }) {

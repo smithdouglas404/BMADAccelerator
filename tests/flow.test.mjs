@@ -42,3 +42,17 @@ test("the Muse has five visible specialists and the product has roles", () => {
   assert.deepEqual(SPECIALISTS.map((s) => s.key), ["business-analyst", "architect", "engineer", "ux", "domain"]);
   for (const r of ["Product owner", "Business analyst", "Product engineer"]) assert.ok(ROLES.includes(r));
 });
+
+test("the Muse's core skills load on every turn: reimagine first, then the conversation", async () => {
+  const { coreInstructions, CORE_SKILLS } = await import("../src/lib/agent/instructions.ts");
+  assert.deepEqual([...CORE_SKILLS], ["studio-reimagine", "studio-muse"]);
+  const text = await coreInstructions();
+  assert.ok(text.indexOf('<core_skill name="studio-reimagine">') < text.indexOf('<core_skill name="studio-muse">'));
+  for (const s of ["Reimagine", "Rethink", "Reinvent", "Accelerate", "Their way wins", "When nothing like it exists", "Ideation rounds", "One sharp question", "why us"]) assert.ok(text.includes(s), s);
+  await assert.rejects(() => coreInstructions("/nonexistent"), /core skill studio-reimagine is missing/);
+});
+
+test("every specialist is told to read the reimagine skill", async () => {
+  const src = (await import("node:fs")).readFileSync(new URL("../src/lib/agent/team.ts", import.meta.url), "utf8");
+  assert.equal((src.match(/studio-reimagine\/SKILL\.md/g) || []).length, 2);
+});

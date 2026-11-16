@@ -14,6 +14,7 @@ type Product = { id: string; name: string }
 
 const BUNDLED = [
   ['working-backwards-studio', 'The Studio’s method: working backwards from the customer, the living PRD and TRD, the floor rule and the Claude Code package contract.'],
+  ['studio-reimagine', 'The Studio’s core theme, loaded on every turn: reimagine, rethink, reinvent and accelerate. Keep the proven floor, protect what makes the product different, and real ideation techniques for ideas that don’t exist yet.'],
   ['studio-muse', 'How the Muse holds the conversation: implicit approvals, one question at a time, spec sections with their trace.'],
   ['studio-agentkit', 'Inngest AgentKit, the standard harness for agents inside every generated app.'],
 ]
