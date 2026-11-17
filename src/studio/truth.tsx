@@ -130,19 +130,18 @@ export function TruthGraphView({ live, changeView, setToast, focusNode = '' }: P
                 return (
                   <div key={lane} className="grid grid-cols-1">
                     <h3 className="border-b border-border bg-muted/40 px-5 py-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">{lane} · {filteredNodes.filter((n) => (LANE[n.source] ?? 2) === li).length}</h3>
-                    {inLane.map((node) => (
-                      <button key={node.id} type="button" onClick={() => setSelectedNodeId(node.id)} aria-current={selectedNode?.id === node.id} className={cn('flex items-start gap-3 border-b border-border px-5 py-3 text-left transition-colors last:border-b-0 hover:bg-accent/60', selectedNode?.id === node.id && 'bg-accent shadow-[inset_3px_0_0_var(--primary)]')}>
-                        <span className={cn('mt-2 size-2 shrink-0 rounded-full', SOURCE_DOT[node.source] ?? 'bg-muted-foreground')} />
-                        <span className="grid min-w-0 flex-1 gap-0.5">
-                          <span className="line-clamp-2 text-sm font-semibold">{node.title}</span>
-                          <span className="line-clamp-2 text-sm text-muted-foreground">{node.interpretations[0]?.plain ?? node.detail}</span>
-                        </span>
-                        <span className="hidden shrink-0 flex-col items-end gap-1 sm:flex">
-                          <StatusBadge tone={STATEMENT_TONE[node.statement]}>{STATEMENT_LABEL[node.statement]}</StatusBadge>
-                          <span className="text-xs text-muted-foreground capitalize">{typeLabel(node.type)}</span>
-                        </span>
-                      </button>
-                    ))}
+                    <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+                      {inLane.map((node) => (
+                        <button key={node.id} type="button" onClick={() => setSelectedNodeId(node.id)} aria-current={selectedNode?.id === node.id} className={cn('grid content-start gap-2 rounded-xl border bg-background p-4 text-left transition-colors hover:border-primary/40 hover:bg-accent/40', selectedNode?.id === node.id ? 'border-primary bg-primary/5' : 'border-border')}>
+                          <span className="flex items-start gap-2 text-xs tracking-wide text-muted-foreground uppercase">
+                            <span className={cn('mt-1 size-2 shrink-0 rounded-full', SOURCE_DOT[node.source] ?? 'bg-muted-foreground')} />
+                            <span>{typeLabel(node.type)} · {STATEMENT_LABEL[node.statement]}</span>
+                          </span>
+                          <span className="line-clamp-3 text-base leading-snug font-semibold">{node.title}</span>
+                          <span className="line-clamp-3 text-sm text-muted-foreground">{node.interpretations[0]?.plain ?? node.detail}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )
               })}
