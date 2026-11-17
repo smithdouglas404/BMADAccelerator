@@ -142,3 +142,7 @@ The Studio's screens hold your keys, so on the public address they sit behind a 
 4. Open the public address: it goes to `/sign-in`, then in.
 
 Assistants keep using `/api/v1`, `/api/mcp` and the OAuth addresses with their own token; the sign-in never applies to them. To close the screens again set `CONNECTOR_GATE_CONF=nginx.conf`.
+
+## Generated apps on the public address
+
+With `nginx-ui.conf` the door also serves each generated app at `/apps/<port>/` (ports 4101-4129), behind the same sign-in, and the Studio's links use that form automatically when opened from the public address. Root-address links in the app's HTML are rewritten to stay under the prefix, and requests an app page makes to root addresses (`/api/...`) are routed back to that app by the page's Referer. An app that builds its own absolute addresses in script may still need a relative base.
