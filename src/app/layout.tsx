@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { PRODUCT_NAME } from "@/lib/brand";
+import "./ui.css";
 import "../studio/styles.css";
 import "../studio/studio-extras.css";
 
@@ -10,7 +11,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <body>{children}</body>
     </html>
   );

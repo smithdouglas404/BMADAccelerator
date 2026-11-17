@@ -1,14 +1,19 @@
 'use client'
 // The flow around the design team's screens: who is working on the product, the next best move, the
 // Socra's visible specialists, numbered option chips, checkpoints with Approve and Reject, and the side
-// menu's four groups. Built from the team's classes; the few new ones are in studio-extras.css.
-import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, Check, Compass, Layers3, PenTool, Scale, ShieldCheck, Sparkles, Undo2, UserRound, Users, Waves, Wrench, X } from 'lucide-react'
+// menu's four groups. On shadcn/ui + Animate UI.
+import { useEffect, useState } from 'react'
+import { Check, Compass, Layers3, PenTool, Scale, UserRound, Users, Wrench, X } from 'lucide-react'
 import { ROLES, SPECIALISTS, numberedOptions } from '@/lib/studio/core'
 import type { ViewId } from './data'
 import { api, initials, type Live, type StudioMessage } from './live'
+import { NextMoveBar } from './overview'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 
-type Act = (fn: () => Promise<unknown>, ok?: string) => Promise<void>
 
 /** The Studio's views: the team's ten plus a full-width place to try the product and mark it up. */
 export type StudioView = ViewId | 'review' | 'agents' | 'storymap'
@@ -93,27 +98,31 @@ export function PeopleMenu({ live, me, setMe, setToast }: { live: Live; me: Me; 
   }
   const remove = (id: string) => void api(`/api/use-cases/${live.id}/members?member=${id}`, { method: 'DELETE' }).catch(() => undefined)
   return (
-    <div className="studio-people">
-      <button className="top-avatar studio-avatar-button" type="button" onClick={() => setOpen(!open)} aria-expanded={open} title={me.name ? `${me.name} · ${me.role}` : me.role}>{me.name ? initials(me.name) : roleShort(me.role)}</button>
-      {open && (
-        <div className="studio-people-menu" role="dialog" aria-label="People on this product">
-          <p className="eyebrow">You</p>
-          <input className="studio-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
-          <select className="studio-input" value={role} onChange={(e) => setRole(e.target.value)}>{ROLES.map((r) => <option key={r}>{r}</option>)}</select>
-          <button className="button button-primary button-small" type="button" onClick={() => void save()}><Check size={13} /> Save</button>
-          <p className="eyebrow">On this product · {live.members.length}</p>
-          <div className="studio-people-list">
-            {live.members.length === 0 && <small className="studio-muted">Only you so far.</small>}
-            {live.members.map((m) => <div key={m.id}><span className="avatar">{initials(m.name)}</span><span><strong>{m.name}</strong><small>{m.role}</small></span><button type="button" aria-label={`Remove ${m.name}`} onClick={() => remove(m.id)}><X size={12} /></button></div>)}
-          </div>
-          <div className="studio-people-add">
-            <input className="studio-input" value={other.name} onChange={(e) => setOther({ ...other, name: e.target.value })} placeholder="Add someone" />
-            <select className="studio-input" value={other.role} onChange={(e) => setOther({ ...other, role: e.target.value })}>{ROLES.map((r) => <option key={r}>{r}</option>)}</select>
-            <button className="button button-quiet button-small" type="button" onClick={() => void add()}><Users size={13} /> Add</button>
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <button type="button" aria-label="People on this product" title={me.name ? `${me.name} · ${me.role}` : me.role} className="grid size-9 place-items-center rounded-full bg-[#5f483a] text-sm font-semibold text-[#f6d8bf] ring-offset-background transition hover:ring-2 hover:ring-primary/50">{me.name ? initials(me.name) : roleShort(me.role)}</button>
+      </SheetTrigger>
+      <SheetContent data-ui side="right" className="w-full gap-0 overflow-y-auto sm:max-w-md">
+        <SheetHeader className="border-b border-border"><SheetTitle className="text-xl">People on this product</SheetTitle><SheetDescription className="text-sm">Every message carries who said it, and Socra answers at each person’s level.</SheetDescription></SheetHeader>
+        <div className="grid gap-4 border-b border-border p-4">
+          <h3 className="text-base font-semibold">You</h3>
+          <div className="grid gap-1.5"><Label htmlFor="me-name" className="text-sm">Your name</Label><Input id="me-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" /></div>
+          <div className="grid gap-1.5"><Label htmlFor="me-role" className="text-sm">Your role</Label><Select value={role} onValueChange={setRole}><SelectTrigger id="me-role" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent></Select></div>
+          <Button type="button" onClick={() => void save()} className="justify-self-start gap-1.5"><Check className="size-4" /> Save</Button>
+        </div>
+        <div className="grid gap-3 p-4">
+          <h3 className="text-base font-semibold">On this product · {live.members.length}</h3>
+          {live.members.length === 0 && <p className="text-sm text-muted-foreground">Only you so far.</p>}
+          <ul className="grid gap-2">{live.members.map((m) => <li key={m.id} className="flex items-center gap-3"><span className="grid size-8 shrink-0 place-items-center rounded-full bg-muted text-xs font-semibold">{initials(m.name)}</span><span className="grid min-w-0 flex-1"><span className="truncate text-sm font-semibold">{m.name}</span><span className="text-xs text-muted-foreground">{m.role}</span></span><Button type="button" size="icon" variant="ghost" aria-label={`Remove ${m.name}`} onClick={() => remove(m.id)}><X className="size-4" /></Button></li>)}</ul>
+          <div className="grid gap-2 rounded-lg border border-border p-3">
+            <Label htmlFor="add-person" className="text-sm font-medium">Add someone</Label>
+            <Input id="add-person" value={other.name} onChange={(e) => setOther({ ...other, name: e.target.value })} placeholder="Their name" />
+            <Select value={other.role} onValueChange={(v) => setOther({ ...other, role: v })}><SelectTrigger aria-label="Their role" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent></Select>
+            <Button type="button" variant="outline" onClick={() => void add()} disabled={!other.name.trim()} className="justify-self-start gap-1.5"><Users className="size-4" /> Add</Button>
           </div>
         </div>
-      )}
-    </div>
+      </SheetContent>
+    </Sheet>
   )
 }
 
@@ -136,30 +145,13 @@ export function nextMove(live: Live): { text: string; view: StudioView; cta: str
 export function NextMove({ live, changeView }: { live: Live; changeView: (v: StudioView) => void }) {
   const m = nextMove(live)
   if (!m) return null
-  return <div className="studio-banner studio-next"><Sparkles size={14} /><span><strong>Next best move</strong> {m.text}</span><button type="button" onClick={() => changeView(m.view)}>{m.cta} <ArrowRight size={13} /></button></div>
+  return <NextMoveBar text={m.text} cta={m.cta} onGo={() => changeView(m.view)} />
 }
 
 const SPECIALIST_ICON: Record<string, React.ReactNode> = { 'business-analyst': <Scale size={13} />, architect: <Layers3 size={13} />, engineer: <Wrench size={13} />, ux: <PenTool size={13} />, domain: <Compass size={13} /> }
-const SPECIALIST_ROUTE: Record<string, string> = { 'business-analyst': 'Business Analyst', architect: 'Solution Architect', engineer: 'Product Engineer', ux: 'UX / Component Mapper', domain: 'Domain Expert' }
+export const SPECIALIST_ROUTE: Record<string, string> = { 'business-analyst': 'Business Analyst', architect: 'Solution Architect', engineer: 'Product Engineer', ux: 'UX / Component Mapper', domain: 'Domain Expert' }
 export const specialistIcon = (key?: string) => SPECIALIST_ICON[key ?? ''] ?? <UserRound size={13} />
 
-/** Socra and its specialists, what each is doing, and who you are talking to. */
-export function TeamPanel({ live, to, setTo }: { live: Live; to: string; setTo: (k: string) => void }) {
-  const domainName = useMemo(() => [...live.messages].reverse().find((m) => m.role === 'agent' && m.addressed === 'domain')?.agent.replace(/ · Specialist$/, ''), [live.messages])
-  const state = (key: string) => live.routes.find((r) => r.agent === SPECIALIST_ROUTE[key])
-  return (
-    <div className="aside-block studio-team">
-      <div className="aside-block-header"><span className="eyebrow">Socra’s team</span><Users size={15} /></div>
-      <div className="lens-list">
-        <button type="button" className={to === '' ? 'is-active' : ''} onClick={() => setTo('')}><span className="message-avatar muse"><Waves size={12} /></span><span><strong>Socra</strong><small>leads the conversation</small></span>{to === '' ? <Check size={13} /> : <ArrowRight size={13} />}</button>
-        {SPECIALISTS.map((s) => {
-          const r = state(s.key)
-          return <button type="button" key={s.key} className={to === s.key ? 'is-active' : ''} onClick={() => setTo(s.key)} title={`Ask the ${s.name.toLowerCase()}: ${s.focus}`}><span className="message-avatar signal">{SPECIALIST_ICON[s.key]}</span><span><strong>{s.key === 'domain' && domainName ? domainName : s.name}</strong><small>{r?.state === 'active' ? r.detail || 'working now' : r?.state === 'complete' ? 'shared findings' : s.focus}</small></span>{to === s.key ? <Check size={13} /> : <ArrowRight size={13} />}</button>
-        })}
-      </div>
-    </div>
-  )
-}
 
 export const talkingTo = (key: string, live: Live) => {
   if (!key) return 'Socra'
@@ -183,38 +175,4 @@ export function optionsFrom(messages: StudioMessage[]) {
   return []
 }
 
-/** Open checkpoints: what only the people on the product can decide, with Approve, Reject and a comment. */
-export function Checkpoints({ live, me, act }: { live: Live; me: Me; act: Act }) {
-  const open = live.decisions.filter((d) => d.status === 'open')
-  const [notes, setNotes] = useState<Record<string, string>>({})
-  if (!open.length) return null
-  const by = me.name ? `${me.name} (${me.role})` : `The ${me.role.toLowerCase()}`
-  const decide = (id: string, status: 'approved' | 'rejected') => {
-    const comment = (notes[id] || '').trim()
-    void act(() => api(`/api/use-cases/${live.id}/decisions/${id}`, { method: 'PATCH', json: { status, ...(comment ? { answer: comment } : {}), by } }), status === 'approved' ? 'Approved. Socra carries it into the product.' : 'Rejected. It stays out of the build; Socra will suggest another way.')
-    setNotes((n) => ({ ...n, [id]: '' }))
-  }
-  return (
-    <div className="studio-checkpoints">
-      {open.map((d) => {
-        const options = Array.isArray(d.options) ? (d.options as { label?: string }[]).map((o) => o.label).filter(Boolean) : []
-        return (
-          <article key={d.id} className="message-card signal studio-checkpoint">
-            <div className="message-meta"><span className="message-avatar signal"><ShieldCheck size={14} /></span><strong>Checkpoint · needs a person</strong><span>{d.agent && d.agent !== 'Socra' ? `raised by ${d.agent}` : 'raised by Socra'}</span></div>
-            <p>{d.text}{options.length > 0 && <small className="studio-checkpoint-options">Suggested: {options.join(' · ')}</small>}</p>
-            <div className="studio-checkpoint-actions">
-              <input className="studio-input" value={notes[d.id] || ''} onChange={(e) => setNotes({ ...notes, [d.id]: e.target.value })} placeholder="Comment (optional): why, or what instead" />
-              <button className="button button-primary button-small" type="button" onClick={() => decide(d.id, 'approved')}><Check size={13} /> Approve</button>
-              <button className="button button-quiet button-small" type="button" onClick={() => decide(d.id, 'rejected')}><X size={13} /> Reject</button>
-            </div>
-          </article>
-        )
-      })}
-    </div>
-  )
-}
 
-/** Undo on a "Decision captured" card: the approval made by a yes or a pick goes back to open. */
-export function UndoChip({ live, decisionId, me, act }: { live: Live; decisionId: string; me: Me; act: Act }) {
-  return <button className="decision-chip studio-undo" type="button" onClick={() => void act(() => api(`/api/use-cases/${live.id}/messages`, { method: 'PATCH', json: { undo: decisionId, author: me } }), 'Undone. The decision is open again.')}><Undo2 size={12} /> Undo</button>
-}
