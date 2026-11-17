@@ -146,7 +146,15 @@ export function toSpec(d: Live): (SpecSection & { ref: string; basis: string; re
 /** The live product's address on this machine (the preview runs on its own port). */
 export function previewUrl(port: number | null | undefined, path = '/') {
   if (!port || typeof window === 'undefined') return ''
-  return `${window.location.protocol}//${window.location.hostname}:${port}${path}`
+  const h = window.location.hostname
+  // Through a public domain (studio.innume.com) only ports 80/443 pass, so each app gets its own hostname:
+  // https://p4107.innume.com. On this computer (localhost, IP address, .local) the app's own port is used.
+  const local = h === 'localhost' || h === '[::1]' || /^\d{1,3}(\.\d{1,3}){3}$/.test(h) || h.endsWith('.local') || !h.includes('.')
+  if (!local) {
+    const parent = h.split('.').slice(-2).join('.')
+    return `https://p${port}.${parent}${path.startsWith('/') ? path : `/${path}`}`
+  }
+  return `${window.location.protocol}//${h}:${port}${path}`
 }
 
 const DAY_PARTS = ['night', 'morning', 'afternoon', 'evening']
