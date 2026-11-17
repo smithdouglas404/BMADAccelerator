@@ -44,6 +44,8 @@ const Body = z.discriminatedUnion("action", [
   }),
   // Change what an existing token may do, without making a new one (the assistant keeps working).
   z.object({ action: z.literal("access"), id: z.string().min(4), scope: z.enum(["read", "write", "admin"]), role: z.string().trim().min(2).max(60) }),
+  // Whose name an existing token's changes are recorded under ("Doug (via Meta Muse)").
+  z.object({ action: z.literal("person"), id: z.string().min(4), person: z.string().trim().max(80) }),
   z.object({ action: z.literal("revoke"), id: z.string().min(4) }),
   z.object({ action: z.literal("notify_add"), kind: z.enum(["email", "slack", "webhook"]), address: z.string().trim().min(3).max(500), customer: z.string().trim().max(120).default("") }),
   z.object({ action: z.literal("notify_remove"), id: z.string().min(4) }),
@@ -90,6 +92,10 @@ export async function POST(req: Request) {
     } catch (e) {
       return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 502 });
     }
+  }
+  if (b.action === "person") {
+    await prisma.apiToken.updateMany({ where: { id: b.id, revokedAt: null }, data: { person: b.person } });
+    return NextResponse.json({ ok: true });
   }
   if (b.action === "access") {
     await prisma.apiToken.updateMany({ where: { id: b.id, revokedAt: null }, data: { scope: b.scope, role: b.role } });

@@ -168,6 +168,9 @@ export function ConnectTab({ setToast }: { setToast: (s: string) => void }) {
     const r = scope === 'admin' ? 'Admin' : role === 'Admin' ? 'Product owner' : role
     try { await api('/api/settings/connect', { json: { action: 'access', id, scope: fit(r, scope), role: r } }); setToast('Access changed. It applies to the next call.'); load() } catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
   }
+  const setPerson = async (id: string, person: string) => {
+    try { await api('/api/settings/connect', { json: { action: 'person', id, person: person.trim() } }); setToast(person.trim() ? `Its changes are now recorded as ${person.trim()}.` : 'Name cleared.'); load() } catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
+  }
   const revoke = async (id: string) => { await api('/api/settings/connect', { json: { action: 'revoke', id } }); load() }
   const MUSE_TEXT = "Every 15 minutes, call the Socra Studio connector's whats_waiting tool. For every question waiting, tell me the product name, Socra's question and its numbered options, and which one Socra suggests. When I answer, call answer with that product's use_case_id and my words (a number picks that option). If answer comes back needing confirmation, show me the preview and send the same call again with confirm: true only after I say yes. Don't approve, build or withdraw anything unless I ask for it in that message."
   return (
@@ -217,7 +220,7 @@ export function ConnectTab({ setToast }: { setToast: (s: string) => void }) {
               <TableBody>{info.tokens.map((t) => (
                 <TableRow key={t.id}>
                   <TableCell className="px-5"><div className="font-medium">{t.name}</div><div className="text-xs text-muted-foreground">{t.customer || 'Every customer'} · {t.viaOAuth ? 'signed in' : `token ${t.prefix}…`}</div></TableCell>
-                  <TableCell>{t.person || 'No name'}<div className="text-xs text-muted-foreground">{t.role}</div></TableCell>
+                  <TableCell><Input aria-label={`Name ${t.name} acts in`} className="h-9 w-40" defaultValue={t.person} placeholder="Acts in the name of…" onBlur={(e) => { if (e.target.value.trim() !== t.person) void setPerson(t.id, e.target.value) }} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }} /><div className="text-xs text-muted-foreground">{t.role}</div></TableCell>
                   <TableCell>
                     <Select value={t.level ?? (t.scope as Level)} onValueChange={(v) => void setAccess(t.id, v as Level, t.role)}>
                       <SelectTrigger aria-label={`What ${t.name} may do`} className="h-9 w-48"><SelectValue>{LEVEL_SHORT(t.level ?? (t.scope as Level))}</SelectValue></SelectTrigger>
