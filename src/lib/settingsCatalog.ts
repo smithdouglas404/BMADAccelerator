@@ -34,6 +34,8 @@ export const OTHER_KEYS: { env: string; name: string }[] = [
   { env: "LINEAR_API_KEY", name: "Linear (tracker)" },
   { env: "TYPESAFE_API_KEY", name: "TypeSafe (Jev: typed yes/no, choice and score answers)" },
   { env: "GITHUB_TOKEN", name: "GitHub (push the pilot to your repository)" },
+  { env: "CLERK_PUBLISHABLE_KEY", name: "Clerk publishable key (sign-in for the public address)" },
+  { env: "CLERK_SECRET_KEY", name: "Clerk secret key (sign-in for the public address)" },
   { env: "SMTP_URL", name: "Email sending (SMTP, for notifications: smtps://user:app-password@smtp.example.com:465)" },
 ];
 

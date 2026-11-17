@@ -134,11 +134,11 @@ Email needs a sending account first. Add the SMTP address under Settings > Model
 
 ## Opening the Studio's screens on the public address
 
-The Studio has no sign-in of its own and holds your keys, so the screens may only go on the internet behind a login. Use Cloudflare Access on the same hostname:
+The Studio's screens hold your keys, so on the public address they sit behind a Clerk sign-in. Locally (localhost:3000) nothing changes and there is no sign-in.
 
-1. Zero Trust > Access > Applications > Add an application > Self-hosted. Hostname `studio.innume.com`, policy "Allow" for your own email (one-time PIN to that email).
-2. Add a second application for the same hostname with policy **Bypass** (Everyone) for these paths only: `/api/v1/*`, `/api/mcp`, `/api/oauth/*`, `/oauth/*`, `/.well-known/*`, `/_next/static/*`. Assistants use these with their own token.
-3. Check that `curl -I https://studio.innume.com/` now answers 302 to a cloudflareaccess.com sign-in, not 404 and not the Studio.
-4. Only then set `CONNECTOR_GATE_CONF=nginx-ui.conf` in `.env` and run `docker compose --profile public up -d connector-gate`.
+1. Clerk: create an application with email sign-in. Put its publishable key in `.env` as `CLERK_PUBLISHABLE_KEY`, and paste its secret key into Settings > AI models and keys (Clerk secret key). The secret is never shown again.
+2. In `.env` set `STUDIO_ALLOWED_EMAILS` to the email(s) allowed in (comma separated). With no list, or no keys, the public screens refuse everyone.
+3. Set `CONNECTOR_GATE_CONF=nginx-ui.conf` in `.env` and run `docker compose --profile public up -d connector-gate`.
+4. Open the public address: it goes to `/sign-in`, then in.
 
-To close the screens again, set it back to `nginx.conf`.
+Assistants keep using `/api/v1`, `/api/mcp` and the OAuth addresses with their own token; the sign-in never applies to them. To close the screens again set `CONNECTOR_GATE_CONF=nginx.conf`.
