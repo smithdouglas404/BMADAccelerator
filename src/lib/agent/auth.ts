@@ -1,5 +1,5 @@
 /**
- * How Claude Code (the BMAD agents, the concierge, Generate and the document agent) signs in.
+ * How Claude Code (Socra and its team, Generate and the document agent) signs in.
  *
  * - "plan": the owner's Claude subscription (CLAUDE_CODE_OAUTH_TOKEN from `claude setup-token`).
  * - "key": the Anthropic API key, billed per use.
@@ -28,7 +28,7 @@ export function authEnv(auth: Auth): Record<string, string> {
   delete env.OPENAI_API_KEY;
   delete env.ELEVENLABS_API_KEY;
   delete env.GEMINI_API_KEY;
-  for (const k of ["DATABASE_URL", "LINEAR_API_KEY", "JIRA_API_TOKEN", "MEM0_API_KEY", "LETTA_API_KEY"]) delete env[k];
+  for (const k of ["DATABASE_URL", "LINEAR_API_KEY", "JIRA_API_TOKEN", "MEM0_API_KEY", "LETTA_API_KEY", "SMTP_URL", "TYPESAFE_API_KEY"]) delete env[k];
   if (auth === "plan") delete env.ANTHROPIC_API_KEY;
   else delete env.CLAUDE_CODE_OAUTH_TOKEN;
   return env;

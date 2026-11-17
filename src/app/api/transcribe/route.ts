@@ -6,7 +6,7 @@ export async function POST(req: Request) {
   const key = process.env.ELEVENLABS_API_KEY;
   if (!key) {
     return NextResponse.json(
-      { error: "Voice transcription is not set up yet. Add ELEVENLABS_API_KEY to the server environment." },
+      { error: "Voice transcription needs an ElevenLabs key: add it on Settings, Models and keys." },
       { status: 503 },
     );
   }

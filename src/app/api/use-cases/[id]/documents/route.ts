@@ -1,72 +1,58 @@
 import { NextResponse } from "next/server";
+import { recordChange } from "@/lib/studio/truthlog";
 import { promises as fs } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
-import { BMAD_DOC_TYPES, DOC_STAGES, guessDocType } from "@/lib/bmad";
 import { ensureWorkspace, workspacePath } from "@/lib/workspace";
 import { describeDocument } from "@/lib/docAgent";
 import { writeIntake } from "@/lib/provision";
+import { enqueue, agentsEnabled } from "@/lib/agent/runner";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 const MAX_BYTES = 200 * 1024 * 1024; // 200 MB per file
 
-// Uploads documents for a use case. Each file is stored in the use case workspace,
-// given a suggested BMAD document type, and queued for review so the user can
-// confirm its summary, tags and type before it is handed to BMAD.
+// Research and evidence: interviews, PDFs, competitive research, screenshots, documents, design
+// references, analytics exports, customer feedback. Each upload is stored in studio/uploads/, shown as
+// evidence straight away, read by the document agent (claims, contradictions, questions, potential
+// requirements, confidence) and handed to Socra. Research never silently becomes a requirement.
 export async function POST(req: Request, { params }: Ctx) {
   const { id } = await params;
-  const useCase = await prisma.useCase.findUnique({ where: { id } });
-  if (!useCase) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
+  const uc = await prisma.useCase.findUnique({ where: { id } });
+  if (!uc) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const form = await req.formData();
   const files = form.getAll("files").filter((f): f is File => f instanceof File);
   if (!files.length) return NextResponse.json({ error: "No files" }, { status: 400 });
-  const stageIn = String(form.get("stage") || "general");
-  const stage = DOC_STAGES.some((s) => s.key === stageIn) ? stageIn : "general";
-  const stageLabel = DOC_STAGES.find((s) => s.key === stage)!.label;
-
-  await ensureWorkspace(useCase.slug);
-  const created = [];
+  const kind = String(form.get("kind") || "uploaded");
+  const opening = form.get("opening") === "1";
+  await ensureWorkspace(uc.slug);
+  const created: { id: string; storagePath: string }[] = [];
   for (const file of files) {
     if (file.size > MAX_BYTES) continue;
     const safeName = path.basename(file.name).replace(/[^\w.\- ]/g, "_");
-    const stored = `${randomUUID()}-${safeName}`;
-    const storagePath = workspacePath(useCase.slug, "bacc", "uploads", stored);
+    const storagePath = workspacePath(uc.slug, "studio", "uploads", `${randomUUID().slice(0, 8)}-${safeName}`);
     await fs.mkdir(path.dirname(storagePath), { recursive: true });
     await fs.writeFile(storagePath, Buffer.from(await file.arrayBuffer()));
-    const bmadType = guessDocType(safeName);
-    const typeLabel = BMAD_DOC_TYPES.find((t) => t.key === bmadType)?.label ?? "Other";
     const doc = await prisma.document.create({
-      data: {
-        useCaseId: id,
-        fileName: safeName,
-        mimeType: file.type || "application/octet-stream",
-        sizeBytes: file.size,
-        storagePath,
-        bmadType,
-        stage,
-        tags: [],
-      },
+      data: { useCaseId: id, fileName: safeName, mimeType: file.type || "application/octet-stream", sizeBytes: file.size, storagePath, kind, status: "approved", approved: true },
     });
-    await prisma.reviewItem.create({
-      data: {
-        useCaseId: id,
-        kind: "document",
-        title: `Confirm "${safeName}"`,
-        detail: `For: ${stageLabel}. Suggested type: ${typeLabel}. Read the summary, then approve it so BMAD uses it, or decline it.`,
-        reason: "New upload",
-        source: "Document agent",
-        targetId: doc.id,
-      },
+    await prisma.evidence.create({
+      data: { useCaseId: id, documentId: doc.id, source: safeName, type: ["interview", "research"].includes(kind) ? kind : "uploaded", insight: "New source uploaded — Socra will extract the product signal next.", confidence: "open", trace: "Awaiting synthesis" },
     });
     created.push(doc);
+    await recordChange(id, { node: `doc:${doc.id}`, kind: "added", summary: `${safeName} was added to the evidence library`, by: "Owner" });
   }
   await prisma.useCase.update({ where: { id }, data: { updatedAt: new Date() } });
-  // The document agent reads each upload in the background; the card updates when it is done.
-  void Promise.all(created.map((d) => describeDocument(d.id).catch((e) => console.error("document agent", e)))).then(
-    () => (useCase.provisioned ? writeIntake(id) : undefined),
-  );
+  void Promise.all(created.map((d) => describeDocument(d.id).catch((e) => console.error("document agent", e)))).then(async () => {
+    if (uc.provisioned) await writeIntake(id);
+    if (!opening && agentsEnabled() && created.length)
+      await enqueue(
+        id,
+        "evidence",
+        `The owner added ${created.length === 1 ? "a source" : `${created.length} sources`} to the evidence library: ${created.map((d) => `studio/uploads/${path.basename(d.storagePath)}`).join(", ")}. The document agent already filed its signals, contradictions and questions as evidence and its potential requirements as suggestions. Read them, raise the floor or the spec where the evidence supports it (set_spec_section with an evidence trace step), and tell the owner in one line what it changed.`,
+        created[0] ? `doc:${created[0].id}` : "",
+      );
+  });
   return NextResponse.json(created, { status: 201 });
 }

@@ -47,16 +47,17 @@ services:
       HISTORY_DB_PATH: /app/history/history.db
       ADMIN_API_KEY: ${MEM0_ADMIN_API_KEY:?run scripts/memory-secrets.sh once to create the memory passwords}
       JWT_SECRET: ${MEM0_JWT_SECRET:?run scripts/memory-secrets.sh once to create the memory passwords}
-      # Same models as Doug's other Mem0: OpenAI gpt-5-mini (Mem0's own default) for fact extraction,
+      # OpenAI gpt-4.1-mini for fact extraction (the server sends temperature 0.2, which gpt-5-mini rejects with a 400, so
+      # some memories were lost) and
       # text-embedding-3-small (1536 dims, pgvector's default) for embeddings.
       OPENAI_API_KEY: ${OPENAI_API_KEY:?add OPENAI_API_KEY to .env (Mem0 and Letta use it for embeddings)}
-      MEM0_DEFAULT_LLM_MODEL: ${MEM0_DEFAULT_LLM_MODEL:-gpt-5-mini}
+      MEM0_DEFAULT_LLM_MODEL: ${MEM0_DEFAULT_LLM_MODEL:-gpt-4.1-mini}
       MEM0_DEFAULT_EMBEDDER_MODEL: ${MEM0_DEFAULT_EMBEDDER_MODEL:-text-embedding-3-small}
       MEM0_TELEMETRY: "false"
     volumes:
       - mem0-history:/app/history
 
-  # Each BMAD role's working mind: self-hosted Letta (open source).
+  # Each Studio agent's working mind: self-hosted Letta (open source).
   letta:
     image: letta/letta:0.16.8
     restart: unless-stopped
@@ -70,6 +71,41 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       SECURE: "true"
       LETTA_SERVER_PASSWORD: ${LETTA_SERVER_PASSWORD:?run scripts/memory-secrets.sh once to create the memory passwords}
+
+  # The shared agent service (CLAUDE.md, "Agent memory: Mem0 + Letta"): every product's agents run here as
+  # configuration, on Inngest AgentKit, each with a Letta persona and Mem0 memory scoped per customer and
+  # use case. Generated apps call it with their own app token and hold no model keys.
+  agents:
+    build: ./agent-service
+    restart: unless-stopped
+    depends_on:
+      db-setup:
+        condition: service_completed_successfully
+    environment:
+      AGENT_SERVICE_DATABASE_URL: postgresql://bacc:bacc@db:5432/agents
+      AGENT_SERVICE_ADMIN_KEY: ${AGENT_SERVICE_ADMIN_KEY:?run scripts/memory-secrets.sh once to create the service passwords}
+      INNGEST_DEV: "1"
+      INNGEST_BASE_URL: http://inngest:8288
+      MEM0_BASE_URL: http://mem0:8000
+      MEM0_API_KEY: ${MEM0_ADMIN_API_KEY:-}
+      LETTA_BASE_URL: http://letta:8283
+      LETTA_SERVER_PASSWORD: ${LETTA_SERVER_PASSWORD:-}
+      AGENT_SERVICE_LETTA_MODEL: ${BACC_LETTA_MODEL:-anthropic/claude-haiku-5-5}
+      # Model keys for the agents. Keys saved on the Studio's Settings page are also sent here by the Studio.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    ports:
+      # The approval page and run history: http://localhost:8300/ui
+      - "8300:8300"
+
+  # Inngest's local server: runs the agents durably, so a run waiting days for an approval survives restarts.
+  inngest:
+    image: inngest/inngest:v1.52.0
+    restart: unless-stopped
+    command: ["inngest", "dev", "-u", "http://agents:8300/api/inngest", "--no-discovery"]
+    ports:
+      - "8288:8288"
 
   app:
     build: .
@@ -98,6 +134,8 @@ services:
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
       BACC_CLAUDE_AUTH: ${BACC_CLAUDE_AUTH:-}
       LINEAR_API_KEY: ${LINEAR_API_KEY:-}
+      # TypeSafe (Jev). Best saved on Settings > Models and keys instead.
+      TYPESAFE_API_KEY: ${TYPESAFE_API_KEY:-}
       JIRA_BASE_URL: ${JIRA_BASE_URL:-}
       JIRA_EMAIL: ${JIRA_EMAIL:-}
       JIRA_API_TOKEN: ${JIRA_API_TOKEN:-}
@@ -105,6 +143,15 @@ services:
       MEM0_API_KEY: ${MEM0_ADMIN_API_KEY:-}
       LETTA_BASE_URL: http://letta:8283
       LETTA_API_KEY: ${LETTA_SERVER_PASSWORD:-}
+      # The shared agent service. Previews reach it as http://agents:8300 too.
+      AGENT_SERVICE_URL: http://agents:8300
+      AGENT_SERVICE_PUBLIC_URL: ${AGENT_SERVICE_PUBLIC_URL:-http://localhost:8300}
+      # The Studio's public address (a tunnel or your domain), for the MCP connector and OAuth. Empty = this computer only.
+      STUDIO_PUBLIC_URL: ${STUDIO_PUBLIC_URL:-}
+      CLERK_PUBLISHABLE_KEY: ${CLERK_PUBLISHABLE_KEY:-}
+      STUDIO_ALLOWED_USERS: ${STUDIO_ALLOWED_USERS:-}
+      STUDIO_ALLOWED_EMAILS: ${STUDIO_ALLOWED_EMAILS:-}
+      AGENT_SERVICE_ADMIN_KEY: ${AGENT_SERVICE_ADMIN_KEY:-}
       BACC_MODEL: ${BACC_MODEL:-claude-sonnet-5-5}
       BACC_DOC_MODEL: ${BACC_DOC_MODEL:-claude-haiku-5-5}
       BACC_GENERATE_MODEL: ${BACC_GENERATE_MODEL:-}
@@ -125,14 +172,46 @@ services:
       BACC_SECRET: ${BACC_SECRET:-}
       # Partner shadcn registries the advisor searches: a list, "all" or "off".
       BACC_SHADCN_REGISTRIES: ${BACC_SHADCN_REGISTRIES:-}
+      npm_config_prefer_offline: "true"
+      npm_config_audit: "false"
+      npm_config_fund: "false"
     volumes:
       - workspaces:/data/workspaces
       # The agents' session history, so conversations resume after a rebuild.
       - claude-home:/home/node/.claude
+      # npm's download cache, kept between builds so installs after the first come from disk.
+      - npm-cache:/home/node/.npm
     shm_size: "512m"
+
+  # Optional: a public address for assistants on the web (Meta Muse, claude.ai). Off unless you run
+  #   docker compose --profile public up -d
+  # connector-gate lets ONLY the connector's addresses through (the Studio's screens stay on this computer);
+  # tunnel is a free Cloudflare quick tunnel to it, with no account. Its address changes if the tunnel restarts:
+  #   scripts/public-address.sh   prints the current one.
+  connector-gate:
+    image: nginx:1.27-alpine
+    profiles: ["public"]
+    restart: unless-stopped
+    depends_on:
+      - app
+    # Reachable from this computer only (127.0.0.1): an existing Cloudflare tunnel on this computer points a
+    # hostname at http://localhost:8088. Nothing else on the network can reach it directly.
+    ports:
+      - "127.0.0.1:${CONNECTOR_GATE_PORT:-8088}:8080"
+    volumes:
+      - ./connector-gate/${CONNECTOR_GATE_CONF:-nginx.conf}:/etc/nginx/nginx.conf:ro
+      - ./connector-gate/pass.conf:/etc/nginx/pass.conf:ro
+  tunnel:
+    image: cloudflare/cloudflared:2024.12.2
+    profiles: ["public"]
+    restart: unless-stopped
+    depends_on:
+      - connector-gate
+    command: tunnel --no-autoupdate --url http://connector-gate:8080
 
 volumes:
   db:
   workspaces:
   claude-home:
+  npm-cache:
   mem0-history:

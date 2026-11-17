@@ -5,3 +5,4 @@ workspaces
 !.env.example
 .git
 *.tsbuildinfo
+agent-service/node_modules

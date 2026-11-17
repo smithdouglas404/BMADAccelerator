@@ -1,24 +1,35 @@
-import { promises as fs } from "fs";
-import { RESEARCH_TEAM } from "./team";
+import { STUDIO_TEAM } from "./team";
+import { coreInstructions } from "./instructions";
 import path from "path";
 import { query, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { prisma } from "@/lib/db";
 import { workspacePath } from "@/lib/workspace";
-import { provisionWorkspace, shadcnLookupDir, syncAcceleratorSkills, writeIntake } from "@/lib/provision";
-import { syncBoard } from "@/lib/bmadTickets";
+import { setTurnCauses } from "@/lib/studio/truthlog";
+import { provisionWorkspace, shadcnLookupDir, syncStudioSkills, writeIntake, STUDIO_SKILLS_DIR } from "@/lib/provision";
 import { agentModel } from "@/lib/docAgent";
+import { mcpServersFor, mcpSummary } from "@/lib/studio/mcp";
+import { ensureRoutes } from "@/lib/studio/state";
 import { LimitError, authEnv, authOrder, claudeConfigured, limitMessage, type Auth } from "@/lib/agent/auth";
-import { baccTools, type RunTally } from "./tools";
+import { studioTools, type RunTally } from "./tools";
 import { fakeAgentTurn } from "./fake";
-import { recallForTurn, startMemoryJobs } from "@/lib/memory";
+import { recallForTurn, searchMemory, startMemoryJobs } from "@/lib/memory";
+import { resumeBrief } from "@/lib/studio/resume";
 import { withContext } from "@/lib/memory/lettaCore";
 
-// One agent turn at a time per use case. Queued events (messages, card moves,
-// feedback, Generate notes) are combined into the next turn, in order.
+// One Socra turn at a time per product. Queued events (messages, captures, pulled-forward
+// recommendations, annotations, build notes) are combined into the next turn, in order.
 const running = new Set<string>();
 
-export async function enqueue(useCaseId: string, kind: string, prompt: string) {
-  await prisma.agentEvent.create({ data: { useCaseId, kind, prompt } });
+// `cause` is the Product Truth Graph node the turn answers (msg:…, ann:…, evidence:…), so every change the
+// Socra makes in that turn records why.
+/** Studio updates (a build finished, research came back) are marked as such, so Socra never answers them as if a person spoke. */
+export function framed(e: { kind: string; prompt: string }) {
+  if (e.kind === "user") return e.prompt;
+  return `[Studio update, not a message from anyone on the product. Don't mention it as an update or event, and don't tell them nothing arrived: say only what it means for the product, or say nothing if it changes nothing they need to know.]\n\n${e.prompt}`;
+}
+
+export async function enqueue(useCaseId: string, kind: string, prompt: string, cause = "") {
+  await prisma.agentEvent.create({ data: { useCaseId, kind, prompt, cause } });
   void kick(useCaseId);
 }
 
@@ -58,8 +69,9 @@ export async function kick(useCaseId: string) {
         data: { agentBusy: true, agentStatus: "Thinking", agentError: "" },
       });
       let ok = true;
+      setTurnCauses(useCaseId, events.map((e) => e.cause).filter(Boolean));
       try {
-        await runTurn(useCaseId, events.map((e) => e.prompt).join("\n\n---\n\n"));
+        await runTurn(useCaseId, events.map(framed).join("\n\n---\n\n"));
       } catch (e) {
         ok = false;
         console.error("agent turn failed", e);
@@ -68,6 +80,7 @@ export async function kick(useCaseId: string) {
           data: { agentError: e instanceof Error ? e.message.slice(0, 500) : String(e) },
         });
       }
+      setTurnCauses(useCaseId, []);
       await prisma.agentEvent.updateMany({ where: { id: { in: ids } }, data: { status: ok ? "done" : "failed" } });
     }
   } finally {
@@ -76,10 +89,8 @@ export async function kick(useCaseId: string) {
   }
 }
 
-export async function conciergeInstructions() {
-  const file = path.join(process.cwd(), "bmad-module/bacc-agent-concierge/SKILL.md");
-  const md = await fs.readFile(file, "utf8");
-  return md.replace(/^---[\s\S]*?---\s*/, "");
+export async function museInstructions() {
+  return coreInstructions(STUDIO_SKILLS_DIR);
 }
 
 function statusFor(block: { type: string; name?: string; input?: unknown }) {
@@ -87,7 +98,10 @@ function statusFor(block: { type: string; name?: string; input?: unknown }) {
   const input = (block.input ?? {}) as Record<string, string>;
   switch (block.name) {
     case "Skill":
-      return `Running ${input.skill ?? input.command ?? "a BMAD skill"}`;
+      return `Using the ${input.skill ?? input.command ?? ""} skill`;
+    case "Task":
+    case "Agent":
+      return `Sending out ${input.subagent_type ?? "a helper"}`;
     case "Read":
     case "Glob":
     case "Grep":
@@ -96,7 +110,7 @@ function statusFor(block: { type: string; name?: string; input?: unknown }) {
     case "Edit":
       return `Writing ${path.basename(input.file_path ?? "a document")}`;
     case "Bash":
-      return "Running BMAD's scripts";
+      return "Running a command";
     case "WebSearch":
     case "WebFetch":
       return "Researching";
@@ -109,14 +123,14 @@ type TurnOpts = Parameters<typeof runSdkTurnOnce>[0];
 
 // Runs a turn, resuming the use case's Claude session. If that session can't be
 // resumed (for example its history was lost when the container was rebuilt), the
-// turn starts a fresh session instead: BMAD's files hold the real state.
+// turn starts a fresh session instead: the Studio's database holds the real state.
 async function runSdkTurnResuming(opts: TurnOpts) {
   try {
     return await runSdkTurnOnce(opts);
   } catch (e) {
     if (e instanceof LimitError || !opts.resume || opts.tally.spoke > 0) throw e;
     console.error("resume failed, starting a fresh session", e);
-    return runSdkTurnOnce({ ...opts, resume: "" });
+    return runSdkTurnOnce({ ...opts, resume: "", prompt: opts.freshPrompt ?? opts.prompt });
   }
 }
 
@@ -128,9 +142,9 @@ export async function runSdkTurn(opts: TurnOpts) {
     const auth = order[i] ?? "key";
     try {
       if (i === 0) return await runSdkTurnResuming({ ...opts, auth });
-      // A session started under another sign-in may not resume; BMAD's files hold the state anyway.
+      // A session started under another sign-in may not resume; the Studio holds the state anyway.
       return await runSdkTurnOnce({ ...opts, auth }).catch((err) =>
-        err instanceof LimitError ? Promise.reject(err) : runSdkTurnOnce({ ...opts, auth, resume: "" }),
+        err instanceof LimitError ? Promise.reject(err) : runSdkTurnOnce({ ...opts, auth, resume: "", prompt: opts.freshPrompt ?? opts.prompt }),
       );
     } catch (e) {
       if (!(e instanceof LimitError) || i + 1 >= order.length) throw e;
@@ -152,38 +166,49 @@ async function runSdkTurnOnce(opts: {
   appendSystem: string;
   onSession: (id: string) => Promise<void>;
   onStatus: (s: string) => Promise<void>;
+  onTool?: (name: string, input: Record<string, unknown>) => void;
+  /** The prompt to use if the session can't be resumed: it carries the conversation (resume.ts). */
+  freshPrompt?: string;
   tally: RunTally;
   maxTurns?: number;
   auth?: Auth;
   model?: string;
   effort?: "low" | "medium" | "high";
+  speaker?: string;
+  /** Stop the run when nothing has happened for this long (a command stuck waiting for input). */
+  idleMs?: number;
 }) {
   const auth = opts.auth ?? authOrder()[0] ?? "key";
   const ws = workspacePath(opts.slug);
   const texts: string[] = [];
   // The official shadcn MCP server (pinned in the image): component, block and chart look-ups.
   const shadcnDir = process.env.BACC_SHADCN_MCP === "0" ? "" : await shadcnLookupDir(opts.slug).catch(() => "");
-  await syncAcceleratorSkills(opts.slug).catch((e) => console.error("skill sync", e));
+  await syncStudioSkills(opts.useCaseId, opts.slug).catch((e) => console.error("skill sync", e));
+  const connectors = await mcpServersFor(opts.useCaseId).catch(() => ({}));
+  const abort = new AbortController();
   const q = query({
     prompt: opts.prompt,
     options: {
+      abortController: abort,
       cwd: ws,
       model: opts.model || agentModel(),
       ...(opts.effort ? { effort: opts.effort } : {}),
       settingSources: ["project"],
       systemPrompt: { type: "preset", preset: "claude_code", append: opts.appendSystem },
       mcpServers: {
-        bacc: baccTools(opts.useCaseId, opts.slug, opts.tally),
+        ...connectors,
+        studio: studioTools(opts.useCaseId, opts.slug, opts.tally, { speaker: opts.speaker }),
         ...(shadcnDir ? { shadcn: { type: "stdio" as const, command: process.env.SHADCN_BIN || "shadcn", args: ["mcp", "--cwd", shadcnDir] } } : {}),
       },
       permissionMode: "bypassPermissions",
       allowDangerouslySkipPermissions: true,
       disallowedTools: ["AskUserQuestion"],
-      // The advisor's research team (category, industry, innovation), sent out when the floor is written.
-      agents: RESEARCH_TEAM,
+      // Socra's team: validator, UX / component mapper, product engineer and the research team.
+      agents: STUDIO_TEAM,
       resume: opts.resume || undefined,
       maxTurns: opts.maxTurns ?? 200,
-      env: authEnv(auth),
+      // No shell command may run for ever: 3 minutes unless it asks for more, never more than 7.
+      env: { ...authEnv(auth), BASH_DEFAULT_TIMEOUT_MS: "180000", BASH_MAX_TIMEOUT_MS: "420000" },
       stderr: (d) => console.error("[claude]", d.trimEnd()),
     },
   });
@@ -193,7 +218,21 @@ async function runSdkTurnOnce(opts: {
     q.interrupt().catch(() => undefined);
     return new LimitError(limitMessage(auth, resetsAt), sessionId, resetsAt);
   };
+  let lastActivity = Date.now();
+  let stalled = false;
+  const watchdog = opts.idleMs
+    ? setInterval(() => {
+        if (Date.now() - lastActivity < opts.idleMs!) return;
+        stalled = true;
+        console.warn(`[claude] no activity for ${Math.round(opts.idleMs! / 60000)} min, stopping the run`);
+        q.interrupt().catch(() => undefined);
+        setTimeout(() => abort.abort(), 30_000).unref?.();
+      }, 15_000)
+    : null;
+  try {
   for await (const m of q as AsyncIterable<SDKMessage>) {
+    lastActivity = Date.now();
+    if (stalled) break;
     if (m.type === "rate_limit_event" && m.rate_limit_info.status === "rejected") throw limited(m.rate_limit_info.resetsAt);
     if (m.type === "assistant" && (m.error === "rate_limit" || m.error === "billing_error")) throw limited();
     if ("session_id" in m && m.session_id && m.session_id !== sessionId) {
@@ -203,6 +242,7 @@ async function runSdkTurnOnce(opts: {
     if (m.type === "assistant") {
       for (const block of m.message.content) {
         if (block.type === "text" && block.text.trim()) texts.push(block.text.trim());
+        if (block.type === "tool_use") opts.onTool?.(block.name, (block.input ?? {}) as Record<string, unknown>);
         const s = statusFor(block as { type: string; name?: string; input?: unknown });
         if (s && s !== lastStatus) {
           lastStatus = s;
@@ -210,71 +250,53 @@ async function runSdkTurnOnce(opts: {
         }
       }
     }
-    if (m.type === "result" && m.subtype !== "success") {
+    if (m.type === "result" && m.subtype !== "success" && !stalled) {
       throw new Error(`Agent stopped: ${m.subtype}`);
     }
   }
-  return { texts, sessionId };
-}
-
-const ASK_NUDGE = "[follow-up: the question]";
-
-// A turn that ends by announcing a question, without asking it, would leave the client waiting on
-// nothing. A last message that is itself a question becomes the open question; one that only
-// promises a question gets one follow-up turn to ask it.
-async function settleAnnouncedQuestion(useCaseId: string, since: Date, prompt: string) {
-  if (await prisma.question.count({ where: { useCaseId, status: { in: ["open", "waiting"] } } })) return;
-  const last = await prisma.message.findFirst({
-    where: { useCaseId, createdAt: { gte: since }, role: { in: ["concierge", "bmad-agent"] } },
-    orderBy: { createdAt: "desc" },
-  });
-  if (!last) return;
-  const text = last.content.trim();
-  if (text.endsWith("?")) {
-    const sentence = text.split(/(?<=[.!?])\s+|\n+/).filter(Boolean).pop() ?? text;
-    await prisma.question.create({
-      data: { useCaseId, agent: last.agent || "concierge", question: sentence.slice(0, 500), explanation: "", status: "open" },
-    });
-    await prisma.useCase.update({ where: { id: useCaseId }, data: { pendingQuestion: sentence.slice(0, 500) } });
-    return;
+  } catch (e) {
+    if (!stalled) throw e;
+  } finally {
+    if (watchdog) clearInterval(watchdog);
   }
-  const promises = /\b(one|a|next|few|quick|some)\s+(more\s+)?questions?\b|\b(I|I'll|I will|let me|she'll|he'll|they'll|we'll)\s+(need to\s+)?ask\b/i.test(text);
-  if (promises && !prompt.includes(ASK_NUDGE)) {
-    await enqueue(
-      useCaseId,
-      "followup",
-      `${ASK_NUDGE} Your last message said a question was coming, but it was never asked, so the client is waiting. Ask it now with mcp__bacc__ask (one question), then end your turn.`,
-    );
-  }
+  return { texts, sessionId, stalled };
 }
 
 async function runTurn(useCaseId: string, prompt: string) {
-  const turnStart = new Date();
   const uc = await prisma.useCase.findUniqueOrThrow({ where: { id: useCaseId } });
   if (!uc.provisioned) {
-    await prisma.useCase.update({ where: { id: useCaseId }, data: { agentStatus: "Installing BMAD" } });
+    await prisma.useCase.update({ where: { id: useCaseId }, data: { agentStatus: "Setting up the workspace" } });
     await provisionWorkspace(useCaseId);
   } else {
     await writeIntake(useCaseId);
   }
+  await ensureRoutes(useCaseId);
   const fresh = await prisma.useCase.findUniqueOrThrow({ where: { id: useCaseId } });
   const tally: RunTally = { spoke: 0 };
 
-  // Recall once per turn: what earlier use cases taught (Mem0) and each role's top lessons (Letta).
-  await prisma.useCase.update({ where: { id: useCaseId }, data: { agentStatus: "Remembering earlier use cases" } });
+  // Recall once per turn: what earlier products taught (Mem0) and each role's top lessons (Letta).
+  await prisma.useCase.update({ where: { id: useCaseId }, data: { agentStatus: "Remembering earlier products" } });
   const recalled = await recallForTurn(fresh, prompt).catch(() => "");
-  prompt = withContext(prompt, recalled);
+  // Coming back after a long gap, or without a session: the record of the conversation leads the turn.
+  const resume = await resumeInput(fresh, prompt).catch(() => null);
+  const briefNow = resume ? resumeBrief({ ...resume, sessionLost: !fresh.claudeSessionId }) : "";
+  const briefLost = resume ? resumeBrief({ ...resume, sessionLost: true }) : "";
+  const base = prompt;
+  prompt = withContext(briefNow ? `${briefNow}\n\n---\n\n${base}` : base, recalled);
+  const freshPrompt = withContext(briefLost ? `${briefLost}\n\n---\n\n${base}` : base, recalled);
   await prisma.useCase.update({ where: { id: useCaseId }, data: { agentStatus: "Thinking" } });
 
   if (process.env.BACC_FAKE_AGENT === "1" && !claudeConfigured()) {
     await fakeAgentTurn(fresh, prompt, tally);
   } else {
+    const connectorNote = await mcpSummary(useCaseId).catch(() => "");
     const { texts } = await runSdkTurn({
       useCaseId,
       slug: fresh.slug,
       prompt,
       resume: fresh.claudeSessionId,
-      appendSystem: await conciergeInstructions(),
+      freshPrompt,
+      appendSystem: `${await museInstructions()}${connectorNote ? `\n\n${connectorNote}` : ""}`,
       tally,
       onSession: async (id) => {
         if (id !== fresh.claudeSessionId) {
@@ -285,21 +307,38 @@ async function runTurn(useCaseId: string, prompt: string) {
         await prisma.useCase.update({ where: { id: useCaseId }, data: { agentStatus: s } });
       },
     });
-    // Safety net: if the agent wrote to the person without using `say`, show its last words.
+    // Safety net: if Socra wrote to the owner without using `say`, show its last words.
     if (!tally.spoke && texts.length) {
-      await prisma.message.create({ data: { useCaseId, role: "concierge", content: texts[texts.length - 1] } });
+      await prisma.message.create({ data: { useCaseId, role: "muse", agent: "Socra · Product physician", content: texts[texts.length - 1] } });
     }
   }
-  await settleAnnouncedQuestion(useCaseId, turnStart, prompt).catch((e) => console.error("question check", e));
-  await syncBoard(useCaseId).catch((e) => console.error("board sync", e));
 }
 
-// The first turn after intake: the concierge greets the person and starts BMAD.
-export const START_PROMPT = `The client just finished intake for this use case. Their own words, their documents and their choices are in bacc/intake.md; their uploads, with text versions, are in bacc/uploads/.
+// Socra's first turn for a product: it opens the studio.
+export const START_PROMPT = `[opening] The owner just described a new product. Their own words, documents and choices are in studio/intake.md; their uploads, with text versions, are in studio/uploads/.
 
-You lead this work; BMAD is installed in this project as a tool for structured documents, reviews and the ticket tree. The client's intake is only part of the floor. Start now:
-1. Read bacc/intake.md and the uploads.
-2. Load the bacc-floor skill and write bacc/floor.md from what you already know: the category and industry, the leading products, the full scaffold of everything this kind of product has, the gap questions and the ideas. Don't research yet; speed matters here. Register it; that starts the first build of the app from the floor, so the client sees a working product within minutes.
-3. Greet the client in one short message: say what kind of product you understood this to be, that a first full version is being built from what leading products in that category have, and that they can keep, change or remove anything on the Product map. Then ask the most important gap question, one question only.
-4. While the build runs, send your research team out in parallel with the Agent tool, in one message: \`category-researcher\`, \`industry-expert\` and \`innovation-scout\`. When they report, raise the floor from bacc/research/ (new items as [assumed], better gap questions, ideas grounded in the client's context), register it again, and tell the client in one or two sentences what the research added. The next build picks it up.
-5. After that, use the \`bmad\` skill to decide which BMAD agent starts, and hand it the floor as the client's input: the full product, where BMAD draws out how this client differs.`;
+Open the studio now, as your skill's "The opening" section says: name the category, write the product in one breath, the capability floor (four to eight capabilities, at least 30 items, everything the leading products of this kind have), the first PRFAQ, the evidence and validation you already have, and five to eight recommendations; start the first build; send your whole team out in parallel; then greet the owner in one short message with the single most important question and your suggested answer. Speed matters: the owner should see their product's shape within a minute and a working first version within minutes.`;
+
+/** What the "where we left off" brief needs, read from the Studio's record of this product. */
+async function resumeInput(uc: { id: string; name: string; customer: string; businessArea: string; description: string }, prompt: string) {
+  const [messages, open, approved, held, last] = await Promise.all([
+    prisma.message.findMany({ where: { useCaseId: uc.id, role: { in: ["user", "muse", "agent"] } }, orderBy: { createdAt: "asc" }, select: { role: true, agent: true, author: true, content: true, createdAt: true } }),
+    prisma.decision.findMany({ where: { useCaseId: uc.id, status: "open" }, orderBy: { createdAt: "asc" }, select: { text: true, createdAt: true } }),
+    prisma.decision.findMany({ where: { useCaseId: uc.id, status: "approved" }, orderBy: { createdAt: "asc" }, select: { text: true } }),
+    prisma.backlogItem.findMany({ where: { useCaseId: uc.id, kind: "capture", state: "held" }, orderBy: { createdAt: "asc" }, select: { title: true } }),
+    prisma.useCase.findUnique({ where: { id: uc.id }, select: { generateCount: true, lastGeneratedAt: true } }),
+  ]);
+  const remembered = (await searchMemory(`${uc.name}. ${prompt}`.slice(0, 1500), { onlyUseCase: uc.id, limit: 6 }).catch(() => [])).map((h) => h.memory);
+  return {
+    now: new Date(),
+    name: uc.name,
+    customer: uc.customer,
+    businessArea: uc.businessArea,
+    messages,
+    openDecisions: open,
+    approved,
+    held,
+    lastBuild: last?.generateCount ? { version: last.generateCount, at: last.lastGeneratedAt } : null,
+    remembered,
+  };
+}

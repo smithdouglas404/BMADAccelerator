@@ -30,7 +30,9 @@ try {
       await page.waitForTimeout(600);
       const slug = p.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "home";
       const file = path.join(outDir, `${slug}-${s.name}.png`);
-      await page.screenshot({ path: file, fullPage: true });
+      // Long pages are cut at three screens: enough to judge the page, and quick to look at.
+      const height = await page.evaluate(() => document.documentElement.scrollHeight);
+      await page.screenshot({ path: file, fullPage: true, clip: { x: 0, y: 0, width: s.width, height: Math.min(height, s.height * 3) } });
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
       console.log(`${file}${overflow ? "  (WARNING: content wider than the screen)" : ""}${errors.length ? `  (page errors: ${errors.slice(0, 3).join(" | ")})` : ""}`);
       await page.close();

@@ -46,3 +46,4 @@ next-env.d.ts
 !.env.example
 
 /vendor
+/agent-service/node_modules

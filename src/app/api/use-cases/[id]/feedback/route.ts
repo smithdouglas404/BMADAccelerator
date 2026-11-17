@@ -1,61 +1,79 @@
 import { NextResponse } from "next/server";
+import { recordChange } from "@/lib/studio/truthlog";
 import { promises as fs } from "fs";
 import path from "path";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
+import { SESSION_EDGES, addTrace } from "@/lib/studio/trace";
 import { workspacePath } from "@/lib/workspace";
 import { enqueue, agentsEnabled } from "@/lib/agent/runner";
 import { rememberFeedback } from "@/lib/memory";
+import { clip } from "@/lib/studio/core";
+import { sortMark } from "@/lib/jev";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 const Body = z.object({
   comment: z.string().trim().min(1).max(20000),
-  image: z.string().startsWith("data:image/png;base64,").max(30_000_000),
+  image: z.string().startsWith("data:image/").max(30_000_000).optional(),
   pageUrl: z.string().max(2000).default("/"),
+  target: z.string().max(400).default(""),
+  shape: z.enum(["object", "circle", "full-screen"]).default("object"),
+  region: z.object({ x: z.number(), y: z.number(), w: z.number(), h: z.number() }).optional(),
+  voice: z.boolean().default(false),
 });
 
-// Saves a marked-up screen (drawing + what the person said) as a backlog card and
-// hands it to Sofia, so it goes into BMAD's ticket tree and the next Generate.
+// Vibe review: the owner pointed at (object), circled (region) or captured (full screen) part of the
+// live product and said what should change. The note becomes a backlog signal with its frame and region
+// kept, ready for the next build, and Socra confirms its meaning.
 export async function POST(req: Request, { params }: Ctx) {
   const { id } = await params;
   const parsed = Body.safeParse(await req.json());
-  if (!parsed.success) return NextResponse.json({ error: "Add a comment and a drawing." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "Say what should feel different." }, { status: 400 });
   const uc = await prisma.useCase.findUnique({ where: { id } });
   if (!uc) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
+  const d = parsed.data;
   const n = (await prisma.feedback.count({ where: { useCaseId: id } })) + 1;
-  const dir = workspacePath(uc.slug, "bacc", "feedback");
+  const dir = workspacePath(uc.slug, "studio", "annotations");
   await fs.mkdir(dir, { recursive: true });
-  const imagePath = path.join(dir, `feedback-${n}.png`);
-  await fs.writeFile(imagePath, Buffer.from(parsed.data.image.split(",")[1], "base64"));
+  let imagePath = "";
+  if (d.image) {
+    imagePath = path.join(dir, `annotation-${n}.png`);
+    await fs.writeFile(imagePath, Buffer.from(d.image.split(",")[1], "base64"));
+  }
   await fs.writeFile(
-    path.join(dir, `feedback-${n}.md`),
-    `# Screen feedback ${n}\n\nPage: ${parsed.data.pageUrl}\n\nWhat the client said:\n\n> ${parsed.data.comment.replace(/\n/g, "\n> ")}\n\nMarked-up screenshot: feedback-${n}.png\n`,
+    path.join(dir, `annotation-${n}.json`),
+    JSON.stringify({ target: d.target, note: d.comment, shape: d.shape, region: d.region ?? null, page: d.pageUrl, voice: d.voice, frameFile: imagePath ? `annotation-${n}.png` : null, at: new Date().toISOString() }, null, 2) + "\n",
   );
-  const ref = `F${n}`;
-  const fb = await prisma.feedback.create({
-    data: { useCaseId: id, comment: parsed.data.comment, imagePath, pageUrl: parsed.data.pageUrl, ticketRef: ref },
-  });
-  rememberFeedback(uc, ref, `On page ${parsed.data.pageUrl} the client said: "${parsed.data.comment}"`);
-  await prisma.ticket.create({
+  const fb = await prisma.feedback.create({ data: { useCaseId: id, comment: d.comment, imagePath, pageUrl: d.pageUrl, target: d.target, shape: d.shape } });
+  for (const edge of SESSION_EDGES.annotation(d.shape, d.target || "selected product surface", d.comment)) await addTrace(id, ...edge);
+  // Jev (TypeSafe) sorts the mark at once: new requirement, change or bug. Socra still reads it in full,
+  // and its own reading is logged beside Jev's (Settings > Jev).
+  const sorted = await sortMark(id, fb.id, d.target, d.comment);
+  const focus = uc.focus ? await prisma.capability.findFirst({ where: { useCaseId: id, key: uc.focus } }) : null;
+  const item = await prisma.backlogItem.create({
     data: {
       useCaseId: id,
-      ref,
-      kind: "feedback",
-      title: parsed.data.comment.slice(0, 140),
-      status: "backlog",
-      position: 1000 + n,
-      verify: `Marked-up screenshot: /api/feedback/${fb.id}/image`,
+      title: clip(d.comment, 140),
+      note: `Visual annotation on ${d.target || "the product"} (${d.shape})${sorted ? ` · sorted as ${sorted.label} (Jev, ${Math.round(sorted.p * 100)}%)` : ""}`,
+      kind: "capture",
+      group: focus?.label ?? "Unsorted signal",
+      source: d.voice ? "Screen annotation / voice" : "Screen annotation",
+      state: "ready",
+      includeInBuild: true,
+      annotationId: fb.id,
     },
   });
-  if (agentsEnabled()) {
+  // The mark-up shows in the conversation with its picture, as the person's own words.
+  await prisma.message.create({ data: { useCaseId: id, role: "user", agent: "You", content: `Marked up ${d.target ? d.target.replace(/^Circled /, "") : "the product"} (${d.shape === "circle" ? "circled" : d.shape === "full-screen" ? "whole screen" : "pointed at"}): ${d.comment}`, ref: `ann:${fb.id}`, raw: d.voice ? d.comment : "" } });
+  rememberFeedback(uc, `A${n}`, `On ${d.target || d.pageUrl} the owner said: "${d.comment}"`);
+  await recordChange(id, { node: `ann:${fb.id}`, kind: "added", summary: `${d.shape === "circle" ? "Circled" : d.shape === "full-screen" ? "Captured the whole screen of" : "Pointed at"} ${d.target ? d.target.replace(/^Circled /, "") : "the product"}: “${d.comment}”`, after: d.comment, by: "Owner" });
+  if (agentsEnabled())
     await enqueue(
       id,
-      "feedback",
-      `The client marked up a screen of the generated app (page ${parsed.data.pageUrl}) and said: "${parsed.data.comment}". The marked-up screenshot is bacc/feedback/feedback-${n}.png (open it with Read: the drawing shows the spot) with notes in bacc/feedback/feedback-${n}.md. Hand it to Sofia (\`bmad-agent-po\`) to turn into a backlog ticket (story or bug) in the ticket tree, referencing the screenshot, and confirm the meaning with the client first if it is unclear. If it changes something an earlier ticket asked for, keep that ticket as it was and make a new ticket that names the earlier one and says what changes, and have John update the PRD requirement if one is affected. Then call \`link_feedback\` with feedback_ref "F${n}", the new ticket's ref and, if it changes one, the earlier ticket's ref. Tell the client in one line which ticket it became; it waits in the backlog until they move it to Ready and press Generate.`,
+      "annotation",
+      `Vibe review: the owner ${d.shape === "circle" ? "circled a region of" : d.shape === "full-screen" ? "captured the whole screen of" : "pointed at"} ${d.target || "the live product"} (page ${d.pageUrl}) and said: "${d.comment}".${imagePath ? ` The picture is studio/annotations/annotation-${n}.png (open it with Read).` : ""} It is in the backlog (item ${item.id}), ticked for the next build. ${sorted ? `Jev sorted it as: ${sorted.label}. ` : ""}Interpret it with mcp__studio__interpret_annotation (annotation ${fb.id}), giving your own kind (new_requirement, change_request or bug_report, or none when it asks for nothing): what they observed, the behaviour they want in plain words, acceptance criteria, the component change, and the PRD and TRD sections it changes, with a question if the meaning is unclear. Then update those sections (set_spec_section with an annotation trace step), and suggest a build when enough has changed.`,
+      `ann:${fb.id}`,
     );
-    await prisma.feedback.update({ where: { id: fb.id }, data: { status: "sent" } });
-  }
-  return NextResponse.json(fb, { status: 201 });
+  return NextResponse.json({ feedback: fb, item }, { status: 201 });
 }

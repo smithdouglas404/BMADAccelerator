@@ -19,8 +19,15 @@ const eslintConfig = [
       "build/**",
       "next-env.d.ts",
       "vendor/**",
+      "agent-service/**",
       "workspaces/**",
+      "studio-skills/**/assets/**",
     ],
+  },
+  {
+    // The Studio keeps the design team's markup as is, including plain links and images.
+    files: ["src/studio/**"],
+    rules: { "@next/next/no-html-link-for-pages": "off", "@next/next/no-img-element": "off" },
   },
 ];
 

@@ -1,41 +1,40 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { enqueue, agentsEnabled } from "@/lib/agent/runner";
-import { AGENTS } from "@/lib/bmad";
-import { answerQuestion } from "@/lib/questions";
-import { rememberAnswer } from "@/lib/memory";
+import { ownerSays, undoApproval } from "@/lib/studio/actions";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-const Body = z.object({ content: z.string().trim().min(1).max(20000) });
+const Author = z.object({ name: z.string().max(80).optional(), role: z.string().max(60).optional() }).optional();
+const Body = z.object({
+  content: z.string().trim().min(1).max(20000),
+  source: z.string().max(80).optional(),
+  author: Author,
+  // "" or a specialist's key: who the message is addressed to.
+  to: z.string().max(40).optional(),
+  // The words as spoken, when the message was cleaned up from voice.
+  raw: z.string().max(40000).optional(),
+});
 
-// Stores a user message and hands it to the concierge, who runs BMAD.
+// Someone on the product talks to Socra (or one of its specialists). A plain yes or a numbered pick
+// is an approval; anything else is held in the backlog.
 export async function POST(req: Request, { params }: Ctx) {
   const { id } = await params;
   const parsed = Body.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: "Message is empty." }, { status: 400 });
-  const msg = await prisma.message.create({ data: { useCaseId: id, role: "user", content: parsed.data.content } });
-  const uc = await prisma.useCase.findUniqueOrThrow({ where: { id } });
-  const answered = await answerQuestion(id, parsed.data.content);
-  if (answered) rememberAnswer(uc, answered.agent, answered.question, parsed.data.content);
-  const about = answered
-    ? ` (answering ${AGENTS[answered.agent as keyof typeof AGENTS]?.name ?? answered.agent}'s question "${answered.question}")`
-    : uc.pendingQuestion
-      ? ` (answering "${uc.pendingQuestion}")`
-      : "";
-  if (agentsEnabled()) {
-    await enqueue(id, "user", `The client says${about}:\n\n${parsed.data.content}`);
-  } else {
-    await prisma.message.create({
-      data: {
-        useCaseId: id,
-        role: "concierge",
-        content:
-          "Got it, I've saved that. The live BMAD agents switch on once the Anthropic API key is added to the server.",
-      },
-    });
-  }
-  await prisma.useCase.update({ where: { id }, data: { updatedAt: new Date() } });
-  return NextResponse.json(msg, { status: 201 });
+  if (!(await prisma.useCase.findUnique({ where: { id }, select: { id: true } }))) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const { content, ...opts } = parsed.data;
+  return NextResponse.json(await ownerSays(id, content, opts), { status: 201 });
+}
+
+const Undo = z.object({ undo: z.string().min(1), author: Author });
+
+// Undo an approval made by a yes or a pick.
+export async function PATCH(req: Request, { params }: Ctx) {
+  const { id } = await params;
+  const parsed = Undo.safeParse(await req.json());
+  if (!parsed.success) return NextResponse.json({ error: "Invalid" }, { status: 400 });
+  const d = await undoApproval(id, parsed.data.undo, parsed.data.author);
+  if (!d) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  return NextResponse.json({ ok: true });
 }

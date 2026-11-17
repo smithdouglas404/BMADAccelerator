@@ -7,10 +7,10 @@ import { authEnv, authOrder, claudeConfigured } from "@/lib/agent/auth";
 import { enqueue, agentsEnabled } from "@/lib/agent/runner";
 import { writeIntake } from "@/lib/provision";
 
-// The bar (Doug, 2026-11-15): "If I just said I want a candy shop, would you not have provided
-// a site that had everything...?" A control build is plain Claude Code given only the client's
-// own idea and documents, with no BMAD, no floor and no rules. The advisor then scores both apps
-// side by side; whatever the control has that ours lacks goes onto the floor.
+// The bar: given only a few lines about any kind of application, plain Claude Code ships a complete,
+// professional product. A control build is plain Claude Code given only the client's
+// own idea and documents, with no Studio, no floor and no rules. Socra then scores both apps
+// side by side; whatever the control has that ours lacks goes onto the capability floor.
 
 export type CompareStatus = { state: "idle" | "building" | "judging" | "done" | "failed"; startedAt?: string; finishedAt?: string; error?: string; version?: number };
 
@@ -19,8 +19,8 @@ const running = new Set<string>();
 
 // Outside the use case's workspace, so none of its skills, CLAUDE.md or documents reach the control.
 export const controlDir = (slug: string) => path.join(WORKSPACES_DIR, ".control", slug.replace(/[^a-z0-9-]/gi, ""));
-const statusFile = (slug: string) => workspacePath(slug, "bacc", "control", "status.json");
-export const COMPARISON_FILE = "bacc/advisor/comparison.md";
+const statusFile = (slug: string) => workspacePath(slug, "studio", "control", "status.json");
+export const COMPARISON_FILE = "studio/comparison.md";
 
 export async function compareStatus(slug: string): Promise<CompareStatus> {
   try {
@@ -54,17 +54,17 @@ export async function runControlBuild(useCaseId: string) {
     const dir = controlDir(uc.slug);
     await fs.rm(dir, { recursive: true, force: true });
     await fs.mkdir(path.join(dir, "brief"), { recursive: true });
-    // The client's own words and documents: the intake and the uploads' text versions. Nothing BMAD or the advisor wrote.
-    const intake = await fs.readFile(workspacePath(uc.slug, "bacc", "intake.md"), "utf8").catch(() => "");
+    // The owner's own words and documents: the intake and the uploads' text versions. Nothing the Studio wrote.
+    const intake = await fs.readFile(workspacePath(uc.slug, "studio", "intake.md"), "utf8").catch(() => "");
     const docs: string[] = [];
-    const uploads = await prisma.document.findMany({ where: { useCaseId, NOT: { origin: "bmad" } }, select: { fileName: true, textPath: true } });
+    const uploads = await prisma.document.findMany({ where: { useCaseId, NOT: { origin: "studio" } }, select: { fileName: true, textPath: true } });
     for (const d of uploads) {
       if (!d.textPath) continue;
       const name = `${d.fileName.replace(/[^\w.-]+/g, "-").replace(/\.[a-z0-9]+$/i, "")}.md`;
       const ok = await fs.copyFile(d.textPath, path.join(dir, "brief", name)).then(() => true, () => false);
       if (ok) docs.push(name);
     }
-    const idea = `I want to build this. Here is what I told my consultants about it:\n\n${intake || `${uc.name}: ${uc.problem}`}`;
+    const idea = `I want to build this. Here is what I told my consultants about it:\n\n${intake || `${uc.name}: ${uc.description}`}`;
 
     if (process.env.BACC_FAKE_AGENT === "1" && !claudeConfigured()) {
       await fs.mkdir(path.join(dir, "shots"), { recursive: true });
@@ -90,10 +90,11 @@ export async function runControlBuild(useCaseId: string) {
         if (m.type === "result" && m.subtype !== "success") throw new Error(`Control build stopped: ${m.subtype}`);
       }
     }
-    // Copy the screenshots next to ours, where the advisor reads them.
-    const shotsTo = workspacePath(uc.slug, "bacc", "control", "shots");
+    // Copy the screenshots next to ours, where Socra reads them.
+    const shotsTo = workspacePath(uc.slug, "studio", "control", "shots");
     await fs.rm(shotsTo, { recursive: true, force: true });
-    await fs.cp(path.join(dir, "shots"), shotsTo, { recursive: true }).catch(() => {});
+    // The control may save them in shots/ or app/shots/ (it ran the command from inside app/): take both.
+    for (const from of [path.join(dir, "shots"), path.join(dir, "app", "shots")]) await fs.cp(from, shotsTo, { recursive: true }).catch(() => {});
     await setStatus(uc.slug, { state: "judging", startedAt, version: uc.generateCount });
     if (agentsEnabled()) await enqueue(useCaseId, "compare", judgePrompt(uc.generateCount, controlDir(uc.slug)));
   } catch (e) {
@@ -105,16 +106,16 @@ export async function runControlBuild(useCaseId: string) {
 }
 
 export function judgePrompt(version: number, control: string) {
-  return `A control build has finished: plain Claude Code, given only the client's intake and uploads, with no BMAD, no floor and no rules, built its own version of this product in \`${control}/app\` with screenshots in \`bacc/control/shots/\`. Ours is version ${version}, with screenshots in \`bacc/design/shots/\` (take fresh ones of the running preview if those are older than the build).
+  return `A control build has finished: plain Claude Code, given only the owner's own words and uploads, with no Studio, no floor and no rules, built its own version of this product in \`${control}/app\` with screenshots in \`studio/control/shots/\`. Ours is version ${version}, with screenshots in \`studio/shots/\`.
 
-As the client's expert advisor, judge the two honestly, side by side (bacc-expert-advisor skill, section 4):
+As the owner's expert, judge the two honestly, side by side:
 1. Open every screenshot of both with Read, and read both apps' source where it helps.
-2. Write \`${COMPARISON_FILE}\` with: a table scoring both from 0 to 5 on completeness against the category's three leading products (from bacc/floor.md), visual quality, imagery, trust and professionalism, the main journey working end to end (for a shop: find, choose, basket, checkout), phone layout, the client's own requirements and decisions, and originality; a total for each; "What the control has that ours lacks" (each a line); "What ours has that the control lacks"; and a one-line verdict. Mark it "Ours meets the bar" only if ours scores at least as high in every row.
-3. Add every feature from "What the control has that ours lacks" to \`bacc/floor.md\` as an [assumed] item under the right area (or [out] with the client's words if they said no to it before), and register the floor again. That's the floor rising: the next build picks them up.
-4. Write "## Done" with today's date at the end of the comparison file, then tell the client in two or three plain sentences: the totals, the biggest gap, and that the gaps are now on the Product map.`;
+2. Write \`${COMPARISON_FILE}\` with: a table scoring both from 0 to 5 on completeness against the category's three leading products, visual quality, imagery, trust and professionalism, the main journey working end to end, phone layout, the owner's own decisions, and originality; a total for each; "What the control has that ours lacks" (each a line); "What ours has that the control lacks"; and a one-line verdict. Mark it "Ours meets the bar" only if ours scores at least as high in every row.
+3. Add every feature from "What the control has that ours lacks" to the right capability's floor with mcp__studio__set_capability as an [assumed] item (or [out] with the owner's words if they said no to it before). That's the floor rising: the next build picks them up.
+4. Write "## Done" with today's date at the end of the comparison file, then tell the owner in two or three plain sentences: the totals, the biggest gap, and that the gaps are now on the capability floor.`;
 }
 
-// Called when the advisor finishes judging (it writes "## Done" in the comparison).
+// Called when Socra finishes judging (it writes "## Done" in the comparison).
 export async function settleCompare(slug: string) {
   const s = await compareStatus(slug);
   if (s.state !== "judging") return s;

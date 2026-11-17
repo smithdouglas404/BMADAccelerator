@@ -4,6 +4,7 @@ import path from "path";
 import type { UseCase } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { workspacePath } from "@/lib/workspace";
+import { agentServiceConfigured, appAgentEnv } from "@/lib/agentService";
 
 // Each use case's generated app runs on its own port, so it has its own URL.
 // Generated apps get a minimal environment, never the accelerator's secrets. The one exception is a
@@ -13,6 +14,8 @@ export function previewEnv(port: number): NodeJS.ProcessEnv {
   const env = { PORT: String(port), HOST: "0.0.0.0", HOSTNAME: "0.0.0.0" } as Record<string, string | undefined>;
   for (const k of Object.keys(process.env)) if (k.startsWith("npm_config_")) env[k] = process.env[k];
   for (const k of keep) if (process.env[k]) env[k] = process.env[k];
+  // With the shared agent service, an app's agents run there: the app gets its token (startPreview), no model key.
+  if (agentServiceConfigured()) return env as NodeJS.ProcessEnv;
   const llm = (process.env.BACC_APP_LLM || "openai").toLowerCase();
   if (llm === "openai" && process.env.OPENAI_API_KEY) env.OPENAI_API_KEY = process.env.OPENAI_API_KEY;
   if (llm === "anthropic" && process.env.ANTHROPIC_API_KEY) env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
@@ -140,9 +143,11 @@ export async function startPreview(useCaseId: string) {
     await stopPreview(useCaseId);
     const port = await assignPort(uc);
     await freePort(port);
-    const log = createWriteStream(workspacePath(uc.slug, "bacc", "preview.log"), { flags: "a" });
+    await fs.mkdir(workspacePath(uc.slug, "studio"), { recursive: true });
+    const log = createWriteStream(workspacePath(uc.slug, "studio", "preview.log"), { flags: "a" });
+    log.on("error", () => {});
     log.write(`\n--- starting preview on ${port} at ${new Date().toISOString()}\n`);
-    const env = previewEnv(port);
+    const env = { ...previewEnv(port), ...(await appAgentEnv(useCaseId).catch(() => ({}))) };
     let child: ChildProcess;
     if (await exists(path.join(dir, "package.json"))) {
       const pkg = JSON.parse(await fs.readFile(path.join(dir, "package.json"), "utf8"));
@@ -181,4 +186,11 @@ export async function syncPreviewState(uc: UseCase) {
   const running = await isUp(uc.previewPort);
   if (!running && !uc.generateBusy && !procs.has(uc.id) && !starting.has(uc.id)) void startPreview(uc.id);
   return { hasApp, port: uc.previewPort, running, starting: starting.has(uc.id) };
+}
+
+/** After the Studio restarts: start the preview of every product that has a built app. */
+export async function resumePreviews() {
+  if (process.env.BACC_NO_RESUME_PREVIEWS === "1") return;
+  const built = await prisma.useCase.findMany({ where: { generateCount: { gt: 0 }, generateBusy: false }, select: { id: true }, orderBy: { updatedAt: "desc" }, take: 29 });
+  for (const uc of built) await startPreview(uc.id).catch((e) => console.error("resume preview", uc.id, e));
 }

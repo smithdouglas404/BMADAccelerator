@@ -1,6 +1,6 @@
 /**
  * The accelerator's side of the Letta role agents (self-hosted Letta). Network calls only; the rules
- * are in lettaCore.ts. Adapted from Capability-Economics-Guide scripts/src/bmad-letta.ts: the same
+ * are in lettaCore.ts. Adapted from the Capability-Economics-Guide Letta pattern: the same
  * idempotent setup (find agents by name, never overwrite their memory, keep the built-in memory tools
  * in tool_ids), the same /messages/stream call, and the same 429 back-off. Every call degrades: when
  * Letta is missing or down, the accelerator carries on without it.
@@ -122,7 +122,7 @@ export async function setupLetta(): Promise<{ ok: boolean; note: string }> {
     }
     const a = await letta<Agent>("POST", "/v1/agents/", {
       name: role.agentName,
-      description: `${role.name}, the BMAD ${role.title}: memory across the accelerator's use cases`,
+      description: `${role.name}, ${role.title} in the Working Backwards Studio: memory across products`,
       model,
       embedding,
       memory_blocks: [

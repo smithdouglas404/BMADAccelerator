@@ -1,0 +1,99 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { prisma } from "@/lib/db";
+import { askSocra } from "@/lib/studio/actions";
+import { recordChange } from "@/lib/studio/truthlog";
+import { LINK_KINDS, LINK_LABEL, connectPrompt, liveLinks, maySuggest, storyNodes, suggestPrompt, unlinked, wouldCycle } from "@/lib/studio/storymap";
+import { guessLinks } from "@/lib/jev";
+
+type Ctx = { params: Promise<{ id: string }> };
+
+// The Story map: stories (board cards) and Socra's open recommendations, with the links between them.
+export async function GET(_req: Request, { params }: Ctx) {
+  const { id } = await params;
+  const uc = await prisma.useCase.findUnique({
+    where: { id },
+    include: { moves: { orderBy: { position: "asc" } }, backlog: { orderBy: { createdAt: "asc" } }, storyLinks: { orderBy: { createdAt: "asc" } } },
+  });
+  if (!uc) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const nodes = storyNodes(uc.moves, uc.backlog);
+  const links = liveLinks(uc.storyLinks, nodes);
+  return NextResponse.json({ nodes, links, unlinked: unlinked(nodes, links), dismissed: uc.storyLinks.filter((l) => l.status === "dismissed").length });
+}
+
+const Author = z.object({ name: z.string().max(80).optional(), role: z.string().max(60).optional() }).optional();
+const Body = z.discriminatedUnion("action", [
+  // A person connects two stories. With ask, Socra asks two or three questions to firm up the link.
+  z.object({ action: z.literal("connect"), from: z.string().min(3), to: z.string().min(3), kind: z.enum(LINK_KINDS), ask: z.boolean().default(true), author: Author }),
+  z.object({ action: z.enum(["accept", "dismiss", "remove"]), link: z.string().min(3), author: Author }),
+  // A person asks Socra to look for links now.
+  z.object({ action: z.literal("suggest"), author: Author }),
+]);
+
+export async function POST(req: Request, { params }: Ctx) {
+  const { id } = await params;
+  const parsed = Body.safeParse(await req.json().catch(() => ({})));
+  if (!parsed.success) return NextResponse.json({ error: "Invalid" }, { status: 400 });
+  const b = parsed.data;
+  if (!(await prisma.useCase.findUnique({ where: { id }, select: { id: true } }))) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const by = b.author?.name?.trim() || b.author?.role?.trim() || "The owner";
+
+  const titleOf = async (ref: string) => {
+    if (ref.startsWith("move:")) return (await prisma.move.findFirst({ where: { id: ref.slice(5), useCaseId: id } }))?.title ?? null;
+    if (ref.startsWith("backlog:")) return (await prisma.backlogItem.findFirst({ where: { id: ref.slice(8), useCaseId: id } }))?.title ?? null;
+    return null;
+  };
+
+  if (b.action === "connect") {
+    if (b.from === b.to) return NextResponse.json({ error: "Pick two different stories." }, { status: 400 });
+    const [a, c] = [await titleOf(b.from), await titleOf(b.to)];
+    if (!a || !c) return NextResponse.json({ error: "One of those stories isn't in this product." }, { status: 404 });
+    const existing = await prisma.storyLink.findMany({ where: { useCaseId: id } });
+    if (wouldCycle(existing, b.from, b.to, b.kind)) return NextResponse.json({ error: `That would make a circle: “${c}” already waits on “${a}”, so “${a}” can't also wait on “${c}”.` }, { status: 409 });
+    const l = await prisma.storyLink.upsert({
+      where: { useCaseId_from_to_kind: { useCaseId: id, from: b.from, to: b.to, kind: b.kind } },
+      create: { useCaseId: id, from: b.from, to: b.to, kind: b.kind, status: "confirmed", by },
+      update: { status: "confirmed", by },
+    });
+    await recordChange(id, { node: b.from, kind: "changed", summary: `${by} linked “${a}” ${LINK_LABEL[b.kind]} “${c}”`, after: `${LINK_LABEL[b.kind]} ${c}`, causes: [b.to], by });
+    if (b.ask) await askSocra(id, { label: "Story map", line: `${by} linked “${a}” ${LINK_LABEL[b.kind]} “${c}”. Socra is asking what firms it up.`, prompt: `${by} linked two stories on the Story map. ${connectPrompt(a, c, b.kind)}`, cause: b.from });
+    return NextResponse.json({ ok: true, link: l.id }, { status: 201 });
+  }
+
+  if (b.action === "suggest") {
+    // Jev (TypeSafe) judges every unlinked pair at once; code keeps the map's rules (no circles, at most
+    // three suggestions per story, never one a person dismissed). Socra is asked only when Jev can't answer.
+    const uc = await prisma.useCase.findUnique({ where: { id }, include: { moves: { orderBy: { position: "asc" } }, backlog: { orderBy: { createdAt: "asc" } }, storyLinks: true } });
+    const nodes = uc ? storyNodes(uc.moves, uc.backlog) : [];
+    const guesses = uc ? await guessLinks(id, uc.name, nodes.map((n) => ({ id: n.id, title: n.title, capability: n.capability })), uc.storyLinks) : null;
+    if (uc && guesses) {
+      const all = [...uc.storyLinks];
+      const title = new Map(nodes.map((n) => [n.id, n.title]));
+      let added = 0;
+      for (const g of guesses) {
+        if (wouldCycle(all, g.from, g.to, g.kind) || !maySuggest(all, g.from, g.to, g.kind).ok) continue;
+        const l = await prisma.storyLink.create({ data: { useCaseId: id, from: g.from, to: g.to, kind: g.kind, status: "suggested", why: g.why, by: "Jev" } });
+        all.push(l);
+        added++;
+        await recordChange(id, { node: g.from, kind: "changed", summary: `Jev suggested a link: “${title.get(g.from)}” ${LINK_LABEL[g.kind]} “${title.get(g.to)}”`, after: `${LINK_LABEL[g.kind]} “${title.get(g.to)}” (suggested)`, causes: [g.to], by: "Jev" });
+      }
+      return NextResponse.json({ ok: true, by: "jev", added }, { status: 201 });
+    }
+    await askSocra(id, { label: "Story map", line: `${by} asked Socra to look for links between the stories. Its guesses will appear on the map, dashed.`, prompt: `${by} asked you to look for links on the Story map. ${suggestPrompt()}` });
+    return NextResponse.json({ ok: true }, { status: 202 });
+  }
+
+  const l = await prisma.storyLink.findFirst({ where: { id: b.link, useCaseId: id } });
+  if (!l) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const [a, c] = [(await titleOf(l.from)) ?? l.from, (await titleOf(l.to)) ?? l.to];
+  const label = LINK_LABEL[l.kind as keyof typeof LINK_LABEL] ?? l.kind;
+  if (b.action === "accept") {
+    await prisma.storyLink.update({ where: { id: l.id }, data: { status: "confirmed" } });
+    await recordChange(id, { node: l.from, kind: "approved", summary: `${by} accepted ${l.by || "Socra"}'s link: “${a}” ${label} “${c}”`, before: "suggested", after: "confirmed", causes: [l.to], by });
+  } else {
+    // Dismissed and removed links are kept as dismissed, so Socra never offers them again.
+    await prisma.storyLink.update({ where: { id: l.id }, data: { status: "dismissed" } });
+    await recordChange(id, { node: l.from, kind: "rejected", summary: `${by} ${b.action === "dismiss" ? "dismissed the suggested" : "removed the"} link “${a}” ${label} “${c}”`, before: l.status, after: "dismissed", causes: [l.to], by });
+  }
+  return NextResponse.json({ ok: true });
+}

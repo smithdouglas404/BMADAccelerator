@@ -1,0 +1,129 @@
+/*
+ * Socra · Working Backwards Studio — the shadcn/ui + Animate UI theme.
+ *
+ * Tailwind's theme and utilities only. Its global reset (preflight) is left out on purpose so the
+ * screens still on the older styles.css keep working while we move them one at a time. New
+ * screens put data-ui on their outermost element to get the small reset below.
+ *
+ * Brand: dark ground, lime accent (#d7f58b), DM Sans. Type scale has a 13px floor:
+ *   xs 13 (meta) · sm 15 (UI) · base 16 (body) · lg 18 (card) · xl 22 (section) · 2xl 28 (page) · 3xl 36 (home)
+ */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "tw-animate-css";
+
+@source "../components";
+@source "../studio";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --radius: 0.75rem;
+  --background: #0f1210;
+  --foreground: #f1f2ec;
+  --card: #181d19;
+  --card-foreground: #f1f2ec;
+  --popover: #1b211c;
+  --popover-foreground: #f1f2ec;
+  --primary: #d7f58b;
+  --primary-foreground: #17200f;
+  --secondary: #1f2620;
+  --secondary-foreground: #f1f2ec;
+  /* styles.css already uses --muted for grey text, so the shadcn surface colour has its own name. */
+  --ui-muted: #1f2620;
+  --muted-foreground: #a3a99e;
+  --accent: #232b24;
+  --accent-foreground: #f1f2ec;
+  --destructive: #ff8a7a;
+  --border: rgba(255, 255, 255, 0.09);
+  --input: rgba(255, 255, 255, 0.14);
+  --ring: #d7f58b;
+  --info: #a9d8ff;
+  --warning: #f5c88a;
+  --suggest: #d5b8ff;
+  --sidebar: #121613;
+  --sidebar-foreground: #f1f2ec;
+  --sidebar-primary: #d7f58b;
+  --sidebar-primary-foreground: #17200f;
+  --sidebar-accent: #1f2620;
+  --sidebar-accent-foreground: #f1f2ec;
+  --sidebar-border: rgba(255, 255, 255, 0.085);
+  --sidebar-ring: #d7f58b;
+}
+
+@theme inline {
+  --font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Fraunces', Georgia, serif;
+  --font-mono: 'DM Mono', ui-monospace, Menlo, monospace;
+
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.4;
+  --text-sm: 0.9375rem;
+  --text-sm--line-height: 1.5;
+  --text-base: 1rem;
+  --text-base--line-height: 1.6;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.4;
+  --text-xl: 1.375rem;
+  --text-xl--line-height: 1.3;
+  --text-2xl: 1.75rem;
+  --text-2xl--line-height: 1.2;
+  --text-3xl: 2.25rem;
+  --text-3xl--line-height: 1.1;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--ui-muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-info: var(--info);
+  --color-warning: var(--warning);
+  --color-suggest: var(--suggest);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+/* The small reset new screens opt into with data-ui (Tailwind's preflight, scoped). shadcn parts carry
+   data-slot, so menus and sheets that open in a portal get it too. */
+@layer base {
+  :where([data-ui], [data-slot]), :where([data-ui], [data-slot]) *, :where([data-ui], [data-slot]) ::before, :where([data-ui], [data-slot]) ::after {
+    border: 0 solid var(--border);
+  }
+  :where([data-ui], [data-slot]) { font-family: var(--font-sans); line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  [data-ui] { color: var(--foreground); }
+  :where([data-ui], [data-slot]) :where(h1, h2, h3, h4, h5, h6, p, ul, ol, figure, blockquote, dl, dd) { margin: 0; }
+  :where([data-ui], [data-slot]) :where(h1, h2, h3, h4, h5, h6) { font-size: inherit; font-weight: inherit; text-wrap: balance; }
+  :where([data-ui], [data-slot]) :where(ul, ol) { list-style: none; padding: 0; }
+  :where([data-ui], [data-slot]) :where(a) { color: inherit; text-decoration: inherit; }
+  :where([data-ui], [data-slot]) :where(button, input, select, textarea) { font: inherit; color: inherit; background: transparent; }
+  :where([data-ui], [data-slot]) :where(button:not(:disabled), [role="button"]) { cursor: pointer; }
+  :where([data-slot="button"]:not(:disabled)) { cursor: pointer; }
+  :where([data-ui], [data-slot]) :where(table) { border-collapse: collapse; }
+  :where([data-ui], [data-slot]) :where(img, svg) { display: block; vertical-align: middle; }
+  :where([data-slot]) :where(svg) { flex-shrink: 0; }
+}

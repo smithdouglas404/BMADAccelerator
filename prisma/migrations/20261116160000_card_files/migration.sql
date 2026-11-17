@@ -1,0 +1,1 @@
+ALTER TABLE "Document" ADD COLUMN "moveId" TEXT NOT NULL DEFAULT '';

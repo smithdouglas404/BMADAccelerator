@@ -1,0 +1,14 @@
+[
+  {
+    "section": "Primary customer flow",
+    "label": "Annotation",
+    "detail": "object on selected product surface: Make the voice capture feel immediate and private, not like a form.",
+    "type": "annotation"
+  },
+  {
+    "section": "Data and state transitions",
+    "label": "Package",
+    "detail": "Visual annotation attached to the generated artifact",
+    "type": "annotation"
+  }
+]

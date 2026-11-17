@@ -1,21 +1,22 @@
+import { workingName } from "@/lib/studio/core";
 import { promises as fs } from "fs";
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { prisma } from "@/lib/db";
-import { inspirationMarkdown } from "@/lib/inspire";
 import { pickPartners } from "@/lib/shadcnPartners";
 import { workspacePath, WORKSPACES_DIR } from "@/lib/workspace";
-import { AGENTS, BMAD_DOC_TYPES, DOC_STAGES, type Routing } from "@/lib/bmad";
+import { eccSkillsFor } from "@/lib/skillLibrary";
+import { ECC_SKILLS } from "@/lib/skills";
 
 const run = promisify(execFile);
 
-// Pinned BMAD v7 and ECC copies live in vendor/ (scripts/fetch-vendor.sh).
+// Pinned copies of the design skills, the ECC skills library and the AgentKit docs live in vendor/
+// (scripts/fetch-vendor.sh).
 export const VENDOR_DIR = process.env.BACC_VENDOR_DIR || path.join(process.cwd(), "vendor");
-export const BMAD_MODULES = ["core-tools", "method", "toolsmith"] as const;
-export const CONCIERGE_DIR = path.join(process.cwd(), "bmad-module");
+// The Studio's own skills: Socra, the Studio rulebook (working-backwards-studio) and AgentKit.
+export const STUDIO_SKILLS_DIR = path.join(process.cwd(), "studio-skills");
 export const CUSTOM_SKILLS_DIR = path.join(WORKSPACES_DIR, "_custom-skills");
-const UV = process.env.UV_BIN || "uv";
 
 async function exists(p: string) {
   try {
@@ -30,42 +31,18 @@ async function copyDir(src: string, dest: string) {
   await fs.cp(src, dest, { recursive: true, force: true });
 }
 
-export async function bmadPinnedVersion() {
-  try {
-    return (await fs.readFile(path.join(VENDOR_DIR, "bmad", ".pinned"), "utf8")).trim().slice(0, 7);
-  } catch {
-    return "";
-  }
-}
 
-// Skill folders a use case gets: BMAD (unmodified), the concierge, chosen ECC skills,
-// and enabled team uploads.
+// Skill folders a product gets, all from the one skill library: the Studio's own skills, the design
+// skills, the ECC skills switched on for it, and every uploaded skill that is switched on.
 async function skillSources(useCaseId: string) {
   const sources: { name: string; dir: string }[] = [];
-  for (const mod of BMAD_MODULES) {
-    const modDir = path.join(VENDOR_DIR, "bmad", "skills", mod);
-    if (!(await exists(modDir))) continue;
-    for (const name of await fs.readdir(modDir)) sources.push({ name, dir: path.join(modDir, name) });
-  }
-  // Extension modules: Test Architect (production readiness) and Creative Intelligence Suite.
-  for (const mod of ["tea", "cis"]) {
-    const modDir = path.join(VENDOR_DIR, mod, "skills");
-    if (!(await exists(modDir))) continue;
-    for (const name of await fs.readdir(modDir)) sources.push({ name, dir: path.join(modDir, name) });
-  }
-  for (const name of await fs.readdir(CONCIERGE_DIR)) sources.push({ name, dir: path.join(CONCIERGE_DIR, name) });
-  // Design skills Generate always uses: Anthropic's frontend-design and ECC's design direction.
-  for (const [name, dir] of [
-    ["frontend-design", path.join(VENDOR_DIR, "anthropic", "skills", "frontend-design")],
-    ["frontend-design-direction", path.join(VENDOR_DIR, "ecc", "skills", "frontend-design-direction")],
-  ] as const) {
-    if (await exists(dir)) sources.push({ name, dir });
-  }
-  const chosen = await prisma.useCaseSkill.findMany({ where: { useCaseId } });
-  for (const s of chosen) {
-    const dir = path.join(VENDOR_DIR, "ecc", "skills", s.skillId);
-    if (await exists(dir)) sources.push({ name: s.skillId, dir });
-  }
+  for (const name of await fs.readdir(STUDIO_SKILLS_DIR)) sources.push({ name, dir: path.join(STUDIO_SKILLS_DIR, name) });
+  // Anthropic's frontend-design, which Generate always uses.
+  const fd = path.join(VENDOR_DIR, "anthropic", "skills", "frontend-design");
+  if (await exists(fd)) sources.push({ name: "frontend-design", dir: fd });
+  // From the ECC library: the design direction every build reads, the skills switched on for every
+  // product, and this product's own picks (Settings > Skills).
+  sources.push(...(await eccSkillsFor(useCaseId)));
   const custom = await prisma.customSkill.findMany({ where: { enabled: true, valid: true } });
   for (const c of custom) sources.push({ name: c.name, dir: c.path });
   return sources;
@@ -90,20 +67,30 @@ export async function installSkills(useCaseId: string, slug: string) {
   }
 }
 
-// The accelerator's own skills (concierge, expert advisor), refreshed in every workspace before each
-// turn so a rule added later reaches use cases created before it.
-export async function syncAcceleratorSkills(slug: string) {
+// The Studio's skills and the switched-on uploads, refreshed in every workspace before each turn so a
+// rule added later (or a skill switched on in Settings) reaches products created before it.
+export async function syncStudioSkills(useCaseId: string, slug: string) {
   const ws = workspacePath(slug);
   const targets = await skillTargets();
-  for (const name of await fs.readdir(CONCIERGE_DIR)) {
-    for (const t of targets) await copyDir(path.join(CONCIERGE_DIR, name), path.join(ws, t, name));
+  for (const s of await skillSources(useCaseId)) {
+    for (const t of targets) await copyDir(s.dir, path.join(ws, t, s.name));
   }
-  // The AgentKit library (its docs and the examples the reference names) goes with the bacc-agentic-advisor skill.
+  // Skills switched off or removed in Settings leave the workspace too.
+  const off = await prisma.customSkill.findMany({ where: { OR: [{ enabled: false }, { valid: false }] } });
+  for (const c of off) for (const t of targets) await fs.rm(path.join(ws, t, c.name), { recursive: true, force: true });
+  // So do ECC library skills switched off for this product.
+  const keep = new Set((await eccSkillsFor(useCaseId)).map((s) => s.name));
+  const custom = new Set((await prisma.customSkill.findMany({ select: { name: true } })).map((c) => c.name));
+  for (const id of ECC_SKILLS.map((s) => s.id)) {
+    if (keep.has(id) || custom.has(id)) continue;
+    for (const t of targets) await fs.rm(path.join(ws, t, id), { recursive: true, force: true });
+  }
+  // The AgentKit library (its docs and the examples the reference names) goes with the studio-agentkit skill.
   const ak = path.join(VENDOR_DIR, "agentkit");
   if (!(await exists(ak))) return;
   const pinned = (await fs.readFile(path.join(ak, ".pinned"), "utf8").catch(() => "")).trim();
   for (const t of targets) {
-    const dest = path.join(ws, t, "bacc-agentic-advisor", "library");
+    const dest = path.join(ws, t, "studio-agentkit", "library");
     const mark = path.join(dest, ".library");
     if ((await fs.readFile(mark, "utf8").catch(() => "")).trim() === pinned) continue;
     await copyDocs(path.join(ak, "docs"), path.join(dest, "docs"));
@@ -158,7 +145,7 @@ const SHADCN_LOOKUP = {
   iconLibrary: "lucide",
 };
 
-// Partner registries the advisor and Sally search beside @shadcn (Doug, Nov 15: bring what the
+// Partner registries the UX / Component Mapper searches beside @shadcn (Doug, Nov 15: bring what the
 // marketplaces offer). Their addresses come from shadcn's own registry index, never typed by hand.
 // BACC_SHADCN_REGISTRIES: a comma-separated list of namespaces, "all" for every listed registry, or "off".
 let partnerIndex: Promise<Record<string, string>> | null = null;
@@ -175,7 +162,7 @@ async function partnerRegistries(): Promise<Record<string, string>> {
 }
 
 export async function shadcnLookupDir(slug: string) {
-  const dir = workspacePath(slug, "bacc", "shadcn");
+  const dir = workspacePath(slug, "studio", "shadcn");
   const file = path.join(dir, "components.json");
   const current = JSON.parse((await fs.readFile(file, "utf8").catch(() => "")) || "null");
   let registries = await partnerRegistries();
@@ -189,76 +176,9 @@ export async function shadcnLookupDir(slug: string) {
   return dir;
 }
 
-async function uvRun(cwd: string, args: string[]) {
-  const { stdout } = await run(UV, ["run", "--no-cache", ...args], {
-    cwd,
-    timeout: 120_000,
-    maxBuffer: 20 * 1024 * 1024,
-    env: { ...process.env, UV_NO_PROGRESS: "1" },
-  });
-  return stdout;
-}
-
-// Runs BMAD's own setup script (what `bmad setup` runs), then makes the use case the
-// active initiative, exactly as the `bmad` skill's initiative action does.
-export async function bmadSetup(slug: string, name: string) {
-  const ws = workspacePath(slug);
-  const skill = path.join(ws, ".claude/skills/bmad");
-  const base = [path.join(skill, "scripts/setup.py"), "--project-root", ws, "--skill", skill, "--root", path.join(ws, ".claude/skills")];
-  // Modules such as TEA ask config questions. Answer each with BMAD's own recommended default.
-  const answersFile = path.join(ws, ".bacc-module-answers.toml");
-  const extra: string[] = [];
-  try {
-    const listed = await uvRun(ws, [...base, "--list-config-questions"]);
-    const line = listed.trim().split("\n").reverse().find((l) => l.trim().startsWith("[")) || "[]";
-    const questions = JSON.parse(line) as { module: string; key: string; default?: string }[];
-    if (questions.length) {
-      const byModule = new Map<string, string[]>();
-      for (const q of questions) {
-        const rows = byModule.get(q.module) ?? [];
-        rows.push(`${JSON.stringify(q.key)} = ${JSON.stringify(String(q.default ?? ""))}`);
-        byModule.set(q.module, rows);
-      }
-      const toml = [...byModule].map(([m, rows]) => `[modules.${JSON.stringify(m)}]\n${rows.join("\n")}\n`).join("\n");
-      await fs.writeFile(answersFile, toml);
-      extra.push("--module-answers", answersFile);
-    }
-  } catch (e) {
-    console.error("bmad config questions", e);
-  }
-  let out: string;
-  try {
-    out = await uvRun(ws, [...base, ...extra]);
-  } finally {
-    await fs.rm(answersFile, { force: true });
-  }
-  const result = JSON.parse(out.trim().split("\n").pop() || "{}");
-  const initiative = `initiative-${slug}`;
-  const initDir = path.join(ws, "_bmad-output", initiative);
-  await fs.mkdir(initDir, { recursive: true });
-  const initFile = path.join(initDir, `${initiative}.md`);
-  if (!(await exists(initFile))) {
-    await fs.writeFile(initFile, `---\ntype: initiative\ntitle: ${JSON.stringify(name)}\nparent: none\n---\n`);
-  }
-  const userCfg = path.join(ws, "_bmad/custom/config.user.toml");
-  let cfg = "";
-  try {
-    cfg = await fs.readFile(userCfg, "utf8");
-  } catch {
-    /* first time */
-  }
-  if (!/^active_initiative\s*=/m.test(cfg)) {
-    cfg = /^\[core\]/m.test(cfg)
-      ? cfg.replace(/^\[core\]\s*$/m, `[core]\nactive_initiative = "${initiative}"`)
-      : `${cfg}${cfg && !cfg.endsWith("\n") ? "\n" : ""}[core]\nactive_initiative = "${initiative}"\n`;
-    await fs.writeFile(userCfg, cfg);
-  }
-  return { initiative, version: String(result?.bmad?.version || "") };
-}
-
 const TEXT_EXT = new Set([".md", ".txt", ".csv", ".json", ".toml", ".yaml", ".yml", ".html"]);
 
-// A text version of an upload so BMAD's agents can read it (PowerPoint, Excel, Word, PDF).
+// A text version of an upload so the Studio's agents can read it (PowerPoint, Excel, Word, PDF).
 export async function convertToText(file: string) {
   const ext = path.extname(file).toLowerCase();
   const target = `${file}.md`;
@@ -278,86 +198,52 @@ export async function convertToText(file: string) {
   }
 }
 
-// intake.md: everything the person told us at the start, for BMAD to read as input.
+// studio/intake.md: the owner's own first words and what they brought, for Socra to read as input.
 export async function writeIntake(useCaseId: string) {
   const uc = await prisma.useCase.findUniqueOrThrow({
     where: { id: useCaseId },
     include: { documents: true, skills: true },
   });
   const ws = workspacePath(uc.slug);
-  const statusText: Record<string, string> = { approved: "approved", in_review: "in review, not approved yet" };
   const docs = uc.documents
     .filter((d) => d.status !== "declined")
     .map((d) => {
-      const stage = DOC_STAGES.find((s) => s.key === d.stage)?.label ?? "General (any stage)";
-      const type = BMAD_DOC_TYPES.find((t) => t.key === d.bmadType)?.label ?? d.bmadType;
       const text = d.textPath ? path.relative(ws, d.textPath) : "(no text version)";
-      return `- **${d.fileName}** (${type}; ${stage}; ${statusText[d.status] ?? d.status}${(d.routing as Routing)?.length ? `; for ${(d.routing as Routing).map((r) => AGENTS[r.agent as keyof typeof AGENTS]?.name).join(", ")}` : ""}): ${d.description || d.summary}\n  - File: \`${path.relative(ws, d.storagePath)}\`, text: \`${text}\`${d.tags.length ? `\n  - Tags: ${d.tags.join(", ")}` : ""}`;
+      return `- **${d.fileName}** (${d.kind}): ${d.description || d.summary || "not read yet"}\n  - File: \`${path.relative(ws, d.storagePath)}\`, text: \`${text}\`${d.tags.length ? `\n  - Tags: ${d.tags.join(", ")}` : ""}`;
     })
     .join("\n");
+  const working = uc.name === workingName(uc.description);
   const md = `# ${uc.name}
+${working ? "\n(This is only a working name taken from their first words: give the product a real name with set_product.)\n" : ""}
+What the owner told the Studio about their product, in their own words. Treat it as input: it is part of the floor, never the ceiling.
 
-What the client told the BMAD Accelerator at intake, in their own words. Treat it as input, like any document they bring.
+## In their words
 
-## Description
-
-${uc.description || "(none yet)"}
-
-## What done looks like
-
-${uc.intentDone || "(not said yet)"}
-
-## Must keep
-
-${uc.intentKeep || "(not said yet)"}
-
-## Out of scope
-
-${uc.intentOutScope || "(not said yet)"}
-
-## Who it is for
-
-${uc.customer || "(not said yet)"}
-
-## The problem
-
-${uc.problem || "(not said yet)"}
-
-## Sizing
-
-- Size: ${uc.size}
-- Needs approvals: ${uc.needsApprovals ? "yes" : "no"}
-- Client and vendor: ${uc.clientVendor ? "yes" : "no"}
-- Regulated: ${uc.regulated ? "yes" : "no"}
-- Idea stage: ${uc.ideaStage}${uc.repoUrl ? `\n- Existing repository: ${uc.repoUrl}` : ""}
-- UX: ${uc.uxMode}, architecture: ${uc.archMode}
-
+${uc.description || "(nothing yet)"}
+${uc.repoUrl ? `\n## Repository\n\n${uc.repoUrl}\n` : ""}
 ## Documents they brought
 
 ${docs || "(none)"}
 
-## Extra skills they chose
+## Extra skills switched on for this product
 
 ${uc.skills.map((s) => `- ${s.skillId}`).join("\n") || "(none)"}
-${inspirationMarkdown(uc.inspiration) ? `\n${inspirationMarkdown(uc.inspiration)}` : ""}`;
-  await fs.mkdir(path.join(ws, "bacc"), { recursive: true });
-  await fs.writeFile(path.join(ws, "bacc/intake.md"), md);
+`;
+  await fs.mkdir(path.join(ws, "studio", "uploads"), { recursive: true });
+  await fs.writeFile(path.join(ws, "studio", "intake.md"), md);
 }
 
-// Sets up a use case's BMAD workspace: git repo, skills, `bmad setup`, initiative, intake.
+// Sets up a product's workspace: git repo, skills, intake.
 export async function provisionWorkspace(useCaseId: string) {
   const uc = await prisma.useCase.findUniqueOrThrow({ where: { id: useCaseId } });
   const ws = workspacePath(uc.slug);
-  await fs.mkdir(path.join(ws, "bacc/uploads"), { recursive: true });
+  await fs.mkdir(path.join(ws, "studio", "uploads"), { recursive: true });
   if (!(await exists(path.join(ws, ".git")))) {
     await run("git", ["init", "-q"], { cwd: ws });
     await fs.writeFile(path.join(ws, ".gitignore"), "node_modules/\n.env*\napp/node_modules/\n");
   }
   await installSkills(useCaseId, uc.slug);
-  const { initiative, version } = await bmadSetup(uc.slug, uc.name);
+  await syncStudioSkills(useCaseId, uc.slug);
   await writeIntake(useCaseId);
-  await prisma.useCase.update({
-    where: { id: useCaseId },
-    data: { provisioned: true, initiative, bmadVersion: version || (await bmadPinnedVersion()) },
-  });
+  await prisma.useCase.update({ where: { id: useCaseId }, data: { provisioned: true } });
 }
