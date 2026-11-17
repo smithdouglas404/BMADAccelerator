@@ -146,11 +146,7 @@ export function toSpec(d: Live): (SpecSection & { ref: string; basis: string; re
 /** The live product's address on this machine (the preview runs on its own port). */
 export function previewUrl(port: number | null | undefined, path = '/') {
   if (!port || typeof window === 'undefined') return ''
-  const h = window.location.hostname
-  // On this computer (or its network) the app has its own port. Through the public address only 443 is open,
-  // so the door serves each app under /apps/<port>/ behind the same sign-in.
-  const local = h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || /^(10|192\.168|172\.(1[6-9]|2\d|3[01]))\./.test(h) || h.endsWith('.local')
-  return local ? `${window.location.protocol}//${h}:${port}${path}` : `/apps/${port}${path.startsWith('/') ? path : `/${path}`}`
+  return `${window.location.protocol}//${window.location.hostname}:${port}${path}`
 }
 
 const DAY_PARTS = ['night', 'morning', 'afternoon', 'evening']
