@@ -136,8 +136,8 @@ Email needs a sending account first. Add the SMTP address under Settings > Model
 
 The Studio's screens hold your keys, so on the public address they sit behind a Clerk sign-in. Locally (localhost:3000) nothing changes and there is no sign-in.
 
-1. Clerk: create an application with email sign-in. Put its publishable key in `.env` as `CLERK_PUBLISHABLE_KEY`, and paste its secret key into Settings > AI models and keys (Clerk secret key). The secret is never shown again.
-2. In `.env` set `STUDIO_ALLOWED_EMAILS` to the email(s) allowed in (comma separated). With no list, or no keys, the public screens refuse everyone.
+1. Clerk: create an application with email sign-in and put its publishable key in `.env` as `CLERK_PUBLISHABLE_KEY` (it is public; no secret key is needed, the Studio checks sign-ins against Clerk's public keys).
+2. In `.env` set `STUDIO_ALLOWED_USERS` (Clerk user ids) and/or `STUDIO_ALLOWED_EMAILS` (needs an `email` claim in the session token). With neither, or no key, the public screens refuse everyone.
 3. Set `CONNECTOR_GATE_CONF=nginx-ui.conf` in `.env` and run `docker compose --profile public up -d connector-gate`.
 4. Open the public address: it goes to `/sign-in`, then in.
 
