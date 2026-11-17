@@ -93,7 +93,7 @@ export function BoardView({ live, me, buildNow, changeView, setToast, children }
   return (
     <div data-ui className="mx-auto grid w-full max-w-[96rem] grid-cols-1 gap-6 px-4 py-8 md:px-8">
       <PageHeader
-        title="Board"
+        title="Board" eyebrow="The build stays connected to the why" headline={<>Make the next move<br /><em>traceable.</em></>}
         description={<>Cards move themselves as {ASSISTANT_NAME}, the builds and your answers settle them. You can also drag a card, use its arrows, or open it to edit it and attach files. Every change is logged and {ASSISTANT_NAME} hears it.</>}
         actions={<>
           <Button variant="outline" onClick={() => setAdding(true)}><Plus className="size-4" /> Add a card</Button>

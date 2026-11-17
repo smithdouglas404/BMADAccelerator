@@ -8,12 +8,23 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 
-export function PageHeader({ title, description, actions }: { title: string; description?: ReactNode; actions?: ReactNode }) {
+/**
+ * The top of a page. With a headline it is the Studio's expressive voice (Doug, Nov 17: "the site needed to be
+ * expressive"): a mono eyebrow, a large headline, and the words in <em> set in lime Fraunces. The page's plain
+ * name stays in the eyebrow so people always know where they are.
+ */
+export function PageHeader({ title, eyebrow, headline, description, actions }: { title: string; eyebrow?: string; headline?: ReactNode; description?: ReactNode; actions?: ReactNode }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-4">
-      <div className="grid max-w-3xl gap-1.5">
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-        {description && <p className="text-base text-muted-foreground">{description}</p>}
+      <div className={cn('grid max-w-3xl', headline ? 'gap-3' : 'gap-1.5')}>
+        {headline ? (
+          <>
+            <p className="flex items-center gap-2 font-mono text-xs tracking-[0.12em] text-muted-foreground uppercase"><span className="size-1.5 rounded-full bg-primary" aria-hidden />{eyebrow ?? title}</p>
+            <h1 className="text-4xl leading-[1.02] font-medium tracking-[-0.045em] text-balance md:text-5xl [&_em]:font-serif [&_em]:font-medium [&_em]:tracking-[-0.05em] [&_em]:text-primary [&_em]:not-italic">{headline}</h1>
+            <h2 className="mt-1 text-lg font-semibold tracking-tight">{title}</h2>
+          </>
+        ) : <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>}
+        {description && <p className={cn('text-muted-foreground', headline ? 'max-w-2xl text-base leading-relaxed' : 'text-base')}>{description}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
@@ -21,12 +32,17 @@ export function PageHeader({ title, description, actions }: { title: string; des
 }
 
 /** One titled block of a page. Sections stack top to bottom; each says what it is for in one line. */
-export function Section({ title, description, action, children, className, id }: { title: ReactNode; description?: ReactNode; action?: ReactNode; children?: ReactNode; className?: string; id?: string }) {
+export function Section({ title, statement, description, action, children, className, id }: { title: ReactNode; statement?: ReactNode; description?: ReactNode; action?: ReactNode; children?: ReactNode; className?: string; id?: string }) {
   return (
     <section id={id} className={cn('overflow-hidden rounded-xl border border-border bg-card', className)}>
       <header className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="grid min-w-0 gap-1">
-          <h2 className="text-lg font-semibold">{title}</h2>
+          {statement ? (
+            <>
+              <h2 className="text-2xl leading-tight font-medium tracking-[-0.035em] text-balance [&_em]:font-serif [&_em]:text-primary [&_em]:not-italic">{statement}</h2>
+              <h3 className="text-sm font-semibold text-muted-foreground">{title}</h3>
+            </>
+          ) : <h2 className="text-lg font-semibold">{title}</h2>}
           {description && <p className="text-sm text-muted-foreground">{description}</p>}
         </div>
         {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}

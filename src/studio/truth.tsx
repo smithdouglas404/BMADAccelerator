@@ -69,7 +69,7 @@ export function TruthGraphView({ live, changeView, setToast, focusNode = '' }: P
   const stage = !latest ? 'select' : latest.status === 'built' ? 'regenerate' : latest.interpretation?.behaviour && (latest.interpretation.prd?.length || latest.interpretation.trd?.length) ? 'shape' : latest.interpretation?.behaviour ? 'interpret' : 'describe'
   const [loopStep, setLoopStep] = useState(stage)
   useEffect(() => setLoopStep(stage), [stage])
-  if (!truth) return <div data-ui className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-6 px-4 py-8 md:px-8"><PageHeader title="Product Truth Graph" description="Reading what really happened…" /></div>
+  if (!truth) return <div data-ui className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-6 px-4 py-8 md:px-8"><PageHeader title="Product Truth Graph" eyebrow="Product Truth Graph" headline={<>Reading what<br /><em>really happened…</em></>} description="Reading what really happened…" /></div>
 
   const ordered = [...nodes].sort((a, b) => (LANE[a.source] ?? 2) - (LANE[b.source] ?? 2) || +new Date(b.at || 0) - +new Date(a.at || 0))
   const filteredNodes = ordered.filter((node) => filter === 'all' || node.source === filter || (filter === 'owner' && node.source === 'evidence'))
@@ -93,7 +93,7 @@ export function TruthGraphView({ live, changeView, setToast, focusNode = '' }: P
   return (
     <div data-ui className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-6 px-4 py-8 md:px-8">
       <PageHeader
-        title="Product Truth Graph"
+        title="Product Truth Graph" eyebrow="Semantic layer · one Studio record, linked out" headline={<>See why each product<br /><em>truth exists.</em></>}
         description={<>Why each part of {live.name} exists. Every item is something that really happened: what someone said, evidence, what Socra inferred, what a person decided, the spec, a mark on the prototype, a build. An inference never passes for a decision.</>}
         actions={<>
           <Button variant="outline" onClick={() => changeView('spec')}><FileText className="size-4" /> Living spec</Button>
@@ -119,7 +119,7 @@ export function TruthGraphView({ live, changeView, setToast, focusNode = '' }: P
 
           {tab === 'graph' ? (
             <Section
-              title="Everything that happened"
+              statement={<>Meaning is a <em>connected system.</em></>} title="Everything that happened"
               description="Pick one to see what it is, where it came from and what it connects to."
             >
               <div className="flex flex-wrap gap-1.5 border-b border-border px-5 py-2.5" role="group" aria-label="Show">{FILTERS.map(([k, l]) => <Button key={k} type="button" size="sm" variant={filter === k ? 'secondary' : 'ghost'} aria-pressed={filter === k} onClick={() => { setFilter(k); setShown(PAGE) }}>{l}</Button>)}</div>
@@ -149,7 +149,7 @@ export function TruthGraphView({ live, changeView, setToast, focusNode = '' }: P
             </Section>
           ) : (
             <Section
-              title={whyFor ? `Why did this change: ${titleOf(whyFor)}` : 'Every change, with its reasons'}
+              statement={<>Every change, <em>with its reasons.</em></>} title={whyFor ? `Why did this change: ${titleOf(whyFor)}` : 'Every change, with its reasons'}
               description="Each change says what caused it and what it affects. Click any item to see it in the graph."
               action={whyFor ? <Button type="button" variant="outline" size="sm" onClick={() => setWhyFor('')}>Show every change</Button> : undefined}
             >
@@ -224,7 +224,7 @@ export function TruthGraphView({ live, changeView, setToast, focusNode = '' }: P
               </div>
             </Section>
           )}
-          <Section title="How sure we are, and why" description="Calculated only from what is connected in the graph. It guides what to learn next; it never blocks a build.">
+          <Section statement={<>Confidence is <em>earned,</em> not declared.</>} title="How sure we are, and why" description="Calculated only from what is connected in the graph. It guides what to learn next; it never blocks a build.">
             <SectionBody className="gap-4">
               {truth.confidence.factors.map((f) => (
                 <div key={f.key} className="grid gap-1.5">
@@ -239,7 +239,7 @@ export function TruthGraphView({ live, changeView, setToast, focusNode = '' }: P
       </div>
 
       <Section
-        title="From a mark on the prototype to changed software"
+        statement={<>From vibe signal to <em>changed software.</em></>} title="From a mark on the prototype to changed software"
         description="Point at the prototype, say what should change, and follow it through: what Socra read, the acceptance criteria, the spec it changes, then the next build."
         action={<StatusBadge tone={live.feedback.length ? 'ok' : 'off'}>{live.feedback.length ? `${live.feedback.length} real mark${live.feedback.length > 1 ? 's' : ''}` : 'No marks yet'}</StatusBadge>}
       >
@@ -312,7 +312,7 @@ export function ObservationEffects({ live }: { live: Live }) {
   const seen = (truth?.nodes ?? []).filter((n) => n.id.startsWith('evidence:') && n.source === 'prototype').slice(0, 5)
   if (!truth || !seen.length) return null
   return (
-    <Section title="What the pilot taught" description="Observations from the pilot and what they changed." action={<History className="size-4 text-muted-foreground" />}>
+    <Section statement={<>The pilot <em>talks back.</em></>} title="What the pilot taught" description="Observations from the pilot and what they changed." action={<History className="size-4 text-muted-foreground" />}>
       {seen.map((n) => {
         const out = truth.edges.filter((e) => e.from === n.id).map((e) => truth.nodes.find((x) => x.id === e.to)?.title).filter(Boolean)
         return <Row key={n.id} title={n.title} detail={out.length ? `Changed: ${out.join(', ')}` : 'Socra is carrying it into the PRD and TRD…'} />

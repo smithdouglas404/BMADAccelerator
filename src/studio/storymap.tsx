@@ -90,7 +90,7 @@ export function StoryMapView({ live, me, changeView, setToast }: Props) {
     return { pos, width, height, looseTop: loose.length ? top - 26 : -1, looseCount: loose.length, looseStories: loose.filter((n) => n.state !== 'idea').length }
   }, [visible, shownLinks])
 
-  if (!data) return <div data-ui className={PAGE}><PageHeader title="Story map" description="Drawing how the stories connect…" /></div>
+  if (!data) return <div data-ui className={PAGE}><PageHeader title="Story map" eyebrow="Story map" headline={<>Drawing how the<br /><em>stories connect…</em></>} description="Drawing how the stories connect…" /></div>
 
   const unlinked = new Set(data.unlinked)
   const node = (id: string) => nodes.find((n) => n.id === id)
@@ -127,7 +127,7 @@ export function StoryMapView({ live, me, changeView, setToast }: Props) {
 
   return <div data-ui className={PAGE}>
     <PageHeader
-      title="Story map"
+      title="Story map" eyebrow="Story map · how the work fits together" headline={<>See how the stories<br /><em>connect.</em></>}
       description={<>Read left to right: a story sits after the stories it depends on. Solid lines are links a person made; dashed ones are {ASSISTANT_NAME}’s guesses to accept or dismiss. A story with a warm outline has no links yet.</>}
       actions={<>
         <Button type="button" variant={connecting ? 'secondary' : 'default'} onClick={() => { setConnecting(connecting ? null : []); setSelected('') }} className="gap-1.5"><Link2 className="size-4" /> {connecting ? 'Cancel connecting' : 'Connect two stories'}</Button>
@@ -209,7 +209,7 @@ export function StoryMapView({ live, me, changeView, setToast }: Props) {
               </div>) })}
           </Section>
         ) : (
-          <Section title="Links worth a look" description={`${ASSISTANT_NAME}’s guesses, at most three per story.`} action={<Sparkles className="size-4 text-primary" />}>
+          <Section statement={<>Links worth <em>a second look.</em></>} title="Links worth a look" description={`${ASSISTANT_NAME}’s guesses, at most three per story.`} action={<Sparkles className="size-4 text-primary" />}>
             {suggested.length === 0 && <p className="px-5 py-4 text-sm text-muted-foreground">None waiting. When something changes, {ASSISTANT_NAME} looks for connections you haven’t made and offers the strongest here.</p>}
             {suggested.slice(0, 8).map((l) => (
               <div key={l.id} className="grid gap-1.5 border-b border-border px-5 py-3 last:border-b-0">

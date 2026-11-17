@@ -63,7 +63,7 @@ export function BriefView({ live, act, buildNow, validationScore, repositoryUrl,
   return (
     <div data-ui className="mx-auto grid w-full max-w-[96rem] grid-cols-1 gap-6 px-4 py-8 md:px-8">
       <PageHeader
-        title="Prototype brief"
+        title="Prototype brief" eyebrow="Ready to hand the work to Claude Code" headline={<>Assemble the brief<br /><em>without losing the why.</em></>}
         description="Everything Claude Code gets, with the why kept attached: the validated use case, PRFAQ, evidence, decisions, component map, agent routes and the board."
         actions={<>
           <RoleLens role={role} setRole={setRole} />
@@ -99,7 +99,7 @@ export function BriefView({ live, act, buildNow, validationScore, repositoryUrl,
 
           <BuildHistory live={live} buildNow={buildNow} />
 
-          <Section title="Agent Kit routes" description="Which agent does what, and where a person pauses it. Visible, not overwhelming." action={<Bot className="size-4 text-muted-foreground" />}>
+          <Section statement={<>Where agents <em>earn their place.</em></>} title="Agent Kit routes" description="Which agent does what, and where a person pauses it. Visible, not overwhelming." action={<Bot className="size-4 text-muted-foreground" />}>
             {live.routes.length === 0 && <Empty>Socra adds agent routes here once the product needs one.</Empty>}
             {live.routes.length > 0 && (
               <ol className="grid grid-cols-1 px-5 py-4">
@@ -119,11 +119,11 @@ export function BriefView({ live, act, buildNow, validationScore, repositoryUrl,
         </div>
 
         <aside className="grid min-w-0 grid-cols-1 content-start gap-6">
-          <Section title="Decisions only a person makes" description={`${live.decisions.length} tracked; ${openDecisions} ${openDecisions === 1 ? 'is' : 'are'} still open before production hardening. Meaning stays yours.`} action={<UserRound className="size-4 text-muted-foreground" />}>
+          <Section statement={<>Some calls stay <em>human.</em></>} title="Decisions only a person makes" description={`${live.decisions.length} tracked; ${openDecisions} ${openDecisions === 1 ? 'is' : 'are'} still open before production hardening. Meaning stays yours.`} action={<UserRound className="size-4 text-muted-foreground" />}>
             <DecisionRegister live={live} act={act} />
           </Section>
 
-          <Section title="Components for the thin slice" description="The UI baseline Claude Code starts from." action={<Layers3 className="size-4 text-muted-foreground" />}>
+          <Section statement={<>A thin slice on a <em>complete floor.</em></>} title="Components for the thin slice" description="The UI baseline Claude Code starts from." action={<Layers3 className="size-4 text-muted-foreground" />}>
             <SectionBody>
               <div className="flex flex-wrap gap-1.5">{components.map((c) => <Badge key={c} variant="secondary" className="rounded-md px-2 py-0.5 text-xs font-medium">{c}</Badge>)}</div>
               <Button type="button" variant="ghost" size="sm" aria-expanded={technicalOpen} onClick={() => setTechnicalOpen(!technicalOpen)} className="justify-self-start gap-1.5 px-2">{technicalOpen ? 'Hide why these' : 'Why these'} <ArrowRight className={cn('size-4 transition-transform', technicalOpen && 'rotate-90')} /></Button>
