@@ -65,19 +65,21 @@ import { StoryMapView } from './storymap'
 import { BoardView } from './board'
 import { ProductSwitcher, StudioMarkdown, SpecReviewTools, ImpactPanel, VersionHistory, ReadinessFactors, DecisionRegister, ObservationComposer, SyncPreview, ProvidersCard, BuildHistory } from './extras'
 import { ASSISTANT_NAME, PRODUCT_LINE } from '@/lib/brand'
+import { hasDetail, needsTriage } from '@/lib/studio/journey'
 
 const viewTitles: Record<StudioView, string> = {
   review: 'Try & mark up',
   overview: 'Whole product',
-  conversation: 'Work with Socra',
+  conversation: 'Talk to Socra',
   validation: 'Validate use case',
-  product: 'Product shape',
+  product: 'Product story (PRFAQ)',
   evidence: 'Evidence & signals',
   truth: 'Product Truth Graph',
-  spec: 'Living specification',
+  spec: 'Requirements doc (PRD)',
+  trd: 'Technical design (TRD)',
   readiness: 'Pilot readiness',
-  brief: 'Prototype brief',
-  pilot: 'Board',
+  brief: 'Generate the prototype',
+  pilot: 'Backlog & board',
   storymap: 'Story map',
   connections: 'Connections',
   agents: 'Agents',
@@ -249,8 +251,27 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
     }).catch(() => setPrototypeStatus('idle'))
   }
 
-  const buildNow = (opts: { redesign?: boolean; fresh?: boolean } = {}) =>
-    void act(() => api(`/api/use-cases/${live.id}/generate`, { json: opts }), opts.fresh ? 'Starting fresh: the old design is set aside and Claude Code builds from the product truth' : 'Claude Code is building the next version from a fresh package')
+  // Generate never silently does nothing: before a build, say what is missing and where to fix it.
+  const [buildGuard, setBuildGuard] = useState<{ opts: BuildOpts; gaps: BuildGap[] } | null>(null)
+  const buildGaps = (): BuildGap[] => {
+    const gaps: BuildGap[] = []
+    const said = live.messages.filter((m) => m.role === 'user').length
+    const open = live.decisions.filter((d) => d.status === 'open').length
+    const fresh = live.backlog.filter((b) => needsTriage(b)).length
+    if (!live.agentsEnabled) gaps.push({ text: 'Claude isn’t signed in yet, so Claude Code can’t build. Sign it in on Settings.', href: '/settings', cta: 'Open Settings', blocking: true })
+    if (!said && !live.capabilities.length) gaps.push({ text: `${ASSISTANT_NAME} doesn’t know what to build yet. Tell it in a few lines what the product should do.`, view: 'conversation', cta: `Talk to ${ASSISTANT_NAME}`, blocking: true })
+    if (open) gaps.push({ text: `${open} ${open === 1 ? 'checkpoint waits' : 'checkpoints wait'} for your decision. The build would go with ${ASSISTANT_NAME}’s suggestion.`, view: 'conversation', cta: 'Decide' })
+    if (fresh) gaps.push({ text: `${fresh} new backlog ${fresh === 1 ? 'item isn’t' : 'items aren’t'} accepted yet, so the build leaves ${fresh === 1 ? 'it' : 'them'} out.`, view: 'pilot', cta: 'Open the backlog' })
+    if (live.capabilities.length && !live.moves.some((m) => hasDetail(m.prompt ?? ''))) gaps.push({ text: 'No card has acceptance criteria yet, so the build rests on what Socra inferred.', view: 'pilot', cta: 'Add detail' })
+    return gaps
+  }
+  const buildNow = (opts: BuildOpts = {}) => {
+    if (live.generateBusy) { setToast('A build is already running. The preview updates when it’s done; watch the status at the top right.'); return }
+    const gaps = buildGaps()
+    if (gaps.some((g) => g.blocking) || (!opts.force && gaps.length)) { setBuildGuard({ opts, gaps }); return }
+    setBuildGuard(null)
+    void act(() => api(`/api/use-cases/${live.id}/generate`, { json: { redesign: opts.redesign, fresh: opts.fresh } }), opts.fresh ? 'Starting fresh: the old design is set aside and Claude Code builds from the product truth' : 'Claude Code is building the next version. The status shows at the top right, and Try & mark up opens it when it’s done.')
+  }
 
   const onPick = async (p: Pick) => {
     setAnnotationPick(p)
@@ -307,6 +328,11 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
   const isListening = voice.listening
   const busy = live.agentBusy || live.pending > 0
   const props = { live, reload, act, setToast, changeView }
+  // Red counts in the menu: what is waiting on a person, and where.
+  const navFlags: Partial<Record<StudioView, number>> = {
+    conversation: live.decisions.filter((d) => d.status === 'open').length,
+    pilot: live.backlog.filter((b) => needsTriage(b)).length,
+  }
 
   return (
     <div className="app-shell">
@@ -328,8 +354,10 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
         </ProductSwitcher>
 
         <nav className="primary-nav studio-nav" aria-label="Product workspace">
-          {NAV_GROUPS.map((group) => (<div className="studio-nav-group" key={group.title}><div className="sidebar-section-label">{group.title}</div>{group.items.map((item) => (
-            <button className={`nav-item ${activeView === item.id ? 'is-active' : ''}`} key={item.id} onClick={() => changeView(item.id)} type="button">
+          {NAV_GROUPS.map((group) => (<div className="studio-nav-group" key={group.title}><div className="sidebar-section-label studio-stage-label">{group.title}<small>{group.about}</small></div>{group.items.map((item) => {
+            const flag = navFlags[item.id] ?? 0
+            return (
+            <button className={`nav-item ${activeView === item.id ? 'is-active' : ''}`} key={item.id} onClick={() => changeView(item.id)} type="button" title={item.tip} aria-label={`${item.label}: ${item.tip}`} data-tip={item.tip}>
               <span className="nav-icon">
                 {item.id === 'review' && <MousePointer2 size={17} />}
                 {item.id === 'overview' && <Layers3 size={17} />}
@@ -341,15 +369,16 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
                 {item.id === 'storymap' && <Workflow size={17} />}
                 {item.id === 'agents' && <Bot size={17} />}
                 {item.id === 'spec' && <FileText size={17} />}
+                {item.id === 'trd' && <Code2 size={17} />}
                 {item.id === 'readiness' && <Target size={17} />}
-                {item.id === 'brief' && <PackageOpen size={17} />}
+                {item.id === 'brief' && <Play size={17} />}
                 {item.id === 'pilot' && <Zap size={17} />}
                 {item.id === 'connections' && <FolderGit2 size={17} />}
               </span>
               <span className="nav-copy"><strong>{item.label}</strong><small>{item.hint}</small></span>
-              {item.id === 'conversation' && <span className="nav-live-dot" />}
+              {flag > 0 ? <span className="studio-needs-you" title={`${flag} ${flag === 1 ? 'thing needs' : 'things need'} you here`}>{flag}</span> : item.id === 'conversation' && <span className="nav-live-dot" />}
             </button>
-          ))}</div>))}
+          )})}</div>))}
         </nav>
 
         <div className="sidebar-divider" />
@@ -386,12 +415,24 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
         {activeView === 'agents' && <AgentsView live={live} me={me} setToast={setToast} />}
         {activeView === 'truth' && <TruthGraphView key={truthNode || 'all'} live={live} changeView={changeView} setToast={setToast} focusNode={truthNode} />}
         {activeView === 'storymap' && <StoryMapView live={live} me={me} changeView={changeView} setToast={setToast} />}
-        {activeView === 'spec' && <SpecView {...{ ...props, specSections, messages, evidence, backlog, execution }} />}
+        {activeView === 'spec' && <SpecView key="prd" {...{ ...props, specSections, messages, evidence, backlog, execution }} />}
+        {activeView === 'trd' && <SpecView key="trd" initialTab="trd" {...{ ...props, specSections, messages, evidence, backlog, execution }} />}
         {activeView === 'readiness' && <ReadinessView {...{ live, capabilities, readiness, overallReadiness, selected, focusCapability, changeView }} />}
         {activeView === 'brief' && <BriefView {...{ live, act, validationScore, repositoryUrl: live.repoUrl, generatedFiles: generatedFiles.length ? generatedFiles : live.packageFiles, prototypeStatus, generatePrototype, buildNow, generationVersion, setTechnicalOpen, technicalOpen, changeView, role, setRole, setToast }} />}
         {activeView === 'pilot' && <BoardView live={live} me={me} buildNow={buildNow} changeView={changeView} setToast={setToast}><ObservationComposer live={live} act={act} /><ObservationEffects live={live} /></BoardView>}
         {activeView === 'connections' && <ConnectionsView {...{ live, act, setToast, changeView }} />}
 
+        {buildGuard && <div className="studio-card-overlay studio-guard-overlay" onClick={() => setBuildGuard(null)}>
+          <div className="studio-guard" role="dialog" aria-label="Before you generate" onClick={(e) => e.stopPropagation()}>
+            <p className="eyebrow">Before you generate</p>
+            <h2>{buildGuard.gaps.some((g) => g.blocking) ? 'There isn’t enough to build yet.' : 'A few things would make this build better.'}</h2>
+            <ul>{buildGuard.gaps.map((g) => <li key={g.text} className={g.blocking ? 'is-blocking' : ''}><span>{g.text}</span>{g.href ? <a className="text-button" href={g.href}>{g.cta} <ArrowRight size={12} /></a> : <button className="text-button" type="button" onClick={() => { setBuildGuard(null); changeView(g.view!) }}>{g.cta} <ArrowRight size={12} /></button>}</li>)}</ul>
+            <div className="studio-guard-actions">
+              {!buildGuard.gaps.some((g) => g.blocking) && <button className="button button-primary" type="button" onClick={() => buildNow({ ...buildGuard.opts, force: true })}><Play size={14} /> Generate anyway</button>}
+              <button className="button button-quiet" type="button" onClick={() => setBuildGuard(null)}>Not now</button>
+            </div>
+          </div>
+        </div>}
         {toast && <div className="toast" role="status"><span className="toast-check"><Check size={14} /></span>{toast}<button type="button" onClick={() => setToast('')} aria-label="Dismiss"><X size={14} /></button></div>}
       </main>
     </div>
@@ -399,6 +440,8 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
 }
 
 type Act = (fn: () => Promise<unknown>, ok?: string) => Promise<void>
+type BuildOpts = { redesign?: boolean; fresh?: boolean; force?: boolean }
+type BuildGap = { text: string; view?: StudioView; href?: string; cta: string; blocking?: boolean }
 
 type OverviewProps = {
   live: Live
@@ -564,12 +607,13 @@ type SpecViewProps = {
   evidence: EvidenceItem[]
   backlog: BacklogItem[]
   execution: ExecutionItem[]
+  initialTab?: 'prd' | 'trd'
 }
 
-function SpecView({ live, act, changeView, setToast, specSections }: SpecViewProps) {
+function SpecView({ live, act, changeView, setToast, specSections, initialTab = 'prd' }: SpecViewProps) {
   const whyChanged = (node: string) => changeView('truth', node)
-  const [tab, setTab] = useState<'prd' | 'trd'>('prd')
-  const [selectedId, setSelectedId] = useState(specSections[0]?.id ?? '')
+  const [tab, setTab] = useState<'prd' | 'trd'>(initialTab)
+  const [selectedId, setSelectedId] = useState(specSections.find((x) => x.tab === initialTab)?.id ?? specSections[0]?.id ?? '')
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(specSections[0]?.content ?? '')
   const [reviewMode, setReviewMode] = useState(false)

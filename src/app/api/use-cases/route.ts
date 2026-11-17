@@ -6,6 +6,7 @@ import { validationScore, workingName, type Validation } from "@/lib/studio/core
 import { explainReadiness } from "@/lib/studio/spec";
 import { ensureRoutes, ensureSpec } from "@/lib/studio/state";
 import { ensureStarted } from "@/lib/studio/actions";
+import { journey, needsTriage, hasDetail, idleDays } from "@/lib/studio/journey";
 
 // Every product the team is shaping, newest first. Archived ones only with ?archived=1.
 export async function GET(req: Request) {
@@ -13,7 +14,7 @@ export async function GET(req: Request) {
   const rows = await prisma.useCase.findMany({
     where: withArchived ? {} : { archivedAt: null },
     orderBy: { updatedAt: "desc" },
-    include: { capabilities: { select: { readiness: true } }, spec: true, decisions: { select: { status: true, includeInBuild: true } }, moves: { select: { status: true } }, _count: { select: { backlog: true, decisions: true, evidence: true } } },
+    include: { capabilities: { select: { readiness: true } }, spec: true, decisions: { select: { status: true, includeInBuild: true } }, moves: { select: { status: true, prompt: true } }, backlog: { select: { triage: true, state: true, kind: true } }, _count: { select: { backlog: true, decisions: true, evidence: true, feedback: true, messages: { where: { role: "user" } } } } },
   });
   return NextResponse.json(
     rows.map((u) => ({
@@ -35,6 +36,22 @@ export async function GET(req: Request) {
         movesTotal: u.moves.length,
         movesDone: u.moves.filter((m) => m.status === "review" || m.status === "done").length,
       }).overall,
+      // How far it has come and the one step that moves it on (same rules as the use case's own screens).
+      ...(() => {
+        const j = journey({
+          userMessages: u._count.messages,
+          openDecisions: u.decisions.filter((d) => d.status === "open").length,
+          approvedDecisions: u.decisions.filter((d) => d.status === "approved").length,
+          needsYou: u.backlog.filter(needsTriage).length,
+          reviewedSections: u.spec.filter((x) => (x.basis === "inferred" || x.basis === "recommended") && x.review).length,
+          unreviewedSections: u.spec.filter((x) => (x.basis === "inferred" || x.basis === "recommended") && !x.review).length,
+          detailedCards: u.moves.filter((m) => m.status !== "queued" && hasDetail(m.prompt)).length,
+          builds: u.generateCount,
+          markups: u._count.feedback,
+          validationScore: validationScore((u.validation ?? {}) as Validation),
+        });
+        return { progress: j.percent, nextStep: j.next ? { label: j.next.label, view: j.next.view, gain: j.next.weight } : null, needsYou: u.backlog.filter(needsTriage).length + u.decisions.filter((d) => d.status === "open").length, idleDays: idleDays(u.updatedAt) };
+      })(),
       versions: u.generateCount,
       thoughts: u._count.backlog,
       decisions: u._count.decisions,

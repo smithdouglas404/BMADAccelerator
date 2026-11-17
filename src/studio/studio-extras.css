@@ -407,3 +407,53 @@ a.studio-home-brand { color: inherit; text-decoration: none; padding-bottom: 12p
 .studio-markup-thumb { display: block; max-width: 320px; margin-top: 8px; border: 1px solid var(--line-strong); border-radius: 9px; overflow: hidden; background: rgba(0,0,0,.25); }
 .studio-markup-thumb img { display: block; width: 100%; height: auto; }
 .backlog-item-copy .studio-markup-thumb { max-width: 220px; }
+
+/* Demo pass (Nov 17): the menu in four stages with plain names and hover help, red "needs you" counts,
+   the progress bar with the next step, and new backlog items on the Board. Same tokens as above. */
+.studio-stage-label { display: grid; gap: 2px; color: var(--muted) !important; }
+.studio-stage-label small { color: var(--faint); font: 400 10px 'DM Sans', sans-serif; letter-spacing: 0; text-transform: none; }
+.studio-nav .nav-item[data-tip]:hover::after { position: absolute; z-index: 60; top: 50%; left: calc(100% + 12px); width: 250px; padding: 9px 11px; color: var(--ink); border: 1px solid var(--line-strong); border-radius: 9px; background: var(--panel-strong); box-shadow: var(--shadow); font-size: 12px; line-height: 1.45; content: attr(data-tip); transform: translateY(-50%); pointer-events: none; }
+.studio-nav .nav-item[title] { cursor: pointer; }
+.studio-needs-you { display: grid; place-items: center; min-width: 19px; height: 19px; margin-left: auto; padding: 0 5px; color: #fff; border-radius: 10px; background: #e5484d; font: 600 10px 'DM Mono', monospace; box-shadow: 0 0 0 3px rgba(229,72,77,.18); }
+.studio-red-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #e5484d; box-shadow: 0 0 0 3px rgba(229,72,77,.2); }
+
+.studio-journey { flex-wrap: wrap; row-gap: 6px; }
+.studio-journey-pct { flex: 0 0 auto !important; color: var(--acid); font: 600 14px 'DM Mono', monospace; }
+.studio-journey-track { position: relative; flex: 0 0 90px !important; height: 6px; overflow: hidden; border-radius: 4px; background: rgba(255,255,255,.08); }
+.studio-journey-track > span { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--acid); }
+.studio-journey-gain { margin-left: 6px; color: var(--acid); font: normal 10px 'DM Mono', monospace; white-space: nowrap; }
+.studio-banner .studio-journey-steps-toggle { color: var(--muted) !important; background: transparent !important; border: 1px solid var(--line-strong); font-weight: 500 !important; }
+.studio-journey-steps { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px; margin: 8px 48px 0; padding: 0; list-style: none; }
+.studio-journey-steps button { display: flex; align-items: center; gap: 7px; width: 100%; padding: 8px 10px; color: var(--muted); text-align: left; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); font-size: 11px; }
+.studio-journey-steps button small { margin-left: auto; color: var(--faint); font: 10px 'DM Mono', monospace; }
+.studio-journey-steps .is-done button { color: var(--ink); }
+.studio-journey-steps .is-done svg { color: var(--acid); }
+.studio-journey-steps .is-next button { color: var(--ink); border-color: rgba(215,245,139,.4); }
+.studio-journey-dot { width: 8px; height: 8px; border: 1px solid var(--faint); border-radius: 50%; }
+@media (max-width: 760px) { .studio-journey-steps { margin: 8px 16px 0; } .studio-nav .nav-item[data-tip]:hover::after { display: none; } }
+
+/* New backlog items waiting for a person, at the top of the Backlog column */
+.studio-triage-card { border-color: rgba(229,72,77,.45) !important; box-shadow: inset 3px 0 0 #e5484d; }
+.studio-triage-tag { display: inline-flex; align-items: center; gap: 6px; color: #ff9b9e; font: 500 9px 'DM Mono', monospace; letter-spacing: .06em; text-transform: uppercase; }
+.studio-triage-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.studio-triage-head { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; color: #ff9b9e; font-size: 11px; }
+.studio-move-guide { display: grid; gap: 10px; padding: 14px; border: 1px solid rgba(215,245,139,.3); border-radius: 11px; background: rgba(215,245,139,.05); }
+.studio-move-guide strong { font-size: 13px; font-weight: 600; }
+.studio-move-guide ol { display: grid; gap: 6px; margin: 0; padding-left: 18px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.studio-move-guide.is-warn { border-color: rgba(245,200,138,.4); background: rgba(245,200,138,.06); }
+.studio-move-guide-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.studio-idle { color: var(--warm); }
+.studio-product-flags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; font-size: 11px; }
+.studio-product-flags span { display: inline-flex; align-items: center; gap: 6px; }
+.studio-product-next { margin-top: 8px; color: var(--muted); font-size: 11px; }
+.studio-product-next strong { color: var(--ink); font-weight: 500; }
+.studio-attention { display: grid; gap: 6px; margin: 0 0 22px; padding: 14px 16px; border: 1px solid rgba(229,72,77,.35); border-radius: 12px; background: rgba(229,72,77,.05); }
+.studio-attention a { justify-self: start; margin: 0 !important; display: flex; align-items: center; gap: 8px; color: var(--ink); text-decoration: none; font-size: 12px; }
+.studio-attention a:hover { color: var(--acid); }
+.studio-guard-overlay { display: flex; justify-content: center; align-items: center; padding: 20px; }
+.studio-guard { display: grid; gap: 12px; width: min(560px, 100%); padding: 22px; border: 1px solid var(--line-strong); border-radius: 14px; background: var(--panel-strong); box-shadow: var(--shadow); }
+.studio-guard h2 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -.03em; }
+.studio-guard ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.studio-guard li { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; padding: 10px 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 9px; font-size: 13px; line-height: 1.45; }
+.studio-guard li.is-blocking { color: var(--ink); border-color: rgba(229,72,77,.45); }
+.studio-guard-actions { display: flex; gap: 8px; }

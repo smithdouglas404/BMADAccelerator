@@ -181,6 +181,8 @@ model BacklogItem {
   annotationId   String   @default("")
   trackerId      String   @default("")
   trackerUrl     String   @default("")
+  // On the Board: "" = new, needs a person (red marker); working | accepted | rejected.
+  triage         String   @default("")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   useCase        UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)

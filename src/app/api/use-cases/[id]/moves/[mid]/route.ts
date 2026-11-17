@@ -66,7 +66,19 @@ export async function PATCH(req: Request, { params }: Ctx) {
     const why = b.why || "moved by hand on the Board";
     await moveCard(id, mid, b.status, by, why);
     const back = BOARD.indexOf(b.status) < BOARD.indexOf(before.status as (typeof BOARD)[number]);
-    notes.push(`${by} moved the card “${edits.title ?? before.title}” from ${BOARD_LABEL[before.status as keyof typeof BOARD_LABEL] ?? before.status} to ${BOARD_LABEL[b.status]} (${why}). ${back ? "It went back: ask in one line what isn't right yet, with your suggestion, and carry the answer into the spec." : "Carry it into the product truth if it changes anything."}`);
+    const title = edits.title ?? before.title;
+    const thin = (edits.prompt ?? before.prompt).trim().length < 80;
+    // Moving a card is an action, not just a move: each column asks Socra for the next thing it needs.
+    const ask: Record<string, string> = {
+      ready: `It is now Ready to shape: ask ${by} the two or three questions that would give it enough detail to build (who uses it, what "done" looks like, the rules and edge cases), with numbered options and your suggestion marked, and write what they answer into the card's acceptance criteria.`,
+      building: thin
+        ? `It is now Being made real but has almost no detail yet: before anyone presses Generate, ask ${by} for its acceptance criteria (numbered options, your suggestion marked).`
+        : `It is now Being made real: check its acceptance criteria are enough to build from and tell ${by} in one line when to press Generate the prototype.`,
+      review: `It is now in Human review: ask ${by} to try it in Try & mark up and say yes, or mark what is wrong.`,
+      done: `It is Done: confirm in one line that it does what the card promised, and name what it unlocks next.`,
+      queued: "",
+    };
+    notes.push(`${by} moved the card “${title}” from ${BOARD_LABEL[before.status as keyof typeof BOARD_LABEL] ?? before.status} to ${BOARD_LABEL[b.status]} (${why}). ${back ? "It went back: ask in one line what isn't right yet, with your suggestion, and carry the answer into the spec." : ask[b.status] || "Carry it into the product truth if it changes anything."}`);
   }
 
   if (notes.length) await prisma.useCase.update({ where: { id }, data: { updatedAt: new Date() } });

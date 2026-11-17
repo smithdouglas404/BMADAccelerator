@@ -7,8 +7,9 @@ import { api, ago } from './live'
 import { useVoice } from './vibe'
 import { useMe } from './flow'
 import { ASSISTANT_NAME, PRODUCT_LINE } from '@/lib/brand'
+import { IDLE_DAYS } from '@/lib/studio/journey'
 
-type ProductRow = { id: string; name: string; statement: string; category: string; stageLabel: string; customer: string; businessArea: string; lastView: string; readiness: number; versions: number; thoughts: number; decisions: number; busy: boolean; updatedAt: string }
+type ProductRow = { id: string; name: string; statement: string; category: string; stageLabel: string; customer: string; businessArea: string; lastView: string; readiness: number; versions: number; thoughts: number; decisions: number; busy: boolean; updatedAt: string; progress?: number; nextStep?: { label: string; view: string; gain: number } | null; needsYou?: number; idleDays?: number }
 
 export function StudioTop({ active }: { active?: 'home' | 'new' | 'settings' | 'capture' }) {
   return (
@@ -51,16 +52,28 @@ export function HomePage() {
         </div>
         {error && <p className="studio-muted">{error}</p>}
         {customers.length > 1 && <div className="truth-filters studio-customer-filter"><button type="button" className={!customer ? 'is-active' : ''} onClick={() => setCustomer('')}>Every customer</button>{customers.map((c) => <button type="button" key={c} className={customer === c ? 'is-active' : ''} onClick={() => setCustomer(c)}>{c}</button>)}</div>}
+        {(() => {
+          const waiting = shown.filter((r) => (r.needsYou ?? 0) > 0)
+          const idle = shown.filter((r) => (r.idleDays ?? 0) >= IDLE_DAYS)
+          if (!waiting.length && !idle.length) return null
+          return <div className="studio-attention" role="region" aria-label="Needs your attention">
+            <p className="eyebrow"><span className="studio-red-dot" /> &nbsp;Needs your attention</p>
+            {waiting.map((r) => <a key={`w${r.id}`} href={`/use-cases/${r.id}?view=pilot`}><span className="studio-needs-you">{r.needsYou}</span> {r.name}: {r.needsYou === 1 ? 'one new item or decision waits' : `${r.needsYou} new items or decisions wait`} for you <ArrowRight size={12} /></a>)}
+            {idle.map((r) => <a key={`i${r.id}`} href={`/use-cases/${r.id}${r.nextStep ? `?view=${r.nextStep.view}` : ''}`}><span className="studio-idle">●</span> {r.name} has been idle for {r.idleDays} days{r.nextStep ? `. Next: ${r.nextStep.label}` : ''} <ArrowRight size={12} /></a>)}
+          </div>
+        })()}
         <div className="studio-products">
           {rows?.length === 0 && <div className="empty-column">No use cases yet. Start one in a few lines.</div>}
           {shown.map((r) => (
-            <a key={r.id} className="studio-product" href={`/use-cases/${r.id}${r.lastView ? `?view=${r.lastView}` : ''}`}>
+            <a key={r.id} className="studio-product" href={`/use-cases/${r.id}${r.nextStep ? `?view=${r.nextStep.view}` : r.lastView ? `?view=${r.lastView}` : ''}`}>
               <span className="eyebrow">{[r.customer, r.businessArea].filter(Boolean).join(' · ') || r.category || r.stageLabel}</span>
               <h3>{r.name}</h3>
               <p>{r.statement}</p>
-              <div className="ceiling-track"><span style={{ width: `${r.readiness}%`, background: 'var(--acid)' }} /></div>
-              <div className="studio-product-meta"><span>{r.readiness}% ready</span><span>{r.versions} versions</span><span>{r.thoughts} thoughts</span><span>{r.busy ? 'working…' : `updated ${ago(r.updatedAt)}`}</span></div>
-              <span className="studio-product-resume">Pick up where you left off <ArrowRight size={12} /></span>
+              <div className="ceiling-track" title="How far this use case has come"><span style={{ width: `${r.progress ?? r.readiness}%`, background: 'var(--acid)' }} /></div>
+              {r.nextStep && <p className="studio-product-next">Next: <strong>{r.nextStep.label}</strong> · +{r.nextStep.gain}% → {(r.progress ?? 0) + r.nextStep.gain}%</p>}
+              {((r.needsYou ?? 0) > 0 || (r.idleDays ?? 0) >= IDLE_DAYS) && <div className="studio-product-flags">{(r.needsYou ?? 0) > 0 && <span><span className="studio-red-dot" /> {r.needsYou} {r.needsYou === 1 ? 'needs' : 'need'} you</span>}{(r.idleDays ?? 0) >= IDLE_DAYS && <span className="studio-idle">Idle {r.idleDays} days</span>}</div>}
+              <div className="studio-product-meta"><span>{r.progress ?? r.readiness}% along</span><span>{r.readiness}% pilot-ready</span><span>{r.versions} versions</span><span>{r.thoughts} thoughts</span><span>{r.busy ? 'working…' : `updated ${ago(r.updatedAt)}`}</span></div>
+              <span className="studio-product-resume">{r.nextStep ? 'Take the next step' : 'Pick up where you left off'} <ArrowRight size={12} /></span>
             </a>
           ))}
         </div>

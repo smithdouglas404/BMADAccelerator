@@ -6,7 +6,8 @@
 // hears it. Built on the design team's kanban classes; new pieces are styled in studio-extras.css.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Check, Download, FileText, History, Network, Paperclip, Play, Plus, Target, Upload, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Download, FileText, History, MessageCircleQuestion, Network, Paperclip, Play, Plus, Target, Upload, X } from 'lucide-react'
+import { hasDetail, needsTriage } from '@/lib/studio/journey'
 import { ASSISTANT_NAME } from '@/lib/brand'
 import { api, ago, type Live } from './live'
 import type { Me, StudioView } from './flow'
@@ -29,7 +30,7 @@ type CardDetail = {
   files: { id: string; fileName: string; mimeType: string; sizeBytes: number; summary: string; createdAt: string }[]
 }
 
-type Props = { live: Live; me: Me; buildNow: () => void; changeView: (v: StudioView) => void; setToast: (v: string) => void; children?: React.ReactNode }
+type Props = { live: Live; me: Me; buildNow: (opts?: { force?: boolean }) => void; changeView: (v: StudioView) => void; setToast: (v: string) => void; children?: React.ReactNode }
 
 const ownerMark = (o: string) => (o === 'Claude Code' ? 'C' : o === 'UX agent' ? 'U' : o === 'Product owner' ? 'PO' : o.slice(0, 1).toUpperCase() || 'A')
 /** Socra writes some lines with record ids (move:…, backlog:…); show the card's name instead. */
@@ -49,7 +50,22 @@ export function BoardView({ live, me, buildNow, changeView, setToast, children }
   const [open, setOpen] = useState('')
   const [adding, setAdding] = useState(false)
   const [newTitle, setNewTitle] = useState('')
+  // What a move asks for next (Ready asks for detail, Being made real checks Generate has something to build).
+  const [guide, setGuide] = useState<{ id: string; status: Status } | null>(null)
+  const [triaging, setTriaging] = useState('')
   useEffect(() => { setLocal({}) }, [live.updatedAt])
+  // New backlog items: what someone said to Socra, a mark-up, or Socra's own suggestion, until a person deals with it.
+  const fresh = live.backlog.filter((b) => needsTriage(b) || (b.triage === 'working' && b.state !== 'built' && b.kind !== 'distraction'))
+  const triage = async (itemId: string, to: 'working' | 'accepted' | 'rejected') => {
+    const item = live.backlog.find((b) => b.id === itemId)
+    setTriaging(itemId)
+    try {
+      await api(`/api/use-cases/${live.id}/backlog/${itemId}`, { method: 'PATCH', json: { triage: to, by } })
+      if (to === 'working') { setToast(`${ASSISTANT_NAME} is opening up “${item?.title ?? 'it'}”. Answer its questions here.`); changeView('conversation') }
+      else setToast(to === 'accepted' ? `Accepted. “${item?.title ?? 'It'}” is on the Board in Backlog, and ${ASSISTANT_NAME} will shape it. Move it to Ready to shape when you want to add detail.` : `Rejected. It stays in the history and out of the product.`)
+    } catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
+    finally { setTriaging('') }
+  }
 
   const cards = live.moves.map((m) => ({ ...m, status: (local[m.id] ?? (ORDER.includes(m.status as Status) ? m.status : 'queued')) as Status }))
 
@@ -59,6 +75,8 @@ export function BoardView({ live, me, buildNow, changeView, setToast, children }
     setLocal((l) => ({ ...l, [id]: status }))
     try {
       await api(`/api/use-cases/${live.id}/moves/${id}`, { method: 'PATCH', json: { status, by, why } })
+      const forward = ORDER.indexOf(status) > ORDER.indexOf(card.status)
+      if (forward && (status === 'ready' || status === 'building' || status === 'review')) { setGuide({ id, status }); setOpen(id) }
       setToast(status === 'done' ? `“${card.title}” is done. It stays traceable to its decision.` : `“${card.title}” moved to ${LABEL[status]}${ORDER.indexOf(status) < ORDER.indexOf(card.status) ? `. ${ASSISTANT_NAME} will ask what isn’t right yet.` : ''}`)
     } catch (e) {
       setLocal((l) => { const n = { ...l }; delete n[id]; return n })
@@ -93,6 +111,20 @@ export function BoardView({ live, me, buildNow, changeView, setToast, children }
         onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('text/plain') || dragging; setOver(''); setDragging(''); if (id) void move(id, col.id, 'dragged on the Board') }}>
         <div className="kanban-column-header"><div><strong>{col.label}</strong><small>{col.description}</small></div><span>{items.length}</span></div>
         <div className="kanban-cards">
+          {col.id === 'queued' && fresh.length > 0 && <p className="studio-triage-head"><span className="studio-red-dot" /> {fresh.filter((b) => !b.triage).length} new · needs you</p>}
+          {col.id === 'queued' && fresh.map((b) => {
+            const from = b.state === 'suggested' || b.state === 'probing' ? `${ASSISTANT_NAME} suggests` : b.annotationId || /mark/i.test(b.source) ? 'From a mark-up' : /Socra|Muse/i.test(b.source) ? `From ${ASSISTANT_NAME}` : 'You said'
+            return <article key={b.id} className={`build-card studio-board-card ${b.triage ? '' : 'studio-triage-card'}`} aria-label={`New: ${b.title}`}>
+              <div className="build-card-top"><span className="studio-triage-tag">{b.triage === 'working' ? <><MessageCircleQuestion size={11} /> Working on it</> : <><span className="studio-red-dot" /> New · {from}</>}</span><small className="studio-board-kind">{ago(b.createdAt)}</small></div>
+              <h3>{b.title}</h3>
+              {b.note && <p className="studio-moved-by">{b.note.slice(0, 160)}</p>}
+              <div className="studio-triage-actions">
+                {b.triage !== 'working' && <button className="button button-quiet button-small" type="button" disabled={triaging === b.id} onClick={() => void triage(b.id, 'working')} title={`${ASSISTANT_NAME} asks the questions that make it a clear requirement`}><MessageCircleQuestion size={12} /> Work on it</button>}
+                <button className="button button-primary button-small" type="button" disabled={triaging === b.id} onClick={() => void triage(b.id, 'accepted')} title="Put it on the Board as a card in Backlog"><Check size={12} /> Accept</button>
+                <button className="button button-quiet button-small" type="button" disabled={triaging === b.id} onClick={() => void triage(b.id, 'rejected')} title="Set it aside; it stays in the history"><X size={12} /> Reject</button>
+              </div>
+            </article>
+          })}
           {col.id === 'queued' && adding && <div className="build-card studio-board-new"><input autoFocus value={newTitle} onChange={(e) => setNewTitle(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void add(); if (e.key === 'Escape') setAdding(false) }} placeholder="What should the product do?" /><div><button className="button button-primary button-small" type="button" onClick={() => void add()} disabled={!newTitle.trim()}><Check size={12} /> Add</button><button className="button button-quiet button-small" type="button" onClick={() => setAdding(false)}>Cancel</button></div></div>}
           {items.map((item) => <article key={item.id} className={`build-card studio-board-card ${dragging === item.id ? 'is-dragging' : ''}`} draggable
             onDragStart={(e) => { e.dataTransfer.setData('text/plain', item.id); e.dataTransfer.effectAllowed = 'move'; setDragging(item.id) }}
@@ -109,18 +141,19 @@ export function BoardView({ live, me, buildNow, changeView, setToast, children }
                 <button className="card-next" type="button" disabled={item.status === 'done'} aria-label="Move forward" title={item.status === 'done' ? '' : `On to ${LABEL[ORDER[ORDER.indexOf(item.status) + 1]]}`} onClick={(e) => { e.stopPropagation(); step(item.id, 1) }}><ArrowRight size={14} /></button>
               </span></div>
           </article>)}
-          {items.length === 0 && !(col.id === 'queued' && adding) && <div className="empty-column">{dragging ? 'Drop it here.' : <>Nothing here yet.<br />That’s okay — the shape is still moving.</>}</div>}
+          {items.length === 0 && !(col.id === 'queued' && (adding || fresh.length > 0)) && <div className="empty-column">{dragging ? 'Drop it here.' : <>Nothing here yet.<br />That’s okay — the shape is still moving.</>}</div>}
         </div>
       </section>
     })}</div>
 
     {children}
     <div className="pilot-footer"><div><span className="live-pulse" /> {ASSISTANT_NAME} is watching for a blocker, not micromanaging the work.</div><button className="text-button" type="button" onClick={() => changeView('storymap')}>See how the stories connect <ArrowRight size={14} /></button></div>
-    {open && <CardPanel key={open} live={live} id={open} by={by} onClose={() => setOpen('')} onMove={(s) => void move(open, s, 'moved from the card')} setToast={setToast} />}
+    {open && <CardPanel key={open} live={live} id={open} by={by} guide={guide?.id === open ? guide.status : undefined} onClose={() => { setOpen(''); setGuide(null) }} onMove={(s) => void move(open, s, 'moved from the card')} setToast={setToast} buildNow={buildNow} changeView={changeView} />}
   </div>
 }
 
-function CardPanel({ live, id, by, onClose, onMove, setToast }: { live: Live; id: string; by: string; onClose: () => void; onMove: (s: Status) => void; setToast: (v: string) => void }) {
+function CardPanel({ live, id, by, guide, onClose, onMove, setToast, buildNow, changeView }: { live: Live; id: string; by: string; guide?: Status; onClose: () => void; onMove: (s: Status) => void; setToast: (v: string) => void; buildNow: (opts?: { force?: boolean }) => void; changeView: (v: StudioView) => void }) {
+  const details = useRef<HTMLTextAreaElement>(null)
   const [d, setD] = useState<CardDetail | null>(null)
   const [error, setError] = useState('')
   const [draft, setDraft] = useState<Partial<CardDetail['move']>>({})
@@ -177,6 +210,11 @@ function CardPanel({ live, id, by, onClose, onMove, setToast }: { live: Live; id
       <div className="studio-card-head"><p className="eyebrow">{m ? `${LABEL[m.status] ?? m.status}${m.hidden ? ` · ${m.hidden}` : ''}` : 'Card'}</p><button className="icon-button subtle" type="button" onClick={onClose} aria-label="Close"><X size={16} /></button></div>
       {!m ? <p className="studio-muted">{error || 'Opening the card…'}</p> : <>
         <textarea className="studio-card-title" rows={2} value={val('title')} onChange={(e) => setDraft({ ...draft, title: e.target.value })} aria-label="Title" />
+        {guide && <MoveGuide status={guide} detailed={hasDetail(String(val('prompt')))} busy={live.generateBusy} hasApp={live.preview.hasApp}
+          onDetail={() => { details.current?.focus(); details.current?.scrollIntoView({ block: 'center', behavior: 'smooth' }) }}
+          onSocra={() => { onClose(); changeView('conversation') }}
+          onGenerate={() => { onClose(); buildNow({ force: true }) }}
+          onTry={() => { onClose(); changeView('review') }} />}
         <div className="studio-card-status">{COLUMNS.map((c) => <button key={c.id} type="button" className={m.status === c.id ? 'is-active' : ''} onClick={() => { if (m.status !== c.id) { onMove(c.id); setD({ ...d!, move: { ...m, status: c.id } }) } }}>{c.label}</button>)}</div>
         <div className="studio-card-grid">
           <label><span>Area</span><input value={val('capability')} onChange={(e) => setDraft({ ...draft, capability: e.target.value })} placeholder="Which capability" /></label>
@@ -185,7 +223,7 @@ function CardPanel({ live, id, by, onClose, onMove, setToast }: { live: Live; id
           <label><span>Tag</span><input value={val('signal')} onChange={(e) => setDraft({ ...draft, signal: e.target.value })} placeholder="e.g. THIN SLICE" /></label>
         </div>
         <label className="studio-card-field"><span>Decision it traces to</span><textarea rows={2} value={val('decision')} onChange={(e) => setDraft({ ...draft, decision: e.target.value })} placeholder="The decision or promise this card delivers" /></label>
-        <label className="studio-card-field"><span>Details and acceptance criteria</span><textarea rows={8} value={val('prompt')} onChange={(e) => setDraft({ ...draft, prompt: e.target.value })} placeholder="What it does, for whom, and how we'll know it works" /></label>
+        <label className="studio-card-field"><span>Details and acceptance criteria</span><textarea ref={details} rows={8} value={val('prompt')} onChange={(e) => setDraft({ ...draft, prompt: e.target.value })} placeholder="What it does, for whom, and how we'll know it works" /></label>
         <div className="studio-card-actions"><button className="button button-primary button-small" type="button" disabled={!dirty || saving} onClick={() => void save()}><Check size={13} /> {saving ? 'Saving…' : 'Save changes'}</button>{dirty && <button className="button button-quiet button-small" type="button" onClick={() => setDraft({})}>Undo edits</button>}</div>
 
         <section className="studio-card-section"><div className="studio-card-section-head"><span className="eyebrow"><Paperclip size={11} /> Files · {d!.files.length}</span><button className="text-button" type="button" disabled={uploading} onClick={() => fileInput.current?.click()}><Upload size={12} /> {uploading ? 'Attaching…' : 'Attach files'}</button><input ref={fileInput} type="file" multiple hidden onChange={(e) => void attach(e.target.files)} /></div>
@@ -206,4 +244,19 @@ function CardPanel({ live, id, by, onClose, onMove, setToast }: { live: Live; id
       </>}
     </aside>
   </div>
+}
+
+/** What moving a card asks for: Ready wants detail, Being made real wants something to build, Review wants a try. */
+function MoveGuide({ status, detailed, busy, hasApp, onDetail, onSocra, onGenerate, onTry }: { status: Status; detailed: boolean; busy: boolean; hasApp: boolean; onDetail: () => void; onSocra: () => void; onGenerate: () => void; onTry: () => void }) {
+  if (status === 'ready') return <div className="studio-move-guide">
+    <strong><MessageCircleQuestion size={14} /> {ASSISTANT_NAME}: let’s get some detail before this is built.</strong>
+    <ol><li>Who uses this, and at what moment?</li><li>What does “done” look like? What can they do afterwards that they couldn’t before?</li><li>Which rules, limits or edge cases must it handle?</li></ol>
+    <p className="studio-muted" style={{ margin: 0 }}>Write it below, or answer {ASSISTANT_NAME} in the conversation: it is asking the same now and writes your answers onto this card.</p>
+    <div className="studio-move-guide-actions"><button className="button button-primary button-small" type="button" onClick={onDetail}>Add detail here</button><button className="button button-quiet button-small" type="button" onClick={onSocra}>Answer {ASSISTANT_NAME} <ArrowRight size={12} /></button></div>
+  </div>
+  if (status === 'building') return detailed
+    ? <div className="studio-move-guide"><strong><Play size={14} /> Ready to build.</strong><p className="studio-muted" style={{ margin: 0 }}>This card has enough detail. Generate the prototype to have Claude Code build it{hasApp ? ' into the next version' : ''}.</p><div className="studio-move-guide-actions"><button className="button button-primary button-small" type="button" disabled={busy} onClick={onGenerate}><Play size={12} /> {busy ? 'A build is running…' : 'Generate the prototype'}</button></div></div>
+    : <div className="studio-move-guide is-warn"><strong>This card has almost no detail yet.</strong><p className="studio-muted" style={{ margin: 0 }}>If you generate now, Claude Code has nothing clear to build for it. Add what it does and how you’ll know it works, or let {ASSISTANT_NAME} ask you.</p><div className="studio-move-guide-actions"><button className="button button-primary button-small" type="button" onClick={onDetail}>Add detail here</button><button className="button button-quiet button-small" type="button" onClick={onSocra}>Let {ASSISTANT_NAME} ask me</button><button className="button button-quiet button-small" type="button" disabled={busy} onClick={onGenerate}>Generate anyway</button></div></div>
+  if (status === 'review') return <div className="studio-move-guide"><strong>Your turn to review.</strong><p className="studio-muted" style={{ margin: 0 }}>Try it in the prototype. Say yes if it works, or mark what is wrong: each mark comes back as a new backlog item.</p><div className="studio-move-guide-actions"><button className="button button-primary button-small" type="button" onClick={onTry}>Try & mark up <ArrowRight size={12} /></button></div></div>
+  return null
 }

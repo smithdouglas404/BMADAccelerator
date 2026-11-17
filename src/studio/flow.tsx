@@ -3,53 +3,80 @@
 // Socra's visible specialists, numbered option chips, checkpoints with Approve and Reject, and the side
 // menu's four groups. Built from the team's classes; the few new ones are in studio-extras.css.
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, Check, Compass, Layers3, PenTool, Scale, ShieldCheck, Sparkles, Undo2, UserRound, Users, Waves, Wrench, X } from 'lucide-react'
+import { ArrowRight, Check, Compass, Layers3, PenTool, Scale, ShieldCheck, Undo2, UserRound, Users, Waves, Wrench, X } from 'lucide-react'
 import { ROLES, SPECIALISTS, numberedOptions } from '@/lib/studio/core'
 import type { ViewId } from './data'
 import { api, initials, type Live, type StudioMessage } from './live'
+import { journey, needsTriage, hasDetail } from '@/lib/studio/journey'
 
 type Act = (fn: () => Promise<unknown>, ok?: string) => Promise<void>
 
-/** The Studio's views: the team's ten plus a full-width place to try the product and mark it up. */
-export type StudioView = ViewId | 'review' | 'agents' | 'storymap'
+/** The Studio's views: the team's ten plus a full-width place to try the product and mark it up. 'trd' is the
+ *  Living specification opened on its technical tab, so the TRD has its own place under Technology. */
+export type StudioView = ViewId | 'review' | 'agents' | 'storymap' | 'trd'
 
-/** The side menu in four groups, in the order work usually moves. Every one of the team's views stays. */
-export const NAV_GROUPS: { title: string; items: { id: StudioView; label: string; hint: string }[] }[] = [
+export type NavItem = { id: StudioView; label: string; hint: string; tip: string }
+
+/** The side menu in four stages, in the order work moves: say what you need, check it holds up, decide how
+ *  it is built, then generate it and try it. Each item says plainly what it is for; hover says more. */
+export const NAV_GROUPS: { title: string; about: string; items: NavItem[] }[] = [
   {
-    title: 'Shape it',
+    title: '1 · Requirements',
+    about: 'Say what you need',
     items: [
-      { id: 'overview', label: 'Whole product', hint: 'See the shape' },
-      { id: 'conversation', label: 'Work with Socra', hint: 'Move the idea' },
-      { id: 'product', label: 'Product shape', hint: 'Living PRFAQ' },
-      { id: 'spec', label: 'Living specification', hint: 'PRD + TRD, traced' },
+      { id: 'conversation', label: 'Talk to Socra', hint: 'Enter your requirements here', tip: 'Start here. Type or speak what you need in your own words. Socra and its specialists ask questions and turn every answer into requirements.' },
+      { id: 'pilot', label: 'Backlog & board', hint: 'Every requirement, and what’s next', tip: 'Everything you or Socra captured lands here. New items are marked red until you work on them, accept or reject them. Moving a card asks Socra for the next step.' },
+      { id: 'spec', label: 'Requirements doc (PRD)', hint: 'What the product must do', tip: 'This helps you with the product requirements document (PRD): who it is for, what it must do, acceptance criteria. Keep, revise or remove what Socra inferred.' },
+      { id: 'product', label: 'Product story (PRFAQ)', hint: 'The promise in plain words', tip: 'The press release and FAQ: the customer promise written before anything is built, plus the thoughts waiting for a home.' },
+      { id: 'overview', label: 'Whole product', hint: 'Where everything stands', tip: 'One page with the product’s shape, how ready each capability is and what Socra is working on.' },
     ],
   },
   {
-    title: 'Prove it',
+    title: '2 · Validate',
+    about: 'Check it holds up',
     items: [
-      { id: 'validation', label: 'Validate use case', hint: 'Test the proof' },
-      { id: 'evidence', label: 'Evidence & signals', hint: 'Keep the why' },
-      { id: 'truth', label: 'Product Truth Graph', hint: 'See the meaning' },
-      { id: 'storymap', label: 'Story map', hint: 'How stories connect' },
-      { id: 'readiness', label: 'Pilot readiness', hint: 'Find the ceiling' },
+      { id: 'validation', label: 'Validate use case', hint: 'Is the problem real?', tip: 'Checks the problem, the customer, the evidence and the thin slice. Shows which signals are still soft and what to ask next.' },
+      { id: 'evidence', label: 'Evidence & signals', hint: 'Why we believe it', tip: 'Interviews, research and uploads that back each decision, so the why is never lost.' },
+      { id: 'storymap', label: 'Story map', hint: 'How the stories connect', tip: 'The user stories laid out along the customer journey, with the links between them.' },
+      { id: 'truth', label: 'Product Truth Graph', hint: 'Every decision and why', tip: 'Every statement, decision and change, labelled fact, inference or decision, with what caused it.' },
+      { id: 'readiness', label: 'Pilot readiness', hint: 'How close to a pilot', tip: 'How ready each capability is for a thin-slice pilot, and what is holding it below that.' },
     ],
   },
   {
-    title: 'See it',
+    title: '3 · Technology',
+    about: 'Decide how it’s built',
     items: [
-      { id: 'review', label: 'Try & mark up', hint: 'The live product' },
-      { id: 'pilot', label: 'Board', hint: 'What is in play' },
+      { id: 'trd', label: 'Technical design (TRD)', hint: 'How it will be built', tip: 'This helps with the technical requirements document (TRD): architecture, data, integrations, security and scale, written by the solution architect.' },
+      { id: 'agents', label: 'Agents', hint: 'The AI helpers it needs', tip: 'The agents the product needs, what each one does, its approvals and its memory.' },
+      { id: 'connections', label: 'Repository & Linear', hint: 'Where the code and work go', tip: 'Connect the Git repository the builds push to, and optionally sync the backlog to Linear.' },
     ],
   },
   {
-    title: 'Ship it',
+    title: '4 · Generate & try',
+    about: 'Make it real',
     items: [
-      { id: 'brief', label: 'Prototype brief', hint: 'Build with Claude Code' },
-      { id: 'agents', label: 'Agents', hint: 'What runs, and why' },
-      { id: 'connections', label: 'Connections', hint: 'Repository & Linear' },
+      { id: 'brief', label: 'Generate the prototype', hint: 'Build it with Claude Code', tip: 'Press Generate to have Claude Code build a working prototype from your requirements. You can also download the package as a ZIP.' },
+      { id: 'review', label: 'Try & mark up', hint: 'Click through it, mark changes', tip: 'Use the prototype and mark anything that should change. Each mark becomes a new backlog item for you to accept.' },
     ],
   },
 ]
+
+/** Where a use case stands: one percentage and the step that moves it to the next one. */
+export function journeyOf(live: Live) {
+  const inferred = live.spec.filter((s) => s.basis === 'inferred' || s.basis === 'recommended')
+  return journey({
+    userMessages: live.messages.filter((m) => m.role === 'user').length,
+    openDecisions: live.decisions.filter((d) => d.status === 'open').length,
+    approvedDecisions: live.decisions.filter((d) => d.status === 'approved').length,
+    needsYou: live.backlog.filter((b) => needsTriage(b)).length,
+    reviewedSections: inferred.filter((s) => s.review).length,
+    unreviewedSections: inferred.filter((s) => !s.review).length,
+    detailedCards: live.moves.filter((m) => m.status !== 'queued' && hasDetail(m.prompt ?? '')).length,
+    builds: live.generateCount,
+    markups: live.feedback.length,
+    validationScore: live.validationScore,
+  })
+}
 
 export type Me = { name: string; role: string }
 
@@ -117,26 +144,23 @@ export function PeopleMenu({ live, me, setMe, setToast }: { live: Live; me: Me; 
   )
 }
 
-/** The one thing worth doing next, from where the product actually stands. */
-export function nextMove(live: Live): { text: string; view: StudioView; cta: string } | null {
-  const said = live.messages.filter((m) => m.role === 'user').length
-  const open = live.decisions.filter((d) => d.status === 'open').length
-  const unreviewed = live.spec.filter((s) => (s.basis === 'inferred' || s.basis === 'recommended') && !s.review).length
-  if (!live.capabilities.length) return { text: 'Socra is laying out the product. Tell it anything else on your mind meanwhile.', view: 'conversation', cta: 'Talk to Socra' }
-  if (open) return { text: `${open} ${open === 1 ? 'checkpoint needs' : 'checkpoints need'} a decision from you.`, view: 'conversation', cta: 'Decide' }
-  if (said < 2) return { text: 'Answer Socra’s first question: a number, a yes or your own words.', view: 'conversation', cta: 'Answer' }
-  if (!live.preview.hasApp && !live.generateBusy) return { text: 'There is enough to build a first version you can click through.', view: 'brief', cta: 'Build it' }
-  if (live.preview.hasApp && !live.feedback.length) return { text: 'Try the product and mark anything that should change.', view: 'review', cta: 'Try it' }
-  if (unreviewed) return { text: `${unreviewed} spec ${unreviewed === 1 ? 'section was' : 'sections were'} inferred for you. Keep, revise or remove them.`, view: 'spec', cta: 'Review' }
-  if (live.validationScore < 60) return { text: 'The use case isn’t proven yet. See which signals are still soft.', view: 'validation', cta: 'Validate' }
-  if (live.readiness.overall >= 65) return { text: 'Ready for a thin-slice pilot with real people.', view: 'pilot', cta: 'Open the Board' }
-  return { text: 'Keep shaping with Socra; it will say when to build again.', view: 'conversation', cta: 'Continue' }
-}
-
+/** Where the use case stands as a percentage, and the one step that moves it to the next percentage. */
 export function NextMove({ live, changeView }: { live: Live; changeView: (v: StudioView) => void }) {
-  const m = nextMove(live)
-  if (!m) return null
-  return <div className="studio-banner studio-next"><Sparkles size={14} /><span><strong>Next best move</strong> {m.text}</span><button type="button" onClick={() => changeView(m.view)}>{m.cta} <ArrowRight size={13} /></button></div>
+  const j = journeyOf(live)
+  const [open, setOpen] = useState(false)
+  if (!j.next) return <div className="studio-banner studio-next studio-journey"><span className="studio-journey-pct">{j.percent}%</span><span className="studio-journey-track"><span style={{ width: `${j.percent}%` }} /></span><span><strong>Every step done</strong> Keep shaping with Socra; it will say when to build again.</span><button type="button" onClick={() => changeView('conversation')}>Continue <ArrowRight size={13} /></button></div>
+  return (
+    <div className="studio-journey-wrap">
+      <div className="studio-banner studio-next studio-journey">
+        <span className="studio-journey-pct" title="How far this use case has come">{j.percent}%</span>
+        <span className="studio-journey-track" aria-hidden><span style={{ width: `${j.percent}%` }} /></span>
+        <span><strong>Next: {j.next.label}</strong> {j.next.why} <em className="studio-journey-gain">+{j.next.weight}% → {j.percent + j.next.weight}%</em></span>
+        <button type="button" className="studio-journey-steps-toggle" onClick={() => setOpen(!open)} aria-expanded={open}>{open ? 'Hide steps' : 'All steps'}</button>
+        <button type="button" onClick={() => changeView(j.next!.view)}>{j.next.cta} <ArrowRight size={13} /></button>
+      </div>
+      {open && <ol className="studio-journey-steps">{j.steps.map((s) => <li key={s.key} className={s.done ? 'is-done' : s === j.next ? 'is-next' : ''}><button type="button" onClick={() => changeView(s.view)}>{s.done ? <Check size={12} /> : <span className="studio-journey-dot" />}<span>{s.label}</span><small>{s.done ? 'done' : `+${s.weight}%`}</small></button></li>)}</ol>}
+    </div>
+  )
 }
 
 const SPECIALIST_ICON: Record<string, React.ReactNode> = { 'business-analyst': <Scale size={13} />, architect: <Layers3 size={13} />, engineer: <Wrench size={13} />, ux: <PenTool size={13} />, domain: <Compass size={13} /> }
