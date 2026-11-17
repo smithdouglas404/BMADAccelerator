@@ -196,7 +196,7 @@ services:
     ports:
       - "127.0.0.1:${CONNECTOR_GATE_PORT:-8088}:8080"
     volumes:
-      - ./connector-gate/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./connector-gate/${CONNECTOR_GATE_CONF:-nginx.conf}:/etc/nginx/nginx.conf:ro
       - ./connector-gate/pass.conf:/etc/nginx/pass.conf:ro
   tunnel:
     image: cloudflare/cloudflared:2024.12.2
