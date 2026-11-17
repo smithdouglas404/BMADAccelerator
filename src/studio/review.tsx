@@ -142,7 +142,7 @@ export function ReviewView({ live, previewMode, setPreview, setToast, annotation
   return (
     <div data-ui className="mx-auto grid w-full max-w-[96rem] grid-cols-1 gap-6 px-4 py-8 md:px-8">
       <PageHeader
-        title="Try it and mark it up"
+        title="Try it and mark it up" eyebrow="Vibe review" headline={<>Try it. Point at<br /><em>what’s wrong.</em></>}
         description="Use the product the way a customer would. Press Mark it up, click or circle the part you mean, and say what should change. Socra turns it into the next build."
         actions={<>
           <span className="text-sm text-muted-foreground">{live.feedback.length} {live.feedback.length === 1 ? 'mark' : 'marks'} so far</span>
@@ -153,7 +153,7 @@ export function ReviewView({ live, previewMode, setPreview, setToast, annotation
         <PreviewCard live={live} mode={previewMode} setPreview={setPreview} setToast={setToast} annotationMode={annotationMode} onSelectTarget={setAnnotationTarget} annotationShape={annotationShape} onPick={onPick} tall />
         {panel && <div className="min-w-0 xl:sticky xl:top-4 xl:self-start"><AnnotationPanel {...{ annotationMode, setAnnotationMode, annotationTarget, annotationNote, setAnnotationNote, isListening, toggleVoice, addAnnotation, captureFrame, capturedFrame, annotationShape, setAnnotationShape }} /></div>}
       </div>
-      <Section title="What you asked to change" description="Your latest marks, and what Socra read from each." action={marks.length > 0 ? <Button type="button" size="sm" onClick={() => changeView('brief')} className="gap-1.5">Build the next version <ArrowRight className="size-4" /></Button> : undefined}>
+      <Section statement={<>Every mark becomes <em>a requirement.</em></>} title="What you asked to change" description="Your latest marks, and what Socra read from each." action={marks.length > 0 ? <Button type="button" size="sm" onClick={() => changeView('brief')} className="gap-1.5">Build the next version <ArrowRight className="size-4" /></Button> : undefined}>
         {marks.length === 0 && <Empty>No marks yet. Press Mark it up and point at anything that should change.</Empty>}
         {marks.map((f) => (
           <article key={f.id} className="grid min-w-0 grid-cols-1 gap-3 border-b border-border px-5 py-4 last:border-b-0 md:grid-cols-[minmax(0,1fr)_12rem]">

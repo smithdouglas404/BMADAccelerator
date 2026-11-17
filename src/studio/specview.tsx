@@ -48,7 +48,7 @@ export function SpecView({ live, act, changeView, specSections }: Props) {
   const tabPercent = (t: 'prd' | 'trd') => { const s = specSections.filter((x) => x.tab === t && x.review !== 'remove'); return s.length ? Math.round(s.reduce((sum, x) => sum + x.completeness, 0) / s.length) : 0 }
   const choose = (s: SpecSection) => { setSelectedId(s.id); setDraft(s.content); setEditing(false) }
   const selectTab = (t: 'prd' | 'trd') => { setTab(t); const n = specSections.find((s) => s.tab === t); if (n) choose(n) }
-  if (!selected) return <div data-ui className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-8 md:px-8"><PageHeader title="Living specification" description="The living specification is being laid out. One moment." /></div>
+  if (!selected) return <div data-ui className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-8 md:px-8"><PageHeader title="Living specification" eyebrow="The specification is alive" headline={<>See what the product<br /><em>is becoming.</em></>} description="The living specification is being laid out. One moment." /></div>
 
   const label = tab.toUpperCase()
   const review = (choice: 'keep' | 'revise' | 'challenge' | 'remove' | '', note = '') =>
@@ -73,7 +73,7 @@ export function SpecView({ live, act, changeView, specSections }: Props) {
 
   return (
     <div data-ui className="mx-auto grid w-full max-w-[96rem] grid-cols-1 gap-6 px-4 py-8 md:px-8">
-      <PageHeader title="Living specification" description="Socra turns the conversation, evidence and marks on the prototype into a real spec. Every inference stays visible and reversible: nothing is confirmed just because Socra suggested it." />
+      <PageHeader title="Living specification" eyebrow="The specification is alive" headline={<>See what the product<br /><em>is becoming.</em></>} description="Socra turns the conversation, evidence and marks on the prototype into a real spec. Every inference stays visible and reversible: nothing is confirmed just because Socra suggested it." />
 
       <Tabs value={tab} onValueChange={(v) => selectTab(v as 'prd' | 'trd')}>
         <TabsList aria-label="Which document" className="!h-10 !w-full !flex-row sm:!w-fit">
@@ -150,7 +150,7 @@ export function SpecView({ live, act, changeView, specSections }: Props) {
           </div>
         </Section>
 
-        <Section title="How this got here" description="Each step that shaped this section. Click one to see where it lives." className="lg:col-span-2 xl:col-span-1">
+        <Section statement={<>Every line <em>has a history.</em></>} title="How this got here" description="Each step that shaped this section. Click one to see where it lives." className="lg:col-span-2 xl:col-span-1">
           {selected.trace.length === 0 && <Empty>No trace yet: nothing has been said or found about this section.</Empty>}
           {selected.trace.map((step, i) => (
             <button key={`${selected.id}-${i}`} type="button" onClick={() => traceGo(step.type)} className="flex items-start gap-3 border-b border-border px-5 py-3 text-left transition-colors last:border-b-0 hover:bg-accent/60">

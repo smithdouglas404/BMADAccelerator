@@ -52,6 +52,8 @@ export function OverviewView({ live, act, me, selected, capabilities, readiness,
     <div data-ui className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-6 px-4 py-8 md:px-8">
       <PageHeader
         title={live.name}
+        eyebrow="The whole product"
+        headline={<>Make the product <em>legible</em><br />before you make it real.</>}
         description={live.statement || live.description}
         actions={<>
           <Button variant="outline" onClick={() => changeView('product')}><FileText className="size-4" /> Product shape</Button>
@@ -69,7 +71,7 @@ export function OverviewView({ live, act, me, selected, capabilities, readiness,
       </div>
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <Section title="Where the product can stand today" description={selected.signal || 'Readiness guides what to learn next; it never blocks a build.'} action={<Button variant="ghost" size="sm" onClick={() => changeView('readiness')}>Full readiness <ArrowRight className="size-4" /></Button>}>
+        <Section statement={<>From the floor <em>to the ceiling.</em></>} title="Where the product can stand today" description={selected.signal || 'Readiness guides what to learn next; it never blocks a build.'} action={<Button variant="ghost" size="sm" onClick={() => changeView('readiness')}>Full readiness <ArrowRight className="size-4" /></Button>}>
           {capabilities.length === 0 && <Empty>Socra is laying the floor: the parts of the product appear here in a moment.</Empty>}
           {capabilities.map((c) => {
             const value = readiness[c.id] ?? c.readiness
@@ -83,7 +85,7 @@ export function OverviewView({ live, act, me, selected, capabilities, readiness,
           })}
         </Section>
 
-        <Section title="Where the conversation is" description={live.agentBusy ? live.agentStatus || 'Socra is thinking' : `Socra is guiding the ${selected.label.toLowerCase()} conversation`} action={<Button variant="ghost" size="sm" onClick={() => changeView('conversation')}>Open <ArrowRight className="size-4" /></Button>}>
+        <Section statement={<>What Socra is <em>helping you see.</em></>} title="Where the conversation is" description={live.agentBusy ? live.agentStatus || 'Socra is thinking' : `Socra is guiding the ${selected.label.toLowerCase()} conversation`} action={<Button variant="ghost" size="sm" onClick={() => changeView('conversation')}>Open <ArrowRight className="size-4" /></Button>}>
           <SectionBody>
             <div className="flex gap-3">
               <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground"><Waves className="size-4" /></span>
@@ -132,7 +134,7 @@ export function HeldThoughts({ live, act, me, selected, items, capture, setCaptu
     setWithdrawing(null)
   }
   return (
-    <Section title={`Thoughts held · ${items.length}`} description="Everything you thought of, in your words. Not everything you need to do." action={action}>
+    <Section statement={<>Everything you thought of. <em>Not everything you need to do.</em></>} title={`Thoughts held · ${items.length}`} description="Everything you thought of, in your words. Not everything you need to do." action={action}>
       <div className="flex gap-2 border-b border-border px-5 py-3">
         <Input aria-label="Catch a thought" value={capture} onChange={(e) => setCapture(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') captureIdea() }} placeholder="I keep thinking about…" />
         <Button type="button" onClick={captureIdea} disabled={!capture.trim()}><Plus className="size-4" /> Hold it</Button>

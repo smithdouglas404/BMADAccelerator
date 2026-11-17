@@ -38,7 +38,7 @@ export function ProductView({ live, act, me, selected, backlog, capture, setCapt
   return (
     <div data-ui className={PAGE}>
       <PageHeader
-        title="Product shape"
+        title="Product shape" eyebrow="The living product shape" headline={<>Keep the dream visible<br /><em>as it becomes specific.</em></>}
         description="The press release and FAQ, kept alive: the original voice, approved decisions and open questions side by side."
         actions={<><span className="text-sm text-muted-foreground">{approvalCount} {approvalCount === 1 ? 'approval' : 'approvals'} carried forward</span><Button type="button" onClick={() => changeView('conversation')} className="gap-1.5">Keep shaping <ArrowRight className="size-4" /></Button></>}
       />
@@ -60,7 +60,7 @@ export function ProductView({ live, act, me, selected, backlog, capture, setCapt
                   : <div className="grid gap-3"><p className="text-base">Socra writes the press release and FAQ from your conversation. It appears here as soon as there is enough to say honestly.</p>{live.customerQuote && <blockquote className="border-l-2 border-primary pl-3 font-serif text-lg">“{live.customerQuote.replace(/[“”]/g, '')}”</blockquote>}</div>}
             </SectionBody>
           </Section>
-          <Section title="Decisions captured" description="A plain yes to Socra carries its proposal forward; an assumed one stays until someone says no.">
+          <Section statement={<>What has been <em>decided.</em></>} title="Decisions captured" description="A plain yes to Socra carries its proposal forward; an assumed one stays until someone says no.">
             {decisions.length === 0 && <Empty>No decisions yet.</Empty>}
             {decisions.map((d) => (
               <Row key={d.id} title={<span className="font-medium">{d.text}</span>} detail={ago(d.createdAt)} badge={<StatusBadge tone={d.status === 'approved' ? 'ok' : d.status === 'assumed' ? 'suggest' : d.status === 'rejected' ? 'off' : 'warn'}>{d.status === 'approved' ? 'Approved' : d.status === 'assumed' ? 'Assumed, say no to change it' : d.status === 'rejected' ? 'Rejected' : 'Open with Socra'}</StatusBadge>} />
@@ -96,13 +96,13 @@ export function ValidationView({ live, validationChecks, validationScore, toggle
   return (
     <div data-ui className={PAGE}>
       <PageHeader
-        title="Validate the use case"
+        title="Validate the use case" eyebrow="A use case is ready when it can make a promise" headline={<>Validate the use case<br /><em>before</em> you build around it.</>}
         description="Socra turns the conversation, evidence and open questions into a recommendation. It isn't a gate: it tells you what would make the next prototype honest."
         actions={<><RoleLens role={role} setRole={setRole} /><Button type="button" onClick={() => changeView('brief')} className="gap-1.5">Prepare the prototype brief <ArrowRight className="size-4" /></Button></>}
       />
       <div className={SPLIT}>
         <div className={COLUMN}>
-          <Section title="Use case readiness" description={validationScore >= 80 ? 'Strong enough to prototype the thin slice.' : 'Keep probing the proof point before you widen the build.'} action={<span className="text-2xl font-semibold text-primary">{validationScore}%</span>}>
+          <Section statement={<>Can it make <em>a promise?</em></>} title="Use case readiness" description={validationScore >= 80 ? 'Strong enough to prototype the thin slice.' : 'Keep probing the proof point before you widen the build.'} action={<span className="text-2xl font-semibold text-primary">{validationScore}%</span>}>
             <SectionBody><Bar value={validationScore} /></SectionBody>
             <ul aria-label="Validation checks" className="grid grid-cols-1">
               {CHECKS(live.name).map((c) => {
@@ -125,7 +125,7 @@ export function ValidationView({ live, validationChecks, validationScore, toggle
           </Section>
         </div>
         <aside className={COLUMN}>
-          <Section title="Questions worth pulling forward" description="Socra’s recommendations. Pick one to ask it in the conversation." action={<Sparkles className="size-4 text-primary" />}>
+          <Section statement={<>Ask now, <em>not after the build.</em></>} title="Questions worth pulling forward" description="Socra’s recommendations. Pick one to ask it in the conversation." action={<Sparkles className="size-4 text-primary" />}>
             {recommendationState.length === 0 && <Empty>Socra pulls considerations, workflows and human pauses forward here as it learns the product.</Empty>}
             {recommendationState.map((r) => {
               const Icon = REC_ICON[r.kind]
@@ -137,7 +137,7 @@ export function ValidationView({ live, validationChecks, validationScore, toggle
               )
             })}
           </Section>
-          <Section title="What the system is noticing" description="The technical read, without making anyone learn agent vocabulary." action={<Bot className="size-4 text-muted-foreground" />}>
+          <Section statement={<>What the signals <em>are saying.</em></>} title="What the system is noticing" description="The technical read, without making anyone learn agent vocabulary." action={<Bot className="size-4 text-muted-foreground" />}>
             <SectionBody>
               {probeQuestion && <div className="flex gap-3 rounded-lg border border-warning/30 bg-warning/5 p-3"><CircleHelp className="mt-0.5 size-4 shrink-0 text-warning" /><p className="text-sm"><span className="font-semibold">Probe now. </span>{probeQuestion}</p></div>}
               <p className="text-sm">{live.techNotes[0] || 'Socra notes where a workflow could run on its own and where a person must pause it before meaning changes.'}</p>
@@ -181,7 +181,7 @@ export function EvidenceView({ live, act, evidence, changeView, role, setRole, s
   return (
     <div data-ui className={PAGE}>
       <PageHeader
-        title="Evidence & signals"
+        title="Evidence & signals" eyebrow="Evidence library · everything Socra is allowed to believe" headline={<>Keep the “why”<br /><em>close to the work.</em></>}
         description="Everything Socra is allowed to believe. Upload research, attach an interview, or let a conversation become evidence; each one stays traceable to the use case, PRFAQ or a decision."
         actions={<><RoleLens role={role} setRole={setRole} /><Button asChild><label className="cursor-pointer gap-1.5"><Upload className="size-4" /> Add research<input type="file" multiple hidden accept=".md,.txt,.pdf,.docx,.csv,.json,.png,.jpg,.jpeg" onChange={addEvidence} aria-label="Add research files" /></label></Button></>}
       />
@@ -225,13 +225,13 @@ export function ReadinessView({ live, capabilities, readiness, overallReadiness,
   return (
     <div data-ui className={PAGE}>
       <PageHeader
-        title="Pilot readiness"
+        title="Pilot readiness" eyebrow="Readiness is a conversation" headline={<>Find the ceiling,<br /><em>not a false finish line.</em></>}
         description="A capability is ready when the product can make a promise and keep it. The percentages show where to look next; they aren't grades for the team."
         actions={<div className="grid justify-items-end"><span className="text-3xl font-semibold text-primary">{overallReadiness}%</span><span className="text-sm text-muted-foreground">ready for a thin-slice pilot</span></div>}
       />
       <div className={SPLIT}>
         <div className={COLUMN}>
-          <Section title="What still needs to become true" description="Each capability, how far it has come, and where to push next.">
+          <Section statement={<>The ceiling, <em>not a finish line.</em></>} title="What still needs to become true" description="Each capability, how far it has come, and where to push next.">
             {capabilities.map((c) => {
               const value = readiness[c.id] ?? c.readiness
               return (
@@ -251,7 +251,7 @@ export function ReadinessView({ live, capabilities, readiness, overallReadiness,
           <ReadinessFactors live={live} />
         </div>
         <aside className={COLUMN}>
-          <Section title="The next honest move" description={`${selected.label} has the clearest path to a meaningful pilot moment. Socra is ready to help you sharpen its promise.`} action={<Flame className="size-4 text-warning" />}>
+          <Section statement={<>One honest <em>next step.</em></>} title="The next honest move" description={`${selected.label} has the clearest path to a meaningful pilot moment. Socra is ready to help you sharpen its promise.`} action={<Flame className="size-4 text-warning" />}>
             <SectionBody><Button type="button" onClick={() => focusCapability(selected)} className="gap-1.5">Open {selected.label} <ArrowRight className="size-4" /></Button></SectionBody>
           </Section>
           <Section title="How the Studio decides">

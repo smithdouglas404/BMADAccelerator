@@ -57,7 +57,7 @@ export function AgentsView({ live, me, setToast }: { live: Live; me: Me; setToas
     void load()
   }
 
-  if (!view) return <div data-ui className={PAGE}><PageHeader title="Agents" description="Finding this product’s agents…" /></div>
+  if (!view) return <div data-ui className={PAGE}><PageHeader title="Agents" eyebrow="Agents" headline={<>Finding this product’s<br /><em>agents…</em></>} description="Finding this product’s agents…" /></div>
   const pending = view.approvals.filter((a) => a.status === 'pending')
   const nameOf = (key: string) => view.agents.find((a) => a.key === key)?.name ?? key
   const approved = view.agents.filter((a) => a.status === 'approved').length
@@ -65,7 +65,9 @@ export function AgentsView({ live, me, setToast }: { live: Live; me: Me; setToas
 
   return <div data-ui className={PAGE}>
     <PageHeader
-      title={`The agents behind ${live.name}`}
+      title="Agents"
+      eyebrow="Agents · shared agent service"
+      headline={<>The agents behind<br /><em>{live.name}.</em></>}
       description="Socra proposes each one from what this product needs and a person approves it. They run in the Studio’s shared agent service: Inngest AgentKit, a Letta persona that remembers each person, and Mem0 memory kept to this product only. Every run is kept."
       actions={<>
         <div className="grid justify-items-end"><span className="text-2xl font-semibold text-primary">{approved} approved</span><span className="text-sm text-muted-foreground">{proposed} waiting for a yes · {pending.length} {pending.length === 1 ? 'approval' : 'approvals'} waiting</span></div>
@@ -74,7 +76,7 @@ export function AgentsView({ live, me, setToast }: { live: Live; me: Me; setToas
     />
     {view.note && <p className="-mt-3 text-sm text-muted-foreground">{view.note}</p>}
 
-    {pending.length > 0 && <Section title="Waiting for a person" description="Approve or reject, with a comment if it helps." action={<ShieldCheck className="size-4 text-warning" />}>
+    {pending.length > 0 && <Section statement={<>AI suggests. <em>People decide.</em></>} title="Waiting for a person" description="Approve or reject, with a comment if it helps." action={<ShieldCheck className="size-4 text-warning" />}>
       {pending.map((ap) => <article key={ap.id} className="grid min-w-0 gap-3 border-b border-border px-5 py-4 last:border-b-0">
         <div className="grid gap-0.5"><h3 className="text-base font-semibold">{ap.title}</h3><span className="text-xs text-muted-foreground">{nameOf(ap.agent)} · {when(ap.created_at)}</span></div>
         <pre className="max-h-60 overflow-auto rounded-lg bg-muted p-3 font-mono text-sm whitespace-pre-wrap">{ap.detail}</pre>
@@ -83,7 +85,7 @@ export function AgentsView({ live, me, setToast }: { live: Live; me: Me; setToas
       </article>)}
     </Section>}
 
-    <Section title={`What each one does, and how · ${view.agents.length}`} description="Fixed rules stay plain code; an agent appears only where one truly helps." action={<Bot className="size-4 text-muted-foreground" />}>
+    <Section statement={<>Each agent, <em>with a memory.</em></>} title={`What each one does, and how · ${view.agents.length}`} description="Fixed rules stay plain code; an agent appears only where one truly helps." action={<Bot className="size-4 text-muted-foreground" />}>
       {view.agents.length === 0 && <Empty>No agents yet. Socra proposes one only where an agent truly helps (a workflow, a message, an alert, a recommendation or an insight); fixed rules stay plain code.</Empty>}
       {view.agents.map((a) => {
         const runs = view.runs.filter((r) => r.agent === a.key)

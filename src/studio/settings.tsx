@@ -48,7 +48,7 @@ export function SettingsPage() {
   return (
     <Shell active="settings">
       <div data-ui className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-8 md:px-8">
-        <PageHeader title="Settings" description="Everything here applies to the whole Studio, not one use case." />
+        <PageHeader title="Settings" eyebrow="Settings" headline={<>The plumbing,<br /><em>out of the way.</em></>} description="Everything here applies to the whole Studio, not one use case." />
         <Tabs value={tab} onValueChange={choose} orientation="vertical" className="grid items-start gap-8 md:grid-cols-[15rem_1fr]">
           <TabsList aria-label="Settings sections" className="h-fit w-full flex-col items-stretch gap-1 bg-transparent p-0 max-md:hidden md:sticky md:top-20">
             {TABS.map((g) => (
@@ -124,7 +124,7 @@ function Models({ setToast }: { setToast: (s: string) => void }) {
         description={s.claudePlan ? 'Socra and Claude Code run on your Claude plan. Nothing to do here.' : 'Claude is signed in once, during setup on this computer. Until then everything you say is kept, and Socra catches up when it starts.'}
         action={s.claudePlan ? <StatusBadge tone="ok">Signed in</StatusBadge> : <StatusBadge tone="warn">Not signed in yet</StatusBadge>}
       />
-      <Section title="Which model does each job" description="Changes apply to the next run.">
+      <Section statement={<>The right model <em>for each job.</em></>} title="Which model does each job" description="Changes apply to the next run.">
         <SectionBody className="gap-5">
           {s.roles.map((r) => {
             const list = models(r.providers)
@@ -143,7 +143,7 @@ function Models({ setToast }: { setToast: (s: string) => void }) {
           })}
         </SectionBody>
       </Section>
-      <Section title="Keys" description="Stored encrypted and never shown again; only the last four characters are kept on screen. Never paste a key into a chat.">
+      <Section statement={<>Keys stay <em>on the server.</em></>} title="Keys" description="Stored encrypted and never shown again; only the last four characters are kept on screen. Never paste a key into a chat.">
         {[...s.providers, ...s.other].map((k) => <KeyRow key={k.env} k={k} onSaved={setS} setToast={setToast} />)}
       </Section>
     </>
@@ -177,7 +177,7 @@ function Connectors({ setToast }: { setToast: (s: string) => void }) {
   return (
     <>
       <Section
-        title="Tools Socra can use"
+        statement={<>Give Socra <em>the right tools.</em></>} title="Tools Socra can use"
         description={<>Outside systems the Studio calls, such as Notion, a database or your own API, added as MCP servers. To let Claude, ChatGPT or Meta Muse reach the Studio instead, use <strong className="text-foreground">Your assistants</strong>.</>}
         action={<StatusBadge tone={rows.length ? 'ok' : 'off'}>{rows.length} added</StatusBadge>}
       >
@@ -248,7 +248,7 @@ function Skills({ setToast }: { setToast: (s: string) => void }) {
   const sourceLabel = (s: LibSkill) => (s.source === 'ecc' ? 'ECC' : s.source === 'studio' ? 'Studio' : 'Yours')
   return (
     <Section
-      title="Skill library"
+      statement={<>Skills, <em>not prompts.</em></>} title="Skill library"
       description="ECC (Everything Claude Code, open source, MIT) plus the Studio’s own skills and yours, in one place. A skill that is on goes into each use case’s workspace, where Socra, its specialists and Claude Code use it."
       action={<Button variant="outline" size="sm" asChild><label className="cursor-pointer"><Upload className="size-4" /> Add a skill<input type="file" className="sr-only" accept=".skill,.zip,.md" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void upload(f) }} /></label></Button>}
     >
@@ -291,7 +291,7 @@ function Memory() {
   useEffect(() => { void api<typeof m>('/api/memory', { cache: 'no-store' }).then(setM).catch(() => setM(null)) }, [])
   return (
     <>
-      <Section title="Memory" description="Self-hosted Mem0 keeps long-term facts; Letta keeps each agent’s working mind. Both run on this computer.">
+      <Section statement={<>Agents that <em>remember.</em></>} title="Memory" description="Self-hosted Mem0 keeps long-term facts; Letta keeps each agent’s working mind. Both run on this computer.">
         {!m ? <Empty>Reading memory status…</Empty> : <>
           <Row title="Mem0" detail={m.mem0.up ? 'Long-term facts, per customer and use case. Running.' : m.mem0.configured ? 'Configured, not answering.' : 'Not configured.'}><StatusBadge tone={m.mem0.up ? 'ok' : 'warn'}>{m.mem0.up ? 'Up' : 'Down'}</StatusBadge></Row>
           <Row title="Letta" detail={m.letta.up ? 'Agents’ working memory and personas. Running.' : m.letta.note || 'Not answering.'}><StatusBadge tone={m.letta.up ? 'ok' : 'warn'}>{m.letta.up ? 'Up' : 'Down'}</StatusBadge></Row>

@@ -44,7 +44,7 @@ export function ConnectionsView({ live, act, setToast, changeView }: { live: Liv
   return (
     <div data-ui className="mx-auto grid w-full max-w-[96rem] grid-cols-1 gap-6 px-4 py-8 md:px-8">
       <PageHeader
-        title="Connections"
+        title="Connections" eyebrow="Connections · where the work goes next" headline={<>Keep the loop<br /><em>open.</em></>}
         description="Where the work goes next. A connected repository gives every build a durable home; Linear can be an optional synchronised view of the same product truth."
         actions={<Button type="button" variant="outline" onClick={() => changeView('brief')} className="gap-1.5">Back to the prototype brief <ArrowRight className="size-4" /></Button>}
       />
@@ -74,7 +74,7 @@ export function ConnectionsView({ live, act, setToast, changeView }: { live: Liv
       </div>
       <SyncPreview live={live} syncState={syncState} refresh={tick} />
       <div className="grid min-w-0 grid-cols-1 items-start gap-6 lg:grid-cols-2">
-        <Section title="The loop" description="How a change travels from the conversation to a running pilot.">
+        <Section statement={<>Truth in, <em>software out.</em></>} title="The loop" description="How a change travels from the conversation to a running pilot.">
           <SectionBody>
             <ol className="flex flex-wrap items-center gap-2 text-sm">
               {['Product truth', 'Prototype package', 'Repository', 'Pilot', 'Linear, if you use it'].map((s, i, all) => <li key={s} className="flex items-center gap-2"><span className="rounded-md border border-border bg-muted px-2.5 py-1">{s}</span>{i < all.length - 1 && <ArrowRight className="size-4 text-muted-foreground" />}</li>)}
@@ -97,7 +97,7 @@ function SyncPreview({ live, syncState, refresh }: { live: Live; syncState: Sync
   const diffs = p?.gitDiffs ?? []
   return (
     <Section
-      title="What the next sync would send"
+      statement={<>What would push <em>from the Studio.</em></>} title="What the next sync would send"
       description={p ? `${p.gitRecords} records already in Git · ${p.linearRecords} in Linear. Syncing again never duplicates them.` : 'Reading what the next sync would send…'}
       action={<StatusBadge tone={syncState === 'synced' ? 'ok' : syncState === 'syncing' ? 'info' : 'off'}>{syncState === 'synced' ? 'Synced' : syncState === 'syncing' ? 'Syncing' : 'Ready'}</StatusBadge>}
     >
@@ -126,7 +126,7 @@ function ProvidersCard() {
     ['Antigravity', 'Same package, run in Google Antigravity', 'Coming'],
   ]
   return (
-    <Section title="Who builds the pilot" description="The coding agent that turns the package into the product." action={<Button asChild size="sm" variant="ghost"><a href="/settings" className="gap-1.5"><Play className="size-4" /> Settings</a></Button>}>
+    <Section statement={<>The package becomes <em>the product.</em></>} title="Who builds the pilot" description="The coding agent that turns the package into the product." action={<Button asChild size="sm" variant="ghost"><a href="/settings" className="gap-1.5"><Play className="size-4" /> Settings</a></Button>}>
       {rows.map(([name, detail, state]) => <Row key={name} title={name} detail={detail}><StatusBadge tone={state === 'Active' ? 'ok' : 'off'}>{state}</StatusBadge></Row>)}
     </Section>
   )

@@ -44,7 +44,7 @@ export function HomePage() {
     <Shell active="home">
       <div data-ui className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-6 px-4 py-8 md:px-8">
         <PageHeader
-          title="All use cases"
+          title="All use cases" eyebrow="Every product you are shaping" headline={<>Make the product <em>legible</em><br />before you make it real.</>}
           description="Say what you want in a few lines. Socra works out what kind of product it is, lays down everything the leading products of that kind have, and asks only what it can’t know."
           actions={<Button asChild><a href="/new"><Plus className="size-4" /> New use case</a></Button>}
         />
@@ -123,8 +123,8 @@ export function NewProductPage() {
   return (
     <Shell active="new">
       <div data-ui className="mx-auto grid w-full max-w-3xl grid-cols-1 gap-6 px-4 py-8 md:px-8">
-        <PageHeader title="New use case" description="A few lines is enough, and a business case or a deck helps if you have one. Socra works out what kind of product it is, names it, lays out everything the leading products of that kind have, and asks you what only you can answer." />
-        <Section title="Who it’s for" description="Each customer’s use cases, documents, memory and agents are kept apart.">
+        <PageHeader title="New use case" eyebrow="A new product" headline={<>Say it the way<br />you’d <em>say it.</em></>} description="A few lines is enough, and a business case or a deck helps if you have one. Socra works out what kind of product it is, names it, lays out everything the leading products of that kind have, and asks you what only you can answer." />
+        <Section statement={<>Start with <em>the person.</em></>} title="Who it’s for" description="Each customer’s use cases, documents, memory and agents are kept apart.">
           <SectionBody className="items-start sm:grid-cols-2">
             <Field id="new-customer" label="Customer">
               <Input id="new-customer" value={customer} onChange={(e) => setCustomer(e.target.value)} list="studio-customers" placeholder="e.g. Acme Insurance" />
@@ -142,7 +142,7 @@ export function NewProductPage() {
             {area === 'Other' && <Field id="new-area-other" label="Which area?"><Input id="new-area-other" value={areaOther} onChange={(e) => setAreaOther(e.target.value)} placeholder="Say it in your words" /></Field>}
           </SectionBody>
         </Section>
-        <Section title="What you want to make" description="Type it, say it, or add what you already have. Socra reads it all.">
+        <Section statement={<>Say what it <em>should do.</em></>} title="What you want to make" description="Type it, say it, or add what you already have. Socra reads it all.">
           <SectionBody>
             <Field id="new-summary" label="Short description">
               <Input id="new-summary" value={summary} onChange={(e) => setSummary(e.target.value)} maxLength={300} placeholder="One or two lines: the problem and who has it" />
@@ -196,7 +196,7 @@ export function CapturePage() {
   return (
     <Shell active="capture">
       <div data-ui className="mx-auto grid w-full max-w-2xl grid-cols-1 gap-6 px-4 py-8 md:px-8">
-        <PageHeader title="Capture a thought" description="Phone, voice, or a half-sentence is enough. It waits in the backlog until Socra finds its home." />
+        <PageHeader title="Capture a thought" eyebrow="Ambient capture" headline={<>Catch the thought<br /><em>before it’s a task.</em></>} description="Phone, voice, or a half-sentence is enough. It waits in the backlog until Socra finds its home." />
         <Section title="The thought">
           <SectionBody>
             <Field id="capture-product" label="Use case">
