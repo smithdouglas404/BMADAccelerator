@@ -7,6 +7,7 @@ import { ensureStarted, focusCapability } from "@/lib/studio/actions";
 import { VALIDATION_SIGNALS, type Validation } from "@/lib/studio/core";
 import { connectionStatus } from "@/lib/studio/sync";
 import { stopPreview } from "@/lib/preview";
+import { ownerEdited } from "@/lib/studio/ownerEdits";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -35,6 +36,13 @@ const PatchBody = z
     customer: z.string().trim().max(120),
     businessArea: z.string().trim().max(120),
     summary: z.string().max(2000),
+    // The PRFAQ's headline, lede, audience and customer quote, edited in place.
+    statement: z.string().max(600),
+    description: z.string().max(8000),
+    audience: z.string().max(300),
+    customerQuote: z.string().max(1200),
+    // Who made the change, for the record.
+    by: z.string().max(80),
     lastView: z.string().max(40).regex(/^[a-z-]*$/),
   })
   .partial();
@@ -45,7 +53,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
   if (!parsed.success) return NextResponse.json({ error: "That change isn't valid." }, { status: 400 });
   const before = await prisma.useCase.findUnique({ where: { id } });
   if (!before) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const { skills, validation, focus, prfaq, lastView, ...fields } = parsed.data;
+  const { skills, validation, focus, prfaq, lastView, by, ...fields } = parsed.data;
   // Remembering where someone was is not a change to the product: it keeps the product's own updated time.
   if (lastView !== undefined && !Object.keys(fields).length && !skills && !validation && !focus && prfaq === undefined) {
     await prisma.useCase.update({ where: { id }, data: { lastView, updatedAt: before.updatedAt } });
@@ -64,6 +72,20 @@ export async function PATCH(req: Request, { params }: Ctx) {
   }
   if (prfaq !== undefined) Object.assign(data, { prfaq, prfaqUpdatedAt: new Date() });
   await prisma.useCase.update({ where: { id }, data });
+  // Content a person owns: each edit is logged with who made it and handed to Socra to carry through.
+  const OWNED: [keyof typeof before & string, string, string][] = [
+    ["prfaq", "the PRFAQ (press release and FAQ)", "prfaq"],
+    ["statement", "the PRFAQ headline", "prfaq:headline"],
+    ["description", "the product description", "prfaq:description"],
+    ["audience", "who the product is for", "prfaq:audience"],
+    ["customerQuote", "the customer quote", "prfaq:quote"],
+    ["name", "the product name", "usecase:name"],
+    ["summary", "the use case summary", "usecase:summary"],
+  ];
+  for (const [field, what, node] of OWNED) {
+    const next = field === "prfaq" ? prfaq : (fields as Record<string, unknown>)[field];
+    if (typeof next === "string" && next !== String(before[field] ?? "")) await ownerEdited(id, { node, what, before: String(before[field] ?? ""), after: next, by });
+  }
   if (focus && focus !== before.focus) await focusCapability(id, focus);
   return NextResponse.json({ ok: true });
 }

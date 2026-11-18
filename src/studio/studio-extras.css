@@ -512,3 +512,20 @@ a.studio-home-brand { color: inherit; text-decoration: none; padding-bottom: 12p
 .studio-md-table table { width: 100%; border-collapse: collapse; font-size: 13px; line-height: 1.45; }
 .studio-md-table th, .studio-md-table td { padding: 7px 9px; text-align: left; vertical-align: top; border: 1px solid var(--line); }
 .studio-md-table th { color: var(--ink); background: var(--panel-strong); font-weight: 600; }
+
+/* Edit in place: a visible Edit button beside text a person owns, and the editor that replaces it. */
+.studio-editable { position: relative; }
+.studio-editable > .studio-edit-button { margin-top: 6px; }
+.studio-editable.is-inline { display: flex; align-items: flex-start; gap: 8px; }
+.studio-editable.is-inline > :first-child { flex: 1; min-width: 0; }
+.studio-editable.is-inline > .studio-edit-button { margin-top: 0; flex: 0 0 auto; }
+.studio-editable.is-editing { display: grid; gap: 8px; }
+.studio-edit-button { gap: 5px; }
+.studio-edit-field { width: 100%; font-size: 14px; line-height: 1.55; }
+.studio-edit-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.studio-edit-actions .studio-muted { margin: 0; }
+.studio-decision-edit { flex: 1; min-width: 0; }
+.studio-evidence-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; }
+.studio-evidence-editing { display: grid; gap: 10px; }
+.studio-edit-label { display: grid; gap: 4px; color: var(--muted); font-size: 12px; font-weight: 500; }
+.studio-edit-label .studio-input, .studio-edit-label .spec-editor { margin-top: 0; color: var(--ink); font-size: 14px; }
