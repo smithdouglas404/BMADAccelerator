@@ -83,6 +83,8 @@ export async function studioState(id: string) {
     moves: uc.moves.map((m) => ({ ...m, movedBy: b(m.movedBy), moveReason: b(m.moveReason) })),
     // Each evidence card points at the stored document it came from, wherever that can be found.
     evidence: withDocuments(uc.evidence, uc.documents),
+    // Whether each stored file is still in the workspace, so the screens never offer an original that is gone.
+    documents: await Promise.all(uc.documents.map(async (d) => ({ ...d, exists: await fs.stat(d.storagePath).then((st) => st.isFile(), () => false) }))),
     validation,
     validationScore: validationScore(validation),
     overallReadiness: overallReadiness(uc.capabilities),

@@ -62,7 +62,8 @@ export function DocumentPanel({ live, docId, onClose }: { live: Live; docId: str
           : pdf && d.exists ? <iframe className="studio-doc-frame" src={raw} title={d.fileName} />
           : d.html && d.exists ? <iframe className="studio-doc-frame" src={raw} title={d.fileName} sandbox="" />
           : d.text != null ? <div className="studio-doc-body">{md ? <StudioMarkdown text={d.text} /> : <pre>{d.text}</pre>}{d.truncated && <p className="studio-muted">This is the first part of a long file. Open the original for all of it.</p>}</div>
-          : <p className="studio-muted">This file type can’t be shown as text here. Open the original or download it.</p>}
+          : d.exists ? <p className="studio-muted">This file type can’t be shown as text here. Open the original or download it.</p>
+          : <p className="studio-muted">Only the record remains: the file was removed from the workspace, and no readable copy was kept.</p>}
       </section>
     </>}
   </Panel>
@@ -88,7 +89,7 @@ export function EvidenceTracePanel({ live, ev, onClose, openDoc, changeView }: {
   const others = [...new Map(edges.map((e) => {
     const other = e.from === node || e.from === docNode ? e.to : e.from
     return [other, { id: other, relation: e.relation, label: e.label }] as const
-  })).values()].filter((o) => o.id !== node && o.id !== docNode)
+  })).values()].filter((o) => o.id !== node)
   const nodeOf = (id: string) => truth?.nodes.find((n) => n.id === id)
   const { spec, caps } = supported(live, ev.trace)
   const go = (view: StudioView, n = '') => { onClose(); changeView(view, n) }
@@ -96,7 +97,7 @@ export function EvidenceTracePanel({ live, ev, onClose, openDoc, changeView }: {
     <p className="eyebrow">{ev.type} · {ev.confidence} confidence · added {ago(ev.createdAt)}</p>
     <h2 className="studio-doc-title">{ev.insight}</h2>
     <section className="studio-card-section"><span className="eyebrow">Source</span>
-      {doc ? <ul className="studio-card-files"><li><FileText size={13} /><button type="button" className="studio-link-button" onClick={() => openDoc(doc.id)}>{doc.fileName}</button><small>{ago(doc.createdAt)}</small><a className="studio-card-dl" href={docUrl(live, doc.id, 'download')} download={doc.fileName} aria-label={`Download ${doc.fileName}`}><Download size={13} /></a></li></ul> : null}
+      {doc ? <ul className="studio-card-files"><li><FileText size={13} /><button type="button" className="studio-link-button" onClick={() => openDoc(doc.id)}>{doc.fileName}</button><small>{ago(doc.createdAt)}{doc.exists === false ? ' · record only' : ''}</small>{doc.exists !== false && <a className="studio-card-dl" href={docUrl(live, doc.id, 'download')} download={doc.fileName} aria-label={`Download ${doc.fileName}`}><Download size={13} /></a>}</li></ul> : null}
       <p className="studio-doc-summary">{ev.source}</p>
       {!doc && <p className="studio-muted">{ev.type === 'conversation' ? 'This came from the conversation, not a file.' : 'No stored file matches this source; it was recorded from research or the conversation.'}</p>}
     </section>
