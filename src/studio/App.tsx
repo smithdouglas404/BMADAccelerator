@@ -59,7 +59,7 @@ import {
 import { downloadPrototypeZip } from './generation'
 import { api, ago, initials, previewUrl, sessionLine, toBacklog, toCapabilities, toEvidence, toExecution, toMessages, toRecommendations, toSpec, useLive, type Live, type StudioMessage } from './live'
 import { LiveFrame, captureLive, useVoice, type Pick } from './vibe'
-import { NAV_GROUPS, NextMove, PeopleMenu, TeamPanel, Checkpoints, UndoChip, optionsFrom, roleShort, specialistIcon, talkingTo, useMe, type Me, type StudioView } from './flow'
+import { NextMove, PERSONAS, PersonaPicker, PersonaSwitch, menuFor, type NavItem, PeopleMenu, TeamPanel, Checkpoints, UndoChip, optionsFrom, roleShort, specialistIcon, talkingTo, useMe, type Me, type StudioView } from './flow'
 import { TruthGraphView, MarkChain, ObservationEffects } from './truth'
 import { AgentsView } from './agents'
 import { StoryMapView } from './storymap'
@@ -133,6 +133,16 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
   const [probeQuestion, setProbeQuestion] = useState('')
   const [pendingMessages, setPendingMessages] = useState<StudioMessage[]>([])
   const [me, setMe] = useMe()
+  const menu = useMemo(() => menuFor(me.role), [me.role])
+  const [moreOpen, setMoreOpen] = useState(false)
+  // Who you are decides what the menu shows first, where you start, and how Socra talks to you.
+  const pickPersona = (p: (typeof PERSONAS)[number]) => {
+    setMe({ ...me, role: p.role })
+    try { window.localStorage.setItem('studio-persona-chosen', '1') } catch { /* private window */ }
+    if (me.name) void api(`/api/use-cases/${live.id}/members`, { json: { name: me.name, role: p.role } }).catch(() => undefined)
+    changeView(p.start)
+    setToast(`You’re in as ${p.label.toLowerCase()}. The menu shows your stages first; everything else is under More.`)
+  }
   const [talkTo, setTalkTo] = useState('')
 
   const capabilities = useMemo(() => toCapabilities(live), [live])
@@ -341,27 +351,7 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
     pilot: live.backlog.filter((b) => needsTriage(b)).length,
   }
 
-  return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <a className="brand-lockup studio-home-brand" href="/" title="All use cases">
-          <div className="brand-mark"><span /><span /><span /></div>
-          <div>
-            <p className="eyebrow">{PRODUCT_LINE}</p>
-            <p className="brand-name">{ASSISTANT_NAME}<span>.</span></p>
-          </div>
-          <span className="version-badge">0.1</span>
-        </a>
-        <a className="studio-home-link" href="/"><ArrowLeft size={13} /> All use cases</a>
-
-        <ProductSwitcher live={live}>
-          <span className="project-glyph">{initials(live.name).slice(0, 1)}</span>
-          <span className="project-switcher-copy"><strong>{live.name}</strong><small>{live.stageLabel}</small></span>
-          <ChevronDown size={15} />
-        </ProductSwitcher>
-
-        <nav className="primary-nav studio-nav" aria-label="Product workspace">
-          {NAV_GROUPS.map((group) => (<div className="studio-nav-group" key={group.title}><div className="sidebar-section-label studio-stage-label">{group.title}<small>{group.about}</small></div>{group.items.map((item) => {
+  const navButton = (item: NavItem) => {
             const flag = navFlags[item.id] ?? 0
             return (
             <button className={`nav-item ${activeView === item.id ? 'is-active' : ''}`} key={item.id} onClick={() => changeView(item.id)} type="button" title={item.tip} aria-label={`${item.label}: ${item.tip}`} data-tip={item.tip}>
@@ -385,7 +375,33 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
               <span className="nav-copy"><strong>{item.label}</strong><small>{item.hint}</small></span>
               {flag > 0 ? <span className="studio-needs-you" title={`${flag} ${flag === 1 ? 'thing needs' : 'things need'} you here`}>{flag}</span> : item.id === 'conversation' && <span className="nav-live-dot" />}
             </button>
-          )})}</div>))}
+          )}
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <a className="brand-lockup studio-home-brand" href="/" title="All use cases">
+          <div className="brand-mark"><span /><span /><span /></div>
+          <div>
+            <p className="eyebrow">{PRODUCT_LINE}</p>
+            <p className="brand-name">{ASSISTANT_NAME}<span>.</span></p>
+          </div>
+          <span className="version-badge">0.1</span>
+        </a>
+        <a className="studio-home-link" href="/"><ArrowLeft size={13} /> All use cases</a>
+
+        <ProductSwitcher live={live}>
+          <span className="project-glyph">{initials(live.name).slice(0, 1)}</span>
+          <span className="project-switcher-copy"><strong>{live.name}</strong><small>{live.stageLabel}</small></span>
+          <ChevronDown size={15} />
+        </ProductSwitcher>
+
+        <PersonaSwitch me={me} onPick={pickPersona} />
+        <nav className="primary-nav studio-nav" aria-label="Product workspace">
+          {menu.groups.map((group) => (<div className="studio-nav-group" key={group.title}><div className="sidebar-section-label studio-stage-label">{group.title}<small>{group.about}</small></div>{group.items.map(navButton)}</div>))}
+          {menu.more.length > 0 && <div className="studio-nav-group studio-nav-more">
+            <button type="button" className="sidebar-section-label studio-stage-label studio-more-toggle" onClick={() => setMoreOpen(!moreOpen)} aria-expanded={moreOpen || menu.more.some((i) => i.id === activeView)}>More <small>{menu.more.length} more places {moreOpen || menu.more.some((i) => i.id === activeView) ? '▴' : '▾'}</small></button>
+            {(moreOpen || menu.more.some((i) => i.id === activeView)) && menu.more.map(navButton)}
+          </div>}
         </nav>
 
         <div className="sidebar-divider" />
@@ -431,6 +447,7 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
 
         {docOpen && <DocumentPanel live={live} docId={docOpen} onClose={() => setDocOpen('')} />}
         {traceOpen && (() => { const ev = live.evidence.find((e) => e.id === traceOpen); return ev ? <EvidenceTracePanel live={live} ev={ev} onClose={() => setTraceOpen('')} openDoc={(id) => { setTraceOpen(''); setDocOpen(id) }} changeView={changeView} /> : null })()}
+        <PersonaPicker onPick={pickPersona} />
         {buildGuard && <div className="studio-card-overlay studio-guard-overlay" onClick={() => setBuildGuard(null)}>
           <div className="studio-guard" role="dialog" aria-label="Before you generate" onClick={(e) => e.stopPropagation()}>
             <p className="eyebrow">Before you generate</p>

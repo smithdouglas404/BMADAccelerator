@@ -3,8 +3,9 @@
 // Socra's visible specialists, numbered option chips, checkpoints with Approve and Reject, and the side
 // menu's four groups. Built from the team's classes; the few new ones are in studio-extras.css.
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { ArrowRight, Check, Compass, Layers3, PenTool, Scale, ShieldCheck, Undo2, UserRound, Users, Waves, Wrench, X } from 'lucide-react'
-import { ROLES, SPECIALISTS, numberedOptions } from '@/lib/studio/core'
+import { ROLES, SPECIALISTS, numberedOptions, personaOf, type Persona } from '@/lib/studio/core'
 import type { ViewId } from './data'
 import { api, initials, type Live, type StudioMessage } from './live'
 import { journey, needsTriage, hasDetail } from '@/lib/studio/journey'
@@ -61,6 +62,35 @@ export const NAV_GROUPS: { title: string; about: string; items: NavItem[] }[] = 
   },
 ]
 
+/** The four ways in (Doug, Nov 18). Each persona sees its own stages first, opens on its starting page,
+ *  and Socra talks its language. Nothing is hidden: everything else sits under "More". */
+export const PERSONAS: { key: Persona; role: string; label: string; blurb: string; start: StudioView; primary: StudioView[] }[] = [
+  { key: 'first', role: 'First-time creator', label: 'First time here', blurb: 'Just say what you need. Socra guides every step in plain words.', start: 'conversation', primary: ['conversation', 'pilot', 'brief', 'review'] },
+  { key: 'owner', role: 'Product owner', label: 'Product owner', blurb: 'Shape the idea, decide priorities, and see it built.', start: 'overview', primary: ['conversation', 'pilot', 'overview', 'product', 'spec', 'validation', 'brief', 'review'] },
+  { key: 'ba', role: 'Business analyst', label: 'Business analyst', blurb: 'Requirements, flows, rules and acceptance criteria.', start: 'spec', primary: ['spec', 'pilot', 'conversation', 'validation', 'evidence', 'storymap', 'truth'] },
+  { key: 'tech', role: 'Tech lead', label: 'Tech lead / engineer', blurb: 'Architecture, data, integrations, agents and the build.', start: 'trd', primary: ['trd', 'agents', 'connections', 'spec', 'pilot', 'conversation', 'brief', 'review'] },
+]
+export const personaFor = (role: string) => PERSONAS.find((p) => p.key === personaOf(role)) ?? PERSONAS[1]
+
+/** The menu for a persona: its stages first, in its order, then everything else under "More". */
+export function menuFor(role: string) {
+  const p = personaFor(role)
+  const all = NAV_GROUPS.flatMap((g) => g.items.map((i) => ({ ...i, group: g })))
+  const groups: { title: string; about: string; items: NavItem[] }[] = []
+  for (const id of p.primary) {
+    const it = all.find((x) => x.id === id)
+    if (!it) continue
+    let g = groups.find((x) => x.title === it.group.title)
+    if (!g) groups.push((g = { title: it.group.title, about: it.group.about, items: [] }))
+    g.items.push(it)
+  }
+  const more = all.filter((x) => !p.primary.includes(x.id))
+  // Stage numbers only help when the stages are in their usual order.
+  const order = groups.map((g) => NAV_GROUPS.findIndex((x) => x.title === g.title))
+  if (order.some((n, i) => i > 0 && n < order[i - 1])) groups.forEach((g) => { g.title = g.title.replace(/^\d+ · /, '') })
+  return { persona: p, groups, more }
+}
+
 /** Where a use case stands: one percentage and the step that moves it to the next one. */
 export function journeyOf(live: Live) {
   const inferred = live.spec.filter((s) => s.basis === 'inferred' || s.basis === 'recommended')
@@ -96,7 +126,7 @@ export function useMe(): [Me, (m: Me) => void] {
   return [me, setMe]
 }
 
-export const roleShort = (role: string) => (role === 'Product owner' ? 'PO' : role === 'Product engineer' ? 'PE' : role === 'Business analyst' ? 'BA' : role === 'UX/UI designer' ? 'UX' : role === 'Architect' ? 'AR' : role === 'Subject-matter expert' ? 'SME' : 'ST')
+export const roleShort = (role: string) => (role === 'Product owner' ? 'PO' : role === 'Product engineer' ? 'PE' : role === 'Business analyst' ? 'BA' : role === 'UX/UI designer' ? 'UX' : role === 'Architect' ? 'AR' : role === 'Tech lead' ? 'TL' : role === 'First-time creator' ? 'NEW' : role === 'Subject-matter expert' ? 'SME' : 'ST')
 
 /** The team's top-bar avatar, opening who you are and who else works on this product. */
 export function PeopleMenu({ live, me, setMe, setToast }: { live: Live; me: Me; setMe: (m: Me) => void; setToast: (v: string) => void }) {
@@ -241,4 +271,51 @@ export function Checkpoints({ live, me, act }: { live: Live; me: Me; act: Act })
 /** Undo on a "Decision captured" card: the approval made by a yes or a pick goes back to open. */
 export function UndoChip({ live, decisionId, me, act }: { live: Live; decisionId: string; me: Me; act: Act }) {
   return <button className="decision-chip studio-undo" type="button" onClick={() => void act(() => api(`/api/use-cases/${live.id}/messages`, { method: 'PATCH', json: { undo: decisionId, author: me } }), 'Undone. The decision is open again.')}><Undo2 size={12} /> Undo</button>
+}
+
+const PERSONA_ICON: Record<Persona, React.ReactNode> = { first: <Compass size={16} />, owner: <UserRound size={16} />, ba: <Scale size={16} />, tech: <Wrench size={16} /> }
+
+/** "Who are you?" the first time someone opens a use case on this browser. They can change it any time. */
+export function PersonaPicker({ onPick, forceOpen = false, onClose }: { onPick: (p: (typeof PERSONAS)[number]) => void; forceOpen?: boolean; onClose?: () => void }) {
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    if (forceOpen) { setOpen(true); return }
+    try { if (!window.localStorage.getItem('studio-persona-chosen')) setOpen(true) } catch { /* private window: don't nag */ }
+  }, [forceOpen])
+  if (!open || typeof document === 'undefined') return null
+  const close = () => { setOpen(false); onClose?.() }
+  // In a portal, so the sidebar's own layout can't trap it.
+  return createPortal(
+    <div className="app-shell-portal studio-card-overlay studio-guard-overlay" onClick={close}>
+      <div className="studio-guard studio-persona" role="dialog" aria-label="Who are you?" onClick={(e) => e.stopPropagation()}>
+        <p className="eyebrow">Who are you?</p>
+        <h2>Pick how you work. The Studio shows your steps first.</h2>
+        <p className="studio-muted" style={{ margin: 0 }}>Socra talks your language, and you start in the right place. Nothing is hidden: everything else is under More. Change it any time from the menu.</p>
+        <div className="studio-persona-grid">{PERSONAS.map((p) => (
+          <button key={p.key} type="button" className="studio-persona-card" onClick={() => { onPick(p); close() }}>
+            <span className="studio-persona-icon">{PERSONA_ICON[p.key]}</span>
+            <strong>{p.label}</strong><small>{p.blurb}</small>
+          </button>
+        ))}</div>
+        <div className="studio-guard-actions"><button className="button button-quiet" type="button" onClick={close}>Decide later</button></div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+/** The menu's "You're working as …" line, which reopens the picker. */
+export function PersonaSwitch({ me, onPick }: { me: Me; onPick: (p: (typeof PERSONAS)[number]) => void }) {
+  const [open, setOpen] = useState(false)
+  const p = personaFor(me.role)
+  return (
+    <>
+      <button type="button" className="studio-persona-switch" onClick={() => setOpen(true)} title="Change who you are: the menu, your starting page and how Socra talks change with it">
+        <span className="studio-persona-icon">{PERSONA_ICON[p.key]}</span>
+        <span><small>Working as</small><strong>{p.label}</strong></span>
+        <span className="studio-persona-change">Change</span>
+      </button>
+      {open && <PersonaPicker forceOpen onPick={onPick} onClose={() => setOpen(false)} />}
+    </>
+  )
 }

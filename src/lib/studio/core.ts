@@ -189,7 +189,24 @@ export const recKindLabels: Record<string, string> = {
 };
 
 /** The people who can work on a product. Several people share one product; each has a role. */
-export const ROLES = ["Product owner", "Business analyst", "Product engineer", "UX/UI designer", "Architect", "Subject-matter expert", "Stakeholder"] as const;
+export const ROLES = ["Product owner", "Business analyst", "Tech lead", "First-time creator", "Product engineer", "UX/UI designer", "Architect", "Subject-matter expert", "Stakeholder"] as const;
+
+/** The four ways in (Doug, Nov 18): who someone is decides what the menu shows first and how Socra talks. */
+export type Persona = "first" | "owner" | "ba" | "tech";
+export function personaOf(role: string): Persona {
+  if (role === "First-time creator") return "first";
+  if (role === "Business analyst" || role === "Subject-matter expert") return "ba";
+  if (role === "Tech lead" || role === "Product engineer" || role === "Architect") return "tech";
+  return "owner";
+}
+/** How Socra speaks to each persona: added to every turn that answers a person. */
+export const PERSONA_VOICE: Record<Persona, string> = {
+  first: "They are new to building products. Use plain words: no jargon (PRD, TRD, epic, backlog, MVP) unless you explain it in a few words. Ask one question at a time, give numbered options with your suggestion marked, and say in one line what happens next.",
+  owner: "They are a product owner. Talk in customers, outcomes, value and priorities; keep technical detail out unless they ask, and say what each decision means for the customer.",
+  ba: "They are a business analyst. Talk in requirements: user flows, business rules, acceptance criteria, edge cases and data they capture. Be precise and name the PRD section each answer lands in.",
+  tech: "They are technical (tech lead or engineer). Talk in architecture, data model, integrations, APIs, security and scale. Be concise and name the TRD section each answer lands in.",
+};
+export const personaVoice = (role: string) => `How to talk to them: ${PERSONA_VOICE[personaOf(role)]}`;
 
 /**
  * Socra's specialists. Socra leads; it brings these in visibly, and anyone on the product can
