@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { enqueue, agentsEnabled, START_PROMPT } from "@/lib/agent/runner";
 import { rememberDecision } from "@/lib/memory";
-import { bumpReadiness, clip, isAffirmative, numberedOptions, pickedNumbers, proposalFrom, specialistByKey, suggestedOption } from "./core";
+import { bumpReadiness, clip, personaVoice, isAffirmative, numberedOptions, pickedNumbers, proposalFrom, specialistByKey, suggestedOption } from "./core";
 import { SESSION_EDGES, addTrace } from "./trace";
 import { recordChange } from "./truthlog";
 import { judgeYes, jevOutcome, tagJevCall } from "@/lib/jev";
@@ -95,7 +95,7 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
       await enqueue(
         useCaseId,
         "user",
-        `${who.said} said: "${content}"\n\nThe Studio recorded it as an approved decision (id ${decision.id}): "${proposal}"${focus ? `, in ${focus.label}` : ""}, and moved its readiness forward. They can undo it. Carry it into the product truth (PRFAQ, the spec sections it touches, the capability's items from [assumed] to [confirmed] where it applies) and ask the next question.`,
+        `${who.said} said: "${content}"\n\nThe Studio recorded it as an approved decision (id ${decision.id}): "${proposal}"${focus ? `, in ${focus.label}` : ""}, and moved its readiness forward. They can undo it. Carry it into the product truth (PRFAQ, the spec sections it touches, the capability's items from [assumed] to [confirmed] where it applies) and ask the next question.\n\n${personaVoice(who.role)}`,
         `decision:${decision.id}`,
       );
   } else if (unclearYes) {
@@ -105,7 +105,7 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
       await enqueue(
         useCaseId,
         "user",
-        `${who.said} said: "${content}"\n\nNothing approved: your last message had ${offered ? "numbered options without a marked suggestion" : "no single yes/no proposal"}. Read it as their answer to your last question. If it is unclear what they agreed to, ask in one line which one, by number, and say which you suggest.`,
+        `${who.said} said: "${content}"\n\nNothing approved: your last message had ${offered ? "numbered options without a marked suggestion" : "no single yes/no proposal"}. Read it as their answer to your last question. If it is unclear what they agreed to, ask in one line which one, by number, and say which you suggest.\n\n${personaVoice(who.role)}`,
         `msg:${msg.id}`,
       );
   } else {
@@ -124,8 +124,8 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
         useCaseId,
         "user",
         specialist
-          ? `${who.said} asked the ${specialist.name} directly: "${content}"\n\nThe Studio held it in the backlog (item ${item.id}). Send \`${specialist.agent}\` with the Agent tool to answer it; the answer reaches them through mcp__studio__share_finding as the ${specialist.name}${specialist.key === "domain" ? " (named for this product's field)" : ""}. Then carry what it changes into the product truth.`
-          : `${who.said} said: "${content}"\n\nThe Studio held it in the backlog in their words (item ${item.id}). Curate it, carry its meaning into the product truth, and answer them.`,
+          ? `${who.said} asked the ${specialist.name} directly: "${content}"\n\nThe Studio held it in the backlog (item ${item.id}). Send \`${specialist.agent}\` with the Agent tool to answer it; the answer reaches them through mcp__studio__share_finding as the ${specialist.name}${specialist.key === "domain" ? " (named for this product's field)" : ""}. Then carry what it changes into the product truth.\n\n${personaVoice(who.role)}`
+          : `${who.said} said: "${content}"\n\nThe Studio held it in the backlog in their words (item ${item.id}). Curate it, carry its meaning into the product truth, and answer them.\n\n${personaVoice(who.role)}`,
         `msg:${msg.id}`,
       );
   }
