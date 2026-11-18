@@ -473,4 +473,4 @@ a.studio-home-brand { color: inherit; text-decoration: none; padding-bottom: 12p
 .studio-persona-change { margin-left: auto; color: var(--acid); font-size: 11px; }
 .studio-more-toggle { width: 100%; text-align: left; background: transparent; cursor: pointer; }
 @media (max-width: 760px) { .studio-persona-grid { grid-template-columns: 1fr; } .studio-persona-switch { display: none; } }
-.app-shell > .sidebar { z-index: 30; }
+.app-shell > .sidebar { z-index: 30; padding-bottom: 72px; } /* room for the reading-comfort buttons bottom-left */
