@@ -98,7 +98,7 @@ export async function captureLive(live: Live, p: Pick | { kind: 'screen'; path: 
   return { image: await mark(r.image, p), target: r.target }
 }
 
-/** Draws the owner's mark (a pin or a circle) on the picture, in the Studio's acid colour. */
+/** Draws the owner's mark (a pin or a circle) on the picture, in the theme's accent colour. */
 async function mark(src: string, p: Pick): Promise<string> {
   const img = new Image()
   await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = src })
@@ -108,8 +108,10 @@ async function mark(src: string, p: Pick): Promise<string> {
   const g = c.getContext('2d')!
   g.drawImage(img, 0, 0)
   const s = img.width / p.width
-  g.strokeStyle = '#d7f58b'
-  g.fillStyle = 'rgba(215,245,139,.18)'
+  const css = getComputedStyle(document.documentElement)
+  const rgb = css.getPropertyValue('--acid-rgb').trim() || '215,245,139'
+  g.strokeStyle = `rgb(${rgb})`
+  g.fillStyle = `rgba(${rgb},.18)`
   g.lineWidth = 4 * s
   g.beginPath()
   if (p.kind === 'point') g.arc(p.x * s, p.y * s, 18 * s, 0, Math.PI * 2)
