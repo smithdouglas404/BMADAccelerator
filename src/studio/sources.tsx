@@ -87,7 +87,8 @@ export function EvidenceTracePanel({ live, ev, onClose, openDoc, changeView }: {
   const doc = ev.documentId ? live.documents.find((d) => d.id === ev.documentId) : undefined
   const edges = (truth?.edges ?? []).filter((e) => e.from === node || e.to === node || (docNode && (e.from === docNode || e.to === docNode)))
   const others = [...new Map(edges.map((e) => {
-    const other = e.from === node || e.from === docNode ? e.to : e.from
+    // The record on the far side: for an edge touching the evidence itself, the other end; for one touching only its document, the document's other end.
+    const other = e.from === node ? e.to : e.to === node ? e.from : e.from === docNode ? e.to : e.from
     return [other, { id: other, relation: e.relation, label: e.label }] as const
   })).values()].filter((o) => o.id !== node)
   const nodeOf = (id: string) => truth?.nodes.find((n) => n.id === id)
