@@ -9,9 +9,9 @@ function read(key: string, fallback: string) {
 }
 
 export function ViewControls() {
-  const [size, setSize] = useState('large')
+  const [size, setSize] = useState('normal')
   const [theme, setTheme] = useState('dark')
-  useEffect(() => { setSize(read('studio-size', 'large')); setTheme(read('studio-theme', 'dark')) }, [])
+  useEffect(() => { setSize(read('studio-size', 'normal')); setTheme(read('studio-theme', 'dark')) }, [])
   useEffect(() => {
     document.documentElement.dataset.size = size
     document.documentElement.dataset.theme = theme
