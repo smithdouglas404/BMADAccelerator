@@ -18,76 +18,54 @@ export type StudioView = ViewId | 'review' | 'agents' | 'storymap' | 'trd'
 
 export type NavItem = { id: StudioView; label: string; hint: string; tip: string }
 
-/** The side menu in four stages, in the order work moves: say what you need, check it holds up, decide how
- *  it is built, then generate it and try it. Each item says plainly what it is for; hover says more. */
+/** The side menu (Doug, Nov 18): the path in the order a product is made, numbered, then the tools that help
+ *  along the way in their own group. Story first, then talk it through, then PRD, TRD, build, try, ship. */
 export const NAV_GROUPS: { title: string; about: string; items: NavItem[] }[] = [
   {
-    title: '1 · Requirements',
-    about: 'Say what you need',
+    title: 'Your path',
+    about: 'Start at 1 and work down',
     items: [
-      { id: 'conversation', label: 'Talk to Socra', hint: 'Enter your requirements here', tip: 'Start here. Type or speak what you need in your own words. Socra and its specialists ask questions and turn every answer into requirements.' },
-      { id: 'pilot', label: 'Backlog & board', hint: 'Every requirement, and what’s next', tip: 'Everything you or Socra captured lands here. New items are marked red until you work on them, accept or reject them. Moving a card asks Socra for the next step.' },
-      { id: 'spec', label: 'Requirements doc (PRD)', hint: 'What the product must do', tip: 'This helps you with the product requirements document (PRD): who it is for, what it must do, acceptance criteria. Keep, revise or remove what Socra inferred.' },
-      { id: 'product', label: 'Product story (PRFAQ)', hint: 'The promise in plain words', tip: 'The press release and FAQ: the customer promise written before anything is built, plus the thoughts waiting for a home.' },
-      { id: 'overview', label: 'Whole product', hint: 'Where everything stands', tip: 'One page with the product’s shape, how ready each capability is and what Socra is working on.' },
+      { id: 'product', label: '1 · Product story (PRFAQ)', hint: 'Start here: the promise', tip: 'Start here. Write the story first: the press release and FAQ that say what the customer gets and why it matters, before anything is built.' },
+      { id: 'conversation', label: '2 · Talk to Socra', hint: 'Talk it through', tip: 'Type or speak what you need in your own words. Socra and its specialists ask questions, and every answer becomes requirements in the PRD.' },
+      { id: 'spec', label: '3 · Requirements doc (PRD)', hint: 'What it must do', tip: 'This helps you with the product requirements document (PRD): who it is for, what it must do, acceptance criteria. Keep, revise or remove what Socra inferred.' },
+      { id: 'trd', label: '4 · Technical design (TRD)', hint: 'How it will be built', tip: 'This helps with the technical requirements document (TRD): architecture, data, integrations, security and scale, written by the solution architect.' },
+      { id: 'brief', label: '5 · Generate the prototype', hint: 'Build it with Claude Code', tip: 'Press Generate to have Claude Code build a working prototype from your PRD and TRD. You can also download the package as a ZIP.' },
+      { id: 'review', label: '6 · Try & mark up', hint: 'Click through it, mark changes', tip: 'Use the prototype and mark anything that should change. Each mark becomes a new backlog item for you to accept.' },
+      { id: 'readiness', label: '7 · Ready to pilot?', hint: 'What still holds it back', tip: 'How ready each capability is for a thin-slice pilot with real people, and what is holding it back.' },
+      { id: 'connections', label: '8 · Ship: repository & Linear', hint: 'Where the code and work go', tip: 'Connect the Git repository the builds push to, and optionally sync the backlog to Linear.' },
     ],
   },
   {
-    title: '2 · Validate',
-    about: 'Check it holds up',
+    title: 'Tools along the way',
+    about: 'Use any time',
     items: [
+      { id: 'pilot', label: 'Backlog & board', hint: 'Every requirement, and what’s next', tip: 'Everything you or Socra captured lands here. New items are marked red until you work on them, accept or reject them. Moving a card asks Socra for the next step.' },
+      { id: 'overview', label: 'Whole product', hint: 'Where everything stands', tip: 'One page with the product’s shape, how ready each capability is and what Socra is working on.' },
       { id: 'validation', label: 'Validate use case', hint: 'Is the problem real?', tip: 'Checks the problem, the customer, the evidence and the thin slice. Shows which signals are still soft and what to ask next.' },
       { id: 'evidence', label: 'Evidence & signals', hint: 'Why we believe it', tip: 'Interviews, research and uploads that back each decision, so the why is never lost.' },
       { id: 'storymap', label: 'Story map', hint: 'How the stories connect', tip: 'The user stories laid out along the customer journey, with the links between them.' },
       { id: 'truth', label: 'Product Truth Graph', hint: 'Every decision and why', tip: 'Every statement, decision and change, labelled fact, inference or decision, with what caused it.' },
-      { id: 'readiness', label: 'Pilot readiness', hint: 'How close to a pilot', tip: 'How ready each capability is for a thin-slice pilot, and what is holding it below that.' },
-    ],
-  },
-  {
-    title: '3 · Technology',
-    about: 'Decide how it’s built',
-    items: [
-      { id: 'trd', label: 'Technical design (TRD)', hint: 'How it will be built', tip: 'This helps with the technical requirements document (TRD): architecture, data, integrations, security and scale, written by the solution architect.' },
       { id: 'agents', label: 'Agents', hint: 'The AI helpers it needs', tip: 'The agents the product needs, what each one does, its approvals and its memory.' },
-      { id: 'connections', label: 'Repository & Linear', hint: 'Where the code and work go', tip: 'Connect the Git repository the builds push to, and optionally sync the backlog to Linear.' },
-    ],
-  },
-  {
-    title: '4 · Generate & try',
-    about: 'Make it real',
-    items: [
-      { id: 'brief', label: 'Generate the prototype', hint: 'Build it with Claude Code', tip: 'Press Generate to have Claude Code build a working prototype from your requirements. You can also download the package as a ZIP.' },
-      { id: 'review', label: 'Try & mark up', hint: 'Click through it, mark changes', tip: 'Use the prototype and mark anything that should change. Each mark becomes a new backlog item for you to accept.' },
     ],
   },
 ]
 
-/** The four ways in (Doug, Nov 18). Each persona sees its own stages first, opens on its starting page,
- *  and Socra talks its language. Nothing is hidden: everything else sits under "More". */
-export const PERSONAS: { key: Persona; role: string; label: string; blurb: string; start: StudioView; primary: StudioView[] }[] = [
-  { key: 'first', role: 'First-time creator', label: 'First time here', blurb: 'Just say what you need. Socra guides every step in plain words.', start: 'conversation', primary: ['conversation', 'pilot', 'brief', 'review'] },
-  { key: 'owner', role: 'Product owner', label: 'Product owner', blurb: 'Shape the idea, decide priorities, and see it built.', start: 'overview', primary: ['conversation', 'pilot', 'overview', 'product', 'spec', 'validation', 'brief', 'review'] },
-  { key: 'ba', role: 'Business analyst', label: 'Business analyst', blurb: 'Requirements, flows, rules and acceptance criteria.', start: 'spec', primary: ['spec', 'pilot', 'conversation', 'validation', 'evidence', 'storymap', 'truth'] },
-  { key: 'tech', role: 'Tech lead', label: 'Tech lead / engineer', blurb: 'Architecture, data, integrations, agents and the build.', start: 'trd', primary: ['trd', 'agents', 'connections', 'spec', 'pilot', 'conversation', 'brief', 'review'] },
+/** The four ways in (Doug, Nov 18). The path stays in life-cycle order for everyone; who you are decides where
+ *  you start, which tools sit beside the path, and how Socra talks. Nothing is hidden: the rest is under "More". */
+export const PERSONAS: { key: Persona; role: string; label: string; blurb: string; start: StudioView; tools: StudioView[] }[] = [
+  { key: 'first', role: 'First-time creator', label: 'First time here', blurb: 'Just say what you need. Socra guides every step in plain words.', start: 'product', tools: ['pilot'] },
+  { key: 'owner', role: 'Product owner', label: 'Product owner', blurb: 'Shape the idea, decide priorities, and see it built.', start: 'product', tools: ['pilot', 'overview', 'validation', 'evidence'] },
+  { key: 'ba', role: 'Business analyst', label: 'Business analyst', blurb: 'Requirements, flows, rules and acceptance criteria.', start: 'spec', tools: ['pilot', 'validation', 'evidence', 'storymap', 'truth'] },
+  { key: 'tech', role: 'Tech lead', label: 'Tech lead / engineer', blurb: 'Architecture, data, integrations, agents and the build.', start: 'trd', tools: ['pilot', 'agents', 'truth', 'storymap'] },
 ]
 export const personaFor = (role: string) => PERSONAS.find((p) => p.key === personaOf(role)) ?? PERSONAS[1]
 
-/** The menu for a persona: its stages first, in its order, then everything else under "More". */
+/** The menu for a persona: the whole path in order, its tools, and every other tool under "More". */
 export function menuFor(role: string) {
   const p = personaFor(role)
-  const all = NAV_GROUPS.flatMap((g) => g.items.map((i) => ({ ...i, group: g })))
-  const groups: { title: string; about: string; items: NavItem[] }[] = []
-  for (const id of p.primary) {
-    const it = all.find((x) => x.id === id)
-    if (!it) continue
-    let g = groups.find((x) => x.title === it.group.title)
-    if (!g) groups.push((g = { title: it.group.title, about: it.group.about, items: [] }))
-    g.items.push(it)
-  }
-  const more = all.filter((x) => !p.primary.includes(x.id))
-  // Stage numbers only help when the stages are in their usual order.
-  const order = groups.map((g) => NAV_GROUPS.findIndex((x) => x.title === g.title))
-  if (order.some((n, i) => i > 0 && n < order[i - 1])) groups.forEach((g) => { g.title = g.title.replace(/^\d+ · /, '') })
+  const [path, tools] = NAV_GROUPS
+  const groups = [path, { ...tools, items: tools.items.filter((i) => p.tools.includes(i.id)) }].filter((g) => g.items.length)
+  const more = tools.items.filter((i) => !p.tools.includes(i.id))
   return { persona: p, groups, more }
 }
 
@@ -289,8 +267,8 @@ export function PersonaPicker({ onPick, forceOpen = false, onClose }: { onPick: 
     <div className="app-shell-portal studio-card-overlay studio-guard-overlay" onClick={close}>
       <div className="studio-guard studio-persona" role="dialog" aria-label="Who are you?" onClick={(e) => e.stopPropagation()}>
         <p className="eyebrow">Who are you?</p>
-        <h2>Pick how you work. The Studio shows your steps first.</h2>
-        <p className="studio-muted" style={{ margin: 0 }}>Socra talks your language, and you start in the right place. Nothing is hidden: everything else is under More. Change it any time from the menu.</p>
+        <h2>Pick how you work. The Studio fits itself to you.</h2>
+        <p className="studio-muted" style={{ margin: 0 }}>The path stays in order for everyone, from the story to shipping. Who you are decides where you start, which tools sit beside the path, and how Socra talks to you. Nothing is hidden: other tools are under More. Change it any time from the menu.</p>
         <div className="studio-persona-grid">{PERSONAS.map((p) => (
           <button key={p.key} type="button" className="studio-persona-card" onClick={() => { onPick(p); close() }}>
             <span className="studio-persona-icon">{PERSONA_ICON[p.key]}</span>
