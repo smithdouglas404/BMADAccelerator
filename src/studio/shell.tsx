@@ -122,7 +122,7 @@ function NavButton({ item, uc }: { item: NavItem; uc: ShellUseCase }) {
       <SidebarMenuButton
         isActive={uc.active === item.id}
         onClick={() => uc.onNavigate(item.id)}
-        tooltip={{ children: <span className="grid max-w-64 gap-1"><strong>{item.label}</strong><span>{item.tip}</span></span> }}
+        tooltip={{ hidden: false, className: "max-w-72", children: <span className="grid max-w-64 gap-1"><strong>{item.label}</strong><span>{item.tip}</span></span> }}
         aria-label={`${item.label}: ${item.tip}`}
         className="h-auto min-h-9 py-1.5 text-sm data-[active=true]:font-semibold data-[active=true]:shadow-[inset_3px_0_0_var(--primary)]"
       >

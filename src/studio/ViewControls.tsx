@@ -30,7 +30,7 @@ export function ViewControls() {
       className={cn('inline-flex gap-0.5 rounded-md border border-border bg-background p-0.5', !host && 'fixed bottom-3 left-3 z-50 shadow-md')}>
       {THEMES.map(([id, label]) => (
         <button key={id} type="button" title={`${label} colours`} aria-pressed={theme === id} onClick={() => setTheme(id)}
-          className={cn('h-8 min-h-8 rounded-[5px] px-3 text-xs font-medium transition-colors', theme === id ? 'bg-primary text-primary-foreground shadow-xs' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground')}>{label}</button>
+          className={cn('h-9 min-h-9 rounded-[5px] px-3 text-xs font-medium transition-colors', theme === id ? 'bg-primary text-primary-foreground shadow-xs' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground')}>{label}</button>
       ))}
     </div>
   )

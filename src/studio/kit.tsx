@@ -88,8 +88,8 @@ const TONES: Record<Tone, string> = {
   info: 'border-info/40 text-info',
   suggest: 'border-dashed border-suggest/50 text-suggest',
 }
-export function StatusBadge({ tone, children }: { tone: Tone; children: ReactNode }) {
-  return <Badge variant="outline" className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium', TONES[tone])}>{children}</Badge>
+export function StatusBadge({ tone, children, className }: { tone: Tone; children: ReactNode; className?: string }) {
+  return <Badge variant="outline" className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium', TONES[tone], className)}>{children}</Badge>
 }
 
 export function CopyField({ value, label }: { value: string; label: string }) {

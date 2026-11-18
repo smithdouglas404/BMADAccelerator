@@ -78,10 +78,10 @@ export function HomePage() {
         )}
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {shown.map((r) => (
-            <a key={r.id} href={`/use-cases/${r.id}${r.nextStep ? `?view=${r.nextStep.view}` : r.lastView ? `?view=${r.lastView}` : ''}`} className="group grid min-w-0 content-start gap-3 rounded-lg border border-border bg-card p-5 shadow-xs transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none">
+            <a key={r.id} href={`/use-cases/${r.id}${r.nextStep ? `?view=${r.nextStep.view}` : r.lastView ? `?view=${r.lastView}` : ''}`} className="group grid min-w-0 grid-cols-1 content-start gap-3 rounded-lg border border-border bg-card p-5 shadow-xs transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none">
               <div className="flex items-start justify-between gap-2">
                 <p className="min-w-0 truncate text-xs text-muted-foreground">{[r.customer, r.businessArea].filter(Boolean).join(' · ') || r.category || r.stageLabel}</p>
-                {r.busy ? <StatusBadge tone="suggest">working…</StatusBadge> : <StatusBadge tone="off">{r.stageLabel || 'shaping'}</StatusBadge>}
+                {r.busy ? <StatusBadge tone="suggest">working…</StatusBadge> : <StatusBadge tone="off" className="shrink-0">{r.stageLabel || 'shaping'}</StatusBadge>}
               </div>
               <h2 className="text-lg font-semibold">{r.name}</h2>
               <p className="line-clamp-3 text-sm text-muted-foreground">{r.statement}</p>
