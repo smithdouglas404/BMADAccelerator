@@ -24,9 +24,9 @@ html[data-theme="paper"] .sidebar { background: #efe7d3; }
 html[data-theme="paper"] input, html[data-theme="paper"] textarea, html[data-theme="paper"] select { color: var(--ink); background: #fffdf5; }
 html[data-theme="paper"] ::placeholder { color: #7b776c; }
 
-/* Clean: shadcn "Modern Minimal" (white, soft greys, Inter, 6px corners) with Kyndryl orange as the only accent
-   in place of its blue. Applied when <html data-theme="clean">. Orange fills use dark text; orange used as text is
-   #c9361f so it passes 4.5:1 on white. Muted text #6b7280 is 4.8:1 on white. */
+/* Clean: shadcn "Modern Minimal" as published (white, soft greys, Inter, 6px corners, blue primary #3b82f6 with
+   white text, sky accent #e0f2fe). Applied when <html data-theme="clean">. Small text in the primary colour uses the
+   theme's own deeper blue #2563eb so it stays readable on white. */
 html[data-theme="clean"] {
   color-scheme: light;
   color: #333333;
@@ -38,12 +38,11 @@ html[data-theme="clean"] {
   --panel-strong: #f3f4f6;
   --line: #e5e7eb;
   --line-strong: #d1d5db;
-  --acid: #ff462d;
-  --acid-ink: #1f2328;
-  /* Kyndryl orange is the only brand colour; the other accent hues become neutral greys. */
-  --blue: #4b5563;
+  --acid: #3b82f6;
+  --acid-ink: #ffffff;
+  --blue: #1d4ed8;
   --warm: #4b5563;
-  --lilac: #4b5563;
+  --lilac: #1e40af;
   --shadow: 0 1px 3px rgba(0, 0, 0, .08), 0 4px 16px rgba(0, 0, 0, .05);
   --radius: 6px;
   --sans-face: 'Inter';
@@ -54,8 +53,8 @@ html[data-theme="clean"] .app-shell { background: #ffffff; }
 html[data-theme="clean"] .sidebar, html[data-theme="clean"] .app-shell > .sidebar { background: #f9fafb; }
 html[data-theme="clean"] input, html[data-theme="clean"] textarea, html[data-theme="clean"] select { color: var(--ink); background: #ffffff; border-color: #e5e7eb; }
 html[data-theme="clean"] ::placeholder { color: #6b7280; }
-/* Active rows and highlights: a light orange wash instead of Modern Minimal's sky blue. */
-html[data-theme="clean"] .nav-item.is-active { background: #fff1ee; }
+/* Active rows and highlights: Modern Minimal's accent (sky wash, deep blue text). */
+html[data-theme="clean"] .nav-item.is-active { background: #e0f2fe; color: #1e3a8a; }
 
 /* Colour channels used by the stylesheets' tints and overlays (rgba(var(--x-rgb), a)), so every tint follows the theme.
    Dark keeps its original values; paper turns white overlays into soft brown shading and uses the deeper accents. */
@@ -69,11 +68,10 @@ html[data-theme="paper"] {
   --raised: #fffdf5; --deep: #efe7d3; --scrim: rgba(60,45,20,.35); --avatar: #8a5a3c; --acid-hover: #2f5717;
 }
 html[data-theme="clean"] {
-  --hi-rgb: 51,51,51; --acid-rgb: 255,70,45; --blue-rgb: 75,85,99; --warm-rgb: 75,85,99;
-  --lilac-rgb: 75,85,99; --shade-rgb: 0,0,0; --glow-rgb: 255,255,255; --bg: #ffffff; --dk-rgb: 255,255,255;
-  --raised: #ffffff; --deep: #f9fafb; --scrim: rgba(15,23,42,.35); --avatar: #4b5563; --acid-hover: #ff6a55;
-  /* Orange as text on white needs a deeper shade to pass 4.5:1 (#ff462d is 3.4:1); fills keep the bright orange with dark text. */
-  --acid-text: #c9361f;
+  --hi-rgb: 51,51,51; --acid-rgb: 59,130,246; --blue-rgb: 29,78,216; --warm-rgb: 75,85,99;
+  --lilac-rgb: 30,64,175; --shade-rgb: 0,0,0; --glow-rgb: 255,255,255; --bg: #ffffff; --dk-rgb: 255,255,255;
+  --raised: #ffffff; --deep: #f9fafb; --scrim: rgba(15,23,42,.35); --avatar: #4b5563; --acid-hover: #2563eb;
+  --acid-text: #2563eb;
 }
 
 /* Light themes (paper, clean): the places the stylesheets hard-code a dark colour. */
@@ -122,8 +120,8 @@ html:is([data-theme="paper"], [data-theme="clean"]) .studio-agent-status.is-reje
 /* Capability colours come from the design data as pastels made for dark screens: deepen them on paper. */
 html:is([data-theme="paper"], [data-theme="clean"]) .capability-color, html:is([data-theme="paper"], [data-theme="clean"]) .focus-mark, html:is([data-theme="paper"], [data-theme="clean"]) .lens-swatch { filter: saturate(1.6) brightness(.7); }
 
-/* Clean (Kyndryl): orange is the only brand colour. The design data's per-capability pastels become neutral swatches,
-   and readiness bars use the orange. Status meaning (red needs-you, error, success chips) keeps its own colour. */
+/* Clean: the design data's per-capability pastels become neutral swatches and readiness bars use the primary blue.
+   Status meaning (red needs-you, error, success chips) keeps its own colour. */
 html[data-theme="clean"] .capability-color, html[data-theme="clean"] .focus-mark, html[data-theme="clean"] .lens-swatch { background: #8a9099 !important; filter: none; }
 html[data-theme="clean"] .capability-track span, html[data-theme="clean"] .ceiling-track span { background: var(--acid) !important; }
 html[data-theme="clean"] .truth-node-dot.evidence { background: #5f6670; }

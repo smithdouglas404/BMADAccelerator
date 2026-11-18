@@ -1,5 +1,5 @@
 'use client'
-// Theme choice: Clean (white with an orange accent, the default), Paper (warm cream) or Dark. Remembered in this
+// Theme choice: Clean (shadcn Modern Minimal, the default), Paper (warm cream) or Dark. Remembered in this
 // browser, applied to <html> as data-theme. Sizes are fixed standard sizes in the stylesheets (no resizing).
 // Where a page has the side menu (or the top bar on Home and Settings), the switch sits inside it so it never covers anything;
 // elsewhere it floats bottom-left.
