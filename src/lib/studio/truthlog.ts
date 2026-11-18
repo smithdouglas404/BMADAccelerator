@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { withDocuments } from "./evidenceDocs";
 import { buildTruthGraph, explainChanges, caseConfidence, exportGraph, type GraphInput } from "./truth";
 
 // Writes the "why did this change?" timeline and reads the Product Truth Graph for a product.
@@ -49,7 +50,7 @@ export async function graphInput(useCaseId: string): Promise<GraphInput | null> 
     include: {
       messages: { orderBy: { createdAt: "asc" } },
       evidence: { orderBy: { createdAt: "asc" } },
-      documents: { orderBy: { createdAt: "asc" }, select: { id: true, fileName: true, createdAt: true, summary: true } },
+      documents: { orderBy: { createdAt: "asc" }, select: { id: true, fileName: true, createdAt: true, summary: true, storagePath: true, textPath: true, origin: true } },
       decisions: { orderBy: { createdAt: "asc" } },
       capabilities: { orderBy: { position: "asc" } },
       backlog: { orderBy: { createdAt: "asc" } },
@@ -70,7 +71,7 @@ export async function graphInput(useCaseId: string): Promise<GraphInput | null> 
     createdAt: uc.createdAt,
     validation: (uc.validation ?? {}) as GraphInput["validation"],
     messages: uc.messages,
-    evidence: uc.evidence,
+    evidence: withDocuments(uc.evidence, uc.documents),
     documents: uc.documents,
     decisions: uc.decisions,
     capabilities: uc.capabilities,

@@ -19,7 +19,8 @@ export type LiveMove = { id: string; title: string; capability: string; decision
 export type LiveCapability = { id: string; key: string; label: string; kicker: string; description: string; readiness: number; delta: string; signal: string; color: string; items: { id: string; text: string; state: string }[] }
 export type LiveMessage = { id: string; role: string; agent: string; content: string; accent: string; createdAt: string; author: string; authorRole: string; addressed: string; raw: string; ref: string }
 export type LiveMember = { id: string; name: string; role: string }
-export type LiveEvidence = { id: string; source: string; type: string; insight: string; confidence: string; trace: string; createdAt: string }
+export type LiveEvidence = { id: string; source: string; type: string; insight: string; confidence: string; trace: string; createdAt: string; documentId: string }
+export type LiveDocument = { id: string; fileName: string; mimeType: string; sizeBytes: number; kind: string; summary: string; description: string; origin: string; moveId: string; status: string; createdAt: string }
 export type LiveRoute = { id: string; agent: string; action: string; state: string; detail: string }
 export type LiveFeedback = { id: string; comment: string; target: string; shape: string; status: string; imageUrl: string; createdAt: string; interpretation?: { observation?: string; behaviour?: string; acceptance?: string[]; component?: string; prd?: string[]; trd?: string[]; question?: string } }
 export type ReadinessFactor = { key: string; label: string; value: number; detail: string }
@@ -37,7 +38,7 @@ export type Live = {
   preview: { hasApp: boolean; port: number | null; running: boolean; starting: boolean }
   packageFiles: string[]
   capabilities: LiveCapability[]; decisions: LiveDecision[]; backlog: LiveBacklog[]; evidence: LiveEvidence[]; moves: LiveMove[]; routes: LiveRoute[]
-  messages: LiveMessage[]; members: LiveMember[]; feedback: LiveFeedback[]; spec: LiveSpec[]; specRevisions: LiveRevision[]
+  messages: LiveMessage[]; members: LiveMember[]; documents: LiveDocument[]; feedback: LiveFeedback[]; spec: LiveSpec[]; specRevisions: LiveRevision[]
 }
 
 export async function api<T = unknown>(url: string, init?: RequestInit & { json?: unknown }): Promise<T> {

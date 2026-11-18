@@ -11,6 +11,7 @@ import { hasDetail, needsTriage } from '@/lib/studio/journey'
 import { ASSISTANT_NAME } from '@/lib/brand'
 import { api, ago, type Live } from './live'
 import type { Me, StudioView } from './flow'
+import { DocumentPanel } from './sources'
 
 type Status = 'queued' | 'ready' | 'building' | 'review' | 'done'
 const COLUMNS: { id: Status; label: string; description: string }[] = [
@@ -154,6 +155,7 @@ export function BoardView({ live, me, buildNow, changeView, setToast, children }
 
 function CardPanel({ live, id, by, guide, onClose, onMove, setToast, buildNow, changeView }: { live: Live; id: string; by: string; guide?: Status; onClose: () => void; onMove: (s: Status) => void; setToast: (v: string) => void; buildNow: (opts?: { force?: boolean }) => void; changeView: (v: StudioView) => void }) {
   const details = useRef<HTMLTextAreaElement>(null)
+  const [docOpen, setDocOpen] = useState('')
   const [d, setD] = useState<CardDetail | null>(null)
   const [error, setError] = useState('')
   const [draft, setDraft] = useState<Partial<CardDetail['move']>>({})
@@ -207,6 +209,7 @@ function CardPanel({ live, id, by, guide, onClose, onMove, setToast, buildNow, c
   return <div className="studio-card-overlay" onClick={() => { if (Date.now() - openedAt.current > 450) onClose() }}>
     <aside className="studio-card-panel" onClick={(e) => e.stopPropagation()} aria-label="Card details"
       onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); void attach(e.dataTransfer.files) }}>
+      {docOpen && <DocumentPanel live={live} docId={docOpen} onClose={() => setDocOpen('')} />}
       <div className="studio-card-head"><p className="eyebrow">{m ? `${LABEL[m.status] ?? m.status}${m.hidden ? ` · ${m.hidden}` : ''}` : 'Card'}</p><button className="icon-button subtle" type="button" onClick={onClose} aria-label="Close"><X size={16} /></button></div>
       {!m ? <p className="studio-muted">{error || 'Opening the card…'}</p> : <>
         <textarea className="studio-card-title" rows={2} value={val('title')} onChange={(e) => setDraft({ ...draft, title: e.target.value })} aria-label="Title" />
@@ -228,7 +231,7 @@ function CardPanel({ live, id, by, guide, onClose, onMove, setToast, buildNow, c
 
         <section className="studio-card-section"><div className="studio-card-section-head"><span className="eyebrow"><Paperclip size={11} /> Files · {d!.files.length}</span><button className="text-button" type="button" disabled={uploading} onClick={() => fileInput.current?.click()}><Upload size={12} /> {uploading ? 'Attaching…' : 'Attach files'}</button><input ref={fileInput} type="file" multiple hidden onChange={(e) => void attach(e.target.files)} /></div>
           {d!.files.length === 0 ? <p className="studio-card-empty">Drop screens, specs, data or recordings here. {ASSISTANT_NAME} reads them as evidence for this card.</p> :
-            <ul className="studio-card-files">{d!.files.map((f) => <li key={f.id}><FileText size={13} /><a href={`/api/use-cases/${live.id}/moves/${id}/files/${f.id}`} target="_blank" rel="noreferrer">{f.fileName}</a><small>{size(f.sizeBytes)} · {ago(f.createdAt)}</small><a className="studio-card-dl" href={`/api/use-cases/${live.id}/moves/${id}/files/${f.id}`} download={f.fileName} aria-label={`Download ${f.fileName}`}><Download size={12} /></a>{f.summary && <p>{f.summary}</p>}</li>)}</ul>}
+            <ul className="studio-card-files">{d!.files.map((f) => <li key={f.id}><FileText size={13} /><button type="button" className="studio-link-button" onClick={() => setDocOpen(f.id)}>{f.fileName}</button><small>{size(f.sizeBytes)} · {ago(f.createdAt)}</small><a className="studio-card-dl" href={`/api/use-cases/${live.id}/moves/${id}/files/${f.id}`} download={f.fileName} aria-label={`Download ${f.fileName}`}><Download size={12} /></a>{f.summary && <p>{f.summary}</p>}</li>)}</ul>}
         </section>
 
         {(m.components.length > 0 || m.routes.length > 0 || m.trackerUrl) && <section className="studio-card-section"><span className="eyebrow">Build</span>

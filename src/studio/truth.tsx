@@ -9,6 +9,7 @@ import { ArrowRight, Database, FileText, GitBranch, History, MousePointer2, Netw
 import { truthGraphSchema, vibeLoopSteps, type TruthEdge, type TruthNode } from './graph'
 import { api, ago, type Live } from './live'
 import type { StudioView } from './flow'
+import { DocumentPanel } from './sources'
 
 export type Statement = 'fact' | 'evidence' | 'inference' | 'recommendation' | 'decision' | 'open' | 'rejected' | 'generated'
 export type TNode = TruthNode & { statement: Statement; at: string; by: string; view: StudioView; interpretations: { plain: string; technical: string }[] }
@@ -39,13 +40,17 @@ const PAGE = 24
 
 type Props = { live: Live; changeView: (view: StudioView) => void; setToast: (value: string) => void; focusNode?: string }
 
-export function TruthGraphView({ live, changeView, setToast, focusNode = '' }: Props) {
+export function TruthGraphView({ live, changeView, setToast, focusNode: focusParam = '' }: Props) {
+  // "graph:<node>" selects a record in the graph; a bare node opens its "why did this change?" history.
+  const inGraph = focusParam.startsWith('graph:')
+  const focusNode = inGraph ? focusParam.slice(6) : focusParam
+  const [docOpen, setDocOpen] = useState('')
   const truth = useTruth(live)
   const nodes = useMemo(() => truth?.nodes ?? [], [truth])
   const edges = truth?.edges ?? []
-  const [tab, setTab] = useState<'graph' | 'why'>(focusNode ? 'why' : 'graph')
+  const [tab, setTab] = useState<'graph' | 'why'>(focusNode && !inGraph ? 'why' : 'graph')
   const [selectedNodeId, setSelectedNodeId] = useState(focusNode || 'usecase')
-  const [whyFor, setWhyFor] = useState(focusNode)
+  const [whyFor, setWhyFor] = useState(inGraph ? '' : focusNode)
   const [filter, setFilter] = useState<'all' | 'owner' | 'muse' | 'prototype' | 'system'>('all')
   const [shown, setShown] = useState(PAGE)
   const [technical, setTechnical] = useState(false)
@@ -63,6 +68,8 @@ export function TruthGraphView({ live, changeView, setToast, focusNode = '' }: P
   const titleOf = (id: string) => nodes.find((n) => n.id === id)?.title ?? id
   const timeline = whyFor ? truth.timeline.filter((c) => c.node === whyFor || c.because.some((b) => b.id === whyFor)) : truth.timeline
   const openWhy = (id: string) => { setWhyFor(id); setTab('why') }
+  // The stored document behind a node: the document itself, or the upload an evidence record came from.
+  const docFor = (id: string) => id.startsWith('doc:') ? id.slice(4) : id.startsWith('evidence:') ? (live.evidence.find((e) => `evidence:${e.id}` === id)?.documentId ?? '') : ''
   const step = vibeLoopSteps.find((s) => s.id === loopStep) ?? vibeLoopSteps[0]
   const loopGo = () => {
     if (loopStep === 'select' || loopStep === 'describe') changeView('review')
@@ -72,6 +79,7 @@ export function TruthGraphView({ live, changeView, setToast, focusNode = '' }: P
   }
 
   return <div className="page-wrap truth-page">
+    {docOpen && <DocumentPanel live={live} docId={docOpen} onClose={() => setDocOpen('')} />}
     <div className="page-intro truth-intro"><div><p className="eyebrow eyebrow-with-dot"><span className="status-dot" />Semantic layer · one Studio record, linked out</p><h1>See why each product<br /><em>truth exists.</em></h1><p>Every node is something that really happened in {live.name}: what someone said, evidence, what Socra inferred, what a person decided, the spec it wrote, a mark on the prototype, a build. Inferences never pass for decisions.</p></div><div className="truth-intro-side"><div className="truth-score"><span className="eyebrow">Use case confidence</span><strong>{truth.confidence.overall}%</strong><small>{nodes.length} meaning objects · {edges.length} relations</small></div><button className="button button-primary" type="button" onClick={() => changeView('review')}><MousePointer2 size={15} /> Start vibe loop</button></div></div>
     <div className="truth-tabs"><button className={tab === 'graph' ? 'is-active' : ''} type="button" onClick={() => setTab('graph')}><Network size={14} /> Trace graph <span>{edges.length} relations</span></button><button className={tab === 'why' ? 'is-active' : ''} type="button" onClick={() => { setWhyFor(''); setTab('why') }}><History size={14} /> Why did this change? <span>{truth.timeline.length} changes</span></button><button type="button" onClick={() => changeView('spec')}><FileText size={14} /> Open living spec <span>PRD + TRD</span></button><button type="button" onClick={() => changeView('connections')}><GitBranch size={14} /> Linked projections <span>Git · Linear</span></button></div>
     <div className="truth-layout">
@@ -92,7 +100,7 @@ export function TruthGraphView({ live, changeView, setToast, focusNode = '' }: P
         {selectedNode.interpretations.length > 0 && <div className="truth-semantic-block"><span className="eyebrow">What this probably means</span>{selectedNode.interpretations.map((i) => <p className="studio-plain" key={i.plain}>{i.plain}{technical && <small><Code2 size={11} /> {i.technical}</small>}</p>)}</div>}
         <div className="truth-semantic-block"><span className="eyebrow">Semantic tags</span><div>{selectedNode.semanticTags.map((tag) => <span key={tag}>{tag}</span>)}</div></div>
         <div className="truth-edge-list"><span className="eyebrow">Connected relations · {selectedEdges.length}</span>{selectedEdges.slice(0, 12).map((edge) => <button type="button" key={edge.id} onClick={() => setSelectedNodeId(edge.from === selectedNode.id ? edge.to : edge.from)}><span className="truth-edge-relation">{edge.relation}</span><span>{edge.from === selectedNode.id ? `${edge.label} → ${titleOf(edge.to)}` : `${titleOf(edge.from)} ${edge.label}`}</span><ArrowRight size={13} /></button>)}</div>
-        <div className="truth-detail-actions"><button className="button button-primary button-small" type="button" onClick={() => changeView(selectedNode.view)}><Wand2 size={13} /> Open where it lives</button><button className="button button-quiet button-small" type="button" onClick={() => openWhy(selectedNode.id)}><History size={13} /> Why did this change?</button><button className="text-button" type="button" onClick={() => setTechnical(!technical)}><Code2 size={13} /> {technical ? 'Hide the technical view' : 'Technical view'}</button></div>
+        <div className="truth-detail-actions"><button className="button button-primary button-small" type="button" onClick={() => changeView(selectedNode.view)}><Wand2 size={13} /> Open where it lives</button><button className="button button-quiet button-small" type="button" onClick={() => openWhy(selectedNode.id)}><History size={13} /> Why did this change?</button>{(() => { const doc = docFor(selectedNode.id); return doc ? <button className="button button-quiet button-small" type="button" onClick={() => setDocOpen(doc)}><FileText size={13} /> Open the document</button> : null })()}<button className="text-button" type="button" onClick={() => setTechnical(!technical)}><Code2 size={13} /> {technical ? 'Hide the technical view' : 'Technical view'}</button></div>
         {technical && <div className="studio-technical"><span className="eyebrow">Technical view</span><p><strong>Node</strong> {selectedNode.id} · {selectedNode.type} · {selectedNode.ontologyClass}</p><p><strong>Created</strong> {selectedNode.at ? new Date(selectedNode.at).toLocaleString() : 'n/a'}</p>{selectedNode.section && <p><strong>Section</strong> {selectedNode.section}</p>}{selectedNode.interpretations.map((i) => <p key={i.technical}>{i.technical}</p>)}</div>}
       </section>
       <section className="truth-ontology-card"><div className="truth-card-heading"><div><p className="eyebrow">Use case confidence · from the graph</p><h3>How sure we are, and why</h3></div><Database size={15} /></div><div className="ontology-list">{truth.confidence.factors.map((f) => <div key={f.key}><span>{f.label} · {f.value}%</span><p>{f.because.join('. ')}.</p></div>)}</div><p className="ontology-note"><Network size={13} /> Calculated only from what is connected in the graph. Readiness guides what to learn next; it never blocks a build.</p></section></aside>}
