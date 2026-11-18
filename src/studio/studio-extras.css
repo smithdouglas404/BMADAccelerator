@@ -538,3 +538,14 @@ a.studio-home-brand { color: inherit; text-decoration: none; padding-bottom: 12p
 .studio-triage-actions .button { flex: 1 1 auto; justify-content: center; white-space: nowrap; }
 /* Header buttons keep their label on one line. */
 .intro-actions .button, .truth-intro .button { white-space: nowrap; }
+/* Short controls never break onto two lines (Inter is wider than the font these boxes were drawn for). */
+.button, .button-small, .text-button, .evidence-filters button, .related-chip, .decision-chip, .readiness-note button, .studio-edit-button { white-space: nowrap; }
+.readiness-note button { flex-wrap: nowrap; }
+/* Whole product: the honest read gets room to breathe beside the ring. */
+.readiness-note { flex: 1 1 220px; min-width: 200px; }
+/* A card header keeps its icon on the title's line. */
+.stack-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.stack-header > div { min-width: 0; flex: 1; }
+.stack-header > svg { flex: 0 0 auto; margin-top: 2px; }
+/* The small line under a page's main buttons reads as a note, not code, and stays tidy. */
+.intro-actions > span.studio-intro-note { display: block; max-width: 300px; font: 12px/1.45 var(--sans-face, 'DM Sans'), ui-sans-serif, system-ui, sans-serif; text-align: right; }
