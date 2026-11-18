@@ -47,14 +47,28 @@ export function StudioMarkdown({ text }: { text: string }) {
   const lines = text.replace(/\r/g, '').split('\n')
   let list: string[] = []
   let para: string[] = []
+  let table: string[][] = []
+  const cells = (row: string) => row.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim())
   const flush = () => {
     if (para.length) blocks.push(<p key={`p${blocks.length}`}>{inline(para.join(' '))}</p>)
     if (list.length) blocks.push(<ul key={`u${blocks.length}`}>{list.map((l, i) => <li key={i}>{inline(l)}</li>)}</ul>)
+    if (table.length) {
+      const [head, ...rows] = table
+      blocks.push(<div key={`t${blocks.length}`} className="studio-md-table"><table><thead><tr>{head.map((c, i) => <th key={i}>{inline(c)}</th>)}</tr></thead><tbody>{rows.map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j}>{inline(c)}</td>)}</tr>)}</tbody></table></div>)
+    }
     para = []
     list = []
+    table = []
   }
   for (const raw of lines) {
     const line = raw.trimEnd()
+    // A Markdown table: a row of |-separated cells; the |---|---| line under the header is dropped.
+    if (/^\s*\|.*\|\s*$/.test(line)) {
+      if (para.length || list.length) { const t = table; table = []; flush(); table = t }
+      if (!/^[\s|:-]+$/.test(line)) table.push(cells(line))
+      continue
+    }
+    if (table.length) flush()
     const h = line.match(/^(#{1,4})\s+(.*)$/)
     if (h) { flush(); blocks.push(<h3 key={`h${blocks.length}`} className={`studio-md-h${h[1].length}`}>{inline(h[2])}</h3>); continue }
     const li = line.match(/^\s*(?:[-*]|\d+[.)])\s+(.*)$/)

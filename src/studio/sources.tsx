@@ -56,7 +56,7 @@ export function DocumentPanel({ live, docId, onClose }: { live: Live; docId: str
         {d.exists ? <><a className="button button-primary button-small" href={raw} target="_blank" rel="noreferrer"><ExternalLink size={13} /> Open the original</a><a className="button button-quiet button-small" href={docUrl(live, docId, 'download')} download={d.fileName}><Download size={13} /> Download</a></>
           : <span className="studio-muted">The original file is no longer in the workspace; only its record remains.</span>}
       </div>
-      {(d.summary || d.description) && !/^No summary yet/.test(d.summary) && <section className="studio-card-section"><span className="eyebrow">What the document agent read</span>{d.description && <p className="studio-doc-summary">{d.description}</p>}{d.summary && <p className="studio-doc-summary">{d.summary}</p>}</section>}
+      {(d.summary || d.description) && !/^No summary yet/.test(d.summary) && <section className="studio-card-section"><span className="eyebrow">What the document agent read</span>{d.description && <p className="studio-doc-summary">{d.description}</p>}{d.summary && d.summary.trim() !== d.description.trim() && <p className="studio-doc-summary">{d.summary}</p>}</section>}
       <section className="studio-card-section"><span className="eyebrow"><FileText size={11} /> Contents</span>
         {image && d.exists ? <img className="studio-doc-image" src={raw} alt={d.fileName} />
           : pdf && d.exists ? <iframe className="studio-doc-frame" src={raw} title={d.fileName} />
