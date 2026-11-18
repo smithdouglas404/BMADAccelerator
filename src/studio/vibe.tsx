@@ -4,6 +4,8 @@
 // the design team's classes (product-preview-shell, annotate-trigger); new pieces use studio-extras.css.
 import { useEffect, useRef, useState } from 'react'
 import { api, previewUrl, type Live } from './live'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 
 export type Pick =
   | { kind: 'point'; x: number; y: number; width: number; height: number; path: string; scrollY: number }
@@ -23,7 +25,7 @@ export function useAppLocation() {
   return loc
 }
 
-export function LiveFrame({ live, annotationMode, shape, onPick, tall = false }: { live: Live; annotationMode: boolean; shape: 'object' | 'circle' | 'full-screen'; onPick: (p: Pick) => void; tall?: boolean }) {
+export function LiveFrame({ live, annotationMode, shape, onPick, tall = false, fill = false }: { live: Live; annotationMode: boolean; shape: 'object' | 'circle' | 'full-screen'; onPick: (p: Pick) => void; tall?: boolean; fill?: boolean }) {
   const box = useRef<HTMLDivElement>(null)
   const loc = useAppLocation()
   const [nonce, setNonce] = useState(0)
@@ -35,12 +37,12 @@ export function LiveFrame({ live, annotationMode, shape, onPick, tall = false }:
   if (!live.preview.hasApp || !live.preview.running) {
     const stopped = !live.generateBusy && live.preview.hasApp && !live.preview.starting
     return (
-      <div className={`product-preview-shell live-empty ${tall ? 'is-tall' : ''}`}>
-        <div className="preview-app-top"><span className="preview-kite">{live.name.toLowerCase()}.</span><span className="preview-preview-label">{live.generateBusy ? `building version ${live.generateCount + 1}` : 'no version yet'}</span><span className="preview-avatar">CC</span></div>
-        <div className="live-empty-copy">
-          <span className="live-pulse" />
-          <strong>{live.generateBusy ? live.generateStatus || 'Claude Code is building' : stopped ? `Version ${live.generateCount} is built; its preview is stopped` : live.preview.hasApp ? 'Starting the preview…' : 'The first version builds from the floor'}</strong>
-          <small>{live.generateBusy ? 'An early version appears here as soon as it runs.' : stopped ? <button type="button" className="annotate-trigger" onClick={() => void api(`/api/use-cases/${live.id}/preview`, { method: 'POST' })}>Start the preview</button> : live.preview.hasApp ? 'One moment.' : 'Ask Socra, or press “Build it now” on the prototype brief.'}</small>
+      <div data-ui data-live-frame className={cn('grid grid-rows-[auto_1fr] overflow-hidden rounded-lg border border-border bg-muted/40', fill ? 'absolute inset-0 rounded-none border-0' : tall ? 'min-h-[640px]' : 'min-h-[260px]')}>
+        <div className="flex items-center gap-2 border-b border-border px-4 py-2.5 text-xs"><span className="font-semibold tracking-tight text-foreground">{live.name.toLowerCase()}.</span><span className="ml-auto font-mono text-muted-foreground uppercase">{live.generateBusy ? `building version ${live.generateCount + 1}` : 'no version yet'}</span></div>
+        <div className="grid place-content-center justify-items-center gap-2.5 px-5 py-8 text-center">
+          <span className={cn('size-2 rounded-full bg-primary ring-4 ring-primary/15', live.generateBusy && 'animate-pulse')} />
+          <strong className="text-base font-medium">{live.generateBusy ? live.generateStatus || 'Claude Code is building' : stopped ? `Version ${live.generateCount} is built; its preview is stopped` : live.preview.hasApp ? 'Starting the preview…' : 'The first version builds from the floor'}</strong>
+          <span className="max-w-xs text-sm text-muted-foreground">{live.generateBusy ? 'An early version appears here as soon as it runs.' : stopped ? <Button type="button" size="sm" className="mt-1" onClick={() => void api(`/api/use-cases/${live.id}/preview`, { method: 'POST' })}>Start the preview</Button> : live.preview.hasApp ? 'One moment.' : 'Ask Socra, or press “Generate the prototype” in the menu.'}</span>
         </div>
       </div>
     )
@@ -74,15 +76,15 @@ export function LiveFrame({ live, annotationMode, shape, onPick, tall = false }:
   }
   const d = drag ? { left: Math.min(drag.x0, drag.x1), top: Math.min(drag.y0, drag.y1), width: Math.abs(drag.x1 - drag.x0), height: Math.abs(drag.y1 - drag.y0) } : null
   return (
-    <div ref={box} className={`product-preview-shell live-frame ${tall ? 'is-tall' : ''} ${annotationMode ? 'is-annotatable' : ''}`}>
-      <iframe key={nonce} src={url} title={`${live.name} live preview`} />
+    <div ref={box} data-ui data-live-frame className={cn('relative overflow-hidden bg-white', fill ? 'absolute inset-0' : 'rounded-lg border border-border', annotationMode && !fill && 'border-primary ring-2 ring-primary/25')}>
+      <iframe key={nonce} src={url} title={`${live.name} live preview`} className={cn('block w-full border-0 bg-white', fill ? 'h-screen' : tall ? 'h-[680px]' : 'h-[360px]')} />
       {annotationMode && shape !== 'full-screen' && (
-        <div className={`live-overlay ${shape}`} onPointerDown={down} onPointerMove={move} onPointerUp={up}>
-          {d && <span className="live-circle" style={d} />}
-          <span className="live-overlay-hint">{shape === 'circle' ? 'Drag a circle around the part you mean' : 'Click the part you mean'}</span>
+        <div className={cn('absolute inset-0 z-[2] bg-primary/5 outline-2 -outline-offset-4 outline-primary/50 outline-dashed', shape === 'circle' ? 'cursor-crosshair' : 'cursor-pointer')} onPointerDown={down} onPointerMove={move} onPointerUp={up}>
+          {d && <span className="pointer-events-none absolute rounded-full border-2 border-primary bg-primary/15" style={d} />}
+          <span className="absolute bottom-3 left-3 rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground">{shape === 'circle' ? 'Drag a circle around the part you mean' : 'Click the part you mean'}</span>
         </div>
       )}
-      <a className="live-open" href={previewUrl(live.preview.port, loc.path)} target="_blank" rel="noreferrer">{loc.path}</a>
+      {!fill && <a className="absolute right-2.5 bottom-2.5 z-[1] rounded-md border border-border bg-background/90 px-2 py-1 font-mono text-xs text-muted-foreground no-underline hover:text-foreground" href={previewUrl(live.preview.port, loc.path)} target="_blank" rel="noreferrer">{loc.path}</a>}
     </div>
   )
 }

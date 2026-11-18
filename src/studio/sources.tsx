@@ -4,7 +4,10 @@
 // is connected to in the Product Truth Graph). Everything shown is read from the product's own records;
 // when something isn't there, the panel says so instead of inventing it.
 import { useEffect, useState } from 'react'
-import { ArrowRight, Download, ExternalLink, FileText, Network, X } from 'lucide-react'
+import { ArrowRight, Download, ExternalLink, FileText, Network } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { api, ago, type Live } from './live'
 import { StudioMarkdown } from './extras'
 import { useTruth, STATEMENT_LABEL } from './truth'
@@ -18,19 +21,28 @@ export type DocText = {
 export const docUrl = (live: { id: string }, docId: string, as = '') => `/api/use-cases/${live.id}/documents/${docId}${as ? `?as=${as}` : ''}`
 const size = (n: number) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : n > 1024 ? `${Math.round(n / 1024)} KB` : `${n} B`)
 
-function Panel({ label, onClose, wide, children }: { label: string; onClose: () => void; wide?: boolean; children: React.ReactNode }) {
-  useEffect(() => {
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', esc)
-    return () => window.removeEventListener('keydown', esc)
-  }, [onClose])
-  return <div className="studio-card-overlay" onClick={onClose}>
-    <aside className={`studio-card-panel${wide ? ' studio-doc-panel' : ''}`} onClick={(e) => e.stopPropagation()} aria-label={label}>
-      <div className="studio-card-head"><p className="eyebrow">{label}</p><button className="icon-button subtle" type="button" onClick={onClose} aria-label="Close"><X size={16} /></button></div>
-      {children}
-    </aside>
-  </div>
+function Panel({ label, title, meta, onClose, wide, children }: { label: string; title?: React.ReactNode; meta?: React.ReactNode; onClose: () => void; wide?: boolean; children: React.ReactNode }) {
+  return <Sheet open onOpenChange={(v) => { if (!v) onClose() }}>
+    <SheetContent data-ui side="right" className={cn('w-full gap-0 overflow-y-auto p-0', wide ? 'sm:max-w-3xl' : 'sm:max-w-xl')}>
+      <SheetHeader className="border-b border-border px-5 py-4 pr-14">
+        <SheetDescription className="text-xs font-medium text-muted-foreground">{label}</SheetDescription>
+        <SheetTitle className="text-xl font-semibold leading-snug tracking-tight text-balance">{title ?? label}</SheetTitle>
+        {meta}
+      </SheetHeader>
+      <div className="grid grid-cols-1 gap-5 px-5 py-4">{children}</div>
+    </SheetContent>
+  </Sheet>
 }
+
+function Part({ label, icon, children }: { label: React.ReactNode; icon?: React.ReactNode; children: React.ReactNode }) {
+  return <section className="grid gap-2">
+    <h3 className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">{icon}{label}</h3>
+    {children}
+  </section>
+}
+const Muted = ({ children }: { children: React.ReactNode }) => <p className="text-sm text-muted-foreground">{children}</p>
+const LinkChip = ({ onClick, children }: { onClick: () => void; children: React.ReactNode }) =>
+  <Button type="button" variant="outline" size="sm" className="h-auto min-h-9 max-w-full justify-start whitespace-normal py-1.5 text-left" onClick={onClick}>{children}</Button>
 
 /** One stored document, opened: its readable text, the original and a download. */
 export function DocumentPanel({ live, docId, onClose }: { live: Live; docId: string; onClose: () => void }) {
@@ -47,24 +59,25 @@ export function DocumentPanel({ live, docId, onClose }: { live: Live; docId: str
   const image = d?.mimeType.startsWith('image/')
   const pdf = d?.mimeType === 'application/pdf'
   const md = Boolean(d && (/\.(md|markdown)$/i.test(d.path) || !/\.(txt|csv|json|ya?ml|xml|log)$/i.test(d.path)))
-  return <Panel label="Document" onClose={onClose} wide>
-    {!d ? <p className="studio-muted">{error || 'Opening the document…'}</p> : <>
-      <h2 className="studio-doc-title">{d.fileName}</h2>
-      <p className="studio-doc-meta">{[d.origin === 'upload' ? 'Uploaded' : d.moveId ? 'Attached to a card' : 'Written in the Studio', ago(d.createdAt), d.sizeBytes ? size(d.sizeBytes) : '', d.kind && d.kind !== 'other' ? d.kind : ''].filter(Boolean).join(' · ')}</p>
-      {d.path && <p className="studio-doc-path">{d.path}</p>}
-      <div className="studio-doc-actions">
-        {d.exists ? <><a className="button button-primary button-small" href={raw} target="_blank" rel="noreferrer"><ExternalLink size={13} /> Open the original</a><a className="button button-quiet button-small" href={docUrl(live, docId, 'download')} download={d.fileName}><Download size={13} /> Download</a></>
-          : <span className="studio-muted">The original file is no longer in the workspace; only its record remains.</span>}
+  const meta = d ? <>
+    <p className="text-xs text-muted-foreground">{[d.origin === 'upload' ? 'Uploaded' : d.moveId ? 'Attached to a card' : 'Written in the Studio', ago(d.createdAt), d.sizeBytes ? size(d.sizeBytes) : '', d.kind && d.kind !== 'other' ? d.kind : ''].filter(Boolean).join(' · ')}</p>
+    {d.path && <p className="font-mono text-xs break-all text-muted-foreground">{d.path}</p>}
+  </> : null
+  return <Panel label="Document" title={d?.fileName ?? 'Document'} meta={meta} onClose={onClose} wide>
+    {!d ? <Muted>{error || 'Opening the document…'}</Muted> : <>
+      <div className="flex flex-wrap gap-2">
+        {d.exists ? <><Button asChild size="sm"><a href={raw} target="_blank" rel="noreferrer"><ExternalLink /> Open the original</a></Button><Button asChild size="sm" variant="outline"><a href={docUrl(live, docId, 'download')} download={d.fileName}><Download /> Download</a></Button></>
+          : <Muted>The original file is no longer in the workspace; only its record remains.</Muted>}
       </div>
-      {(d.summary || d.description) && !/^No summary yet/.test(d.summary) && <section className="studio-card-section"><span className="eyebrow">What the document agent read</span>{d.description && <p className="studio-doc-summary">{d.description}</p>}{d.summary && d.summary.trim() !== d.description.trim() && <p className="studio-doc-summary">{d.summary}</p>}</section>}
-      <section className="studio-card-section"><span className="eyebrow"><FileText size={11} /> Contents</span>
-        {image && d.exists ? <img className="studio-doc-image" src={raw} alt={d.fileName} />
-          : pdf && d.exists ? <iframe className="studio-doc-frame" src={raw} title={d.fileName} />
-          : d.html && d.exists ? <iframe className="studio-doc-frame" src={raw} title={d.fileName} sandbox="" />
-          : d.text != null ? <div className="studio-doc-body">{md ? <StudioMarkdown text={d.text} /> : <pre>{d.text}</pre>}{d.truncated && <p className="studio-muted">This is the first part of a long file. Open the original for all of it.</p>}</div>
-          : d.exists ? <p className="studio-muted">This file type can’t be shown as text here. Open the original or download it.</p>
-          : <p className="studio-muted">Only the record remains: the file was removed from the workspace, and no readable copy was kept.</p>}
-      </section>
+      {(d.summary || d.description) && !/^No summary yet/.test(d.summary) && <Part label="What the document agent read">{d.description && <p className="text-sm leading-relaxed">{d.description}</p>}{d.summary && d.summary.trim() !== d.description.trim() && <p className="text-sm leading-relaxed">{d.summary}</p>}</Part>}
+      <Part label="Contents" icon={<FileText className="size-3.5" />}>
+        {image && d.exists ? <img className="max-w-full rounded-md border border-border" src={raw} alt={d.fileName} />
+          : pdf && d.exists ? <iframe className="h-[70vh] w-full rounded-md border border-border bg-white" src={raw} title={d.fileName} />
+          : d.html && d.exists ? <iframe className="h-[70vh] w-full rounded-md border border-border bg-white" src={raw} title={d.fileName} sandbox="" />
+          : d.text != null ? <div className="rounded-md border border-border bg-card p-4 text-sm leading-relaxed">{md ? <StudioMarkdown text={d.text} /> : <pre className="overflow-x-auto font-mono text-xs whitespace-pre-wrap">{d.text}</pre>}{d.truncated && <p className="mt-3 text-sm text-muted-foreground">This is the first part of a long file. Open the original for all of it.</p>}</div>
+          : d.exists ? <Muted>This file type can’t be shown as text here. Open the original or download it.</Muted>
+          : <Muted>Only the record remains: the file was removed from the workspace, and no readable copy was kept.</Muted>}
+      </Part>
     </>}
   </Panel>
 }
@@ -94,25 +107,28 @@ export function EvidenceTracePanel({ live, ev, onClose, openDoc, changeView }: {
   const nodeOf = (id: string) => truth?.nodes.find((n) => n.id === id)
   const { spec, caps } = supported(live, ev.trace)
   const go = (view: StudioView, n = '') => { onClose(); changeView(view, n) }
-  return <Panel label="Evidence trace" onClose={onClose}>
-    <p className="eyebrow">{ev.type} · {ev.confidence} confidence · added {ago(ev.createdAt)}</p>
-    <h2 className="studio-doc-title">{ev.insight}</h2>
-    <section className="studio-card-section"><span className="eyebrow">Source</span>
-      {doc ? <ul className="studio-card-files"><li><FileText size={13} /><button type="button" className="studio-link-button" onClick={() => openDoc(doc.id)}>{doc.fileName}</button><small>{ago(doc.createdAt)}{doc.exists === false ? ' · record only' : ''}</small>{doc.exists !== false && <a className="studio-card-dl" href={docUrl(live, doc.id, 'download')} download={doc.fileName} aria-label={`Download ${doc.fileName}`}><Download size={13} /></a>}</li></ul> : null}
-      <p className="studio-doc-summary">{ev.source}</p>
-      {!doc && <p className="studio-muted">{ev.type === 'conversation' ? 'This came from the conversation, not a file.' : 'No stored file matches this source; it was recorded from research or the conversation.'}</p>}
-    </section>
-    <section className="studio-card-section"><span className="eyebrow">What it supports</span>
-      {ev.trace ? <p className="studio-doc-summary">{ev.trace}</p> : <p className="studio-muted">Nothing named yet.</p>}
-      {(spec.length > 0 || caps.length > 0) && <div className="studio-trace-links">
-        {spec.map((s) => <button type="button" key={s.id} onClick={() => go(s.tab === 'trd' ? 'trd' : 'spec', s.key)}>{s.ref} · {s.title} <ArrowRight size={11} /></button>)}
-        {caps.map((c) => <button type="button" key={c.id} onClick={() => go('readiness')}>{c.label} <ArrowRight size={11} /></button>)}
+  return <Panel label="Evidence trace" title={ev.insight} meta={<p className="text-xs text-muted-foreground">{ev.type} · {ev.confidence} confidence · added {ago(ev.createdAt)}</p>} onClose={onClose}>
+    <Part label="Source">
+      {doc && <div className="flex items-center gap-2 rounded-md border border-border px-3 py-1.5">
+        <FileText className="size-4 shrink-0 text-muted-foreground" />
+        <Button type="button" variant="link" className="h-9 min-w-0 flex-1 justify-start truncate px-0" onClick={() => openDoc(doc.id)}>{doc.fileName}</Button>
+        <span className="text-xs text-muted-foreground">{ago(doc.createdAt)}{doc.exists === false ? ' · record only' : ''}</span>
+        {doc.exists !== false && <Button asChild size="icon-sm" variant="ghost"><a href={docUrl(live, doc.id, 'download')} download={doc.fileName} aria-label={`Download ${doc.fileName}`}><Download /></a></Button>}
       </div>}
-    </section>
-    <section className="studio-card-section"><span className="eyebrow"><Network size={11} /> Connected in the truth graph · {truth ? others.length : '…'}</span>
-      {!truth ? <p className="studio-muted">Reading the graph…</p> : others.length === 0 ? <p className="studio-muted">No other record is linked to this evidence yet.</p>
-        : <div className="studio-trace-links">{others.slice(0, 20).map((o) => { const n = nodeOf(o.id); return <button type="button" key={o.id} onClick={() => go('truth', `graph:${o.id}`)}><em>{o.relation}</em> {n?.title ?? o.id}{n ? <small> · {STATEMENT_LABEL[n.statement]}</small> : null} <ArrowRight size={11} /></button> })}</div>}
-      <button className="text-button" type="button" onClick={() => go('truth', `graph:${node}`)}>Open it in the truth graph <ArrowRight size={12} /></button>
-    </section>
+      <p className="text-sm leading-relaxed">{ev.source}</p>
+      {!doc && <Muted>{ev.type === 'conversation' ? 'This came from the conversation, not a file.' : 'No stored file matches this source; it was recorded from research or the conversation.'}</Muted>}
+    </Part>
+    <Part label="What it supports">
+      {ev.trace ? <p className="text-sm leading-relaxed">{ev.trace}</p> : <Muted>Nothing named yet.</Muted>}
+      {(spec.length > 0 || caps.length > 0) && <div className="flex flex-wrap gap-2">
+        {spec.map((s) => <LinkChip key={s.id} onClick={() => go(s.tab === 'trd' ? 'trd' : 'spec', s.key)}>{s.ref} · {s.title} <ArrowRight /></LinkChip>)}
+        {caps.map((c) => <LinkChip key={c.id} onClick={() => go('readiness')}>{c.label} <ArrowRight /></LinkChip>)}
+      </div>}
+    </Part>
+    <Part label={<>Connected in the truth graph · {truth ? others.length : '…'}</>} icon={<Network className="size-3.5" />}>
+      {!truth ? <Muted>Reading the graph…</Muted> : others.length === 0 ? <Muted>No other record is linked to this evidence yet.</Muted>
+        : <div className="flex flex-wrap gap-2">{others.slice(0, 20).map((o) => { const n = nodeOf(o.id); return <LinkChip key={o.id} onClick={() => go('truth', `graph:${o.id}`)}><em className="font-serif text-primary not-italic">{o.relation}</em> {n?.title ?? o.id}{n ? <span className="text-xs text-muted-foreground"> · {STATEMENT_LABEL[n.statement]}</span> : null} <ArrowRight /></LinkChip> })}</div>}
+      <div><Button type="button" variant="ghost" size="sm" onClick={() => go('truth', `graph:${node}`)}>Open it in the truth graph <ArrowRight /></Button></div>
+    </Part>
   </Panel>
 }

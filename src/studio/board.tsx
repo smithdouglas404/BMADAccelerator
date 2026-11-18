@@ -3,12 +3,20 @@
 // The Board (Doug, Nov 16): the team's Kanban made fully usable. Cards still move themselves (Socra, the
 // builds and people's answers move them), but a person can also drag a card or use its arrows, open a
 // card to see and edit everything on it, add a card, and attach files. Every change is logged and Socra
-// hears it. Built on the design team's kanban classes; new pieces are styled in studio-extras.css.
+// hears it. On shadcn/ui + Animate UI; the card opens in a Sheet.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, Check, Download, FileText, History, MessageCircleQuestion, Network, Paperclip, Play, Plus, Target, Upload, X } from 'lucide-react'
 import { hasDetail, needsTriage } from '@/lib/studio/journey'
 import { ASSISTANT_NAME } from '@/lib/brand'
+import { cn } from '@/lib/utils'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Textarea } from '@/components/ui/textarea'
+import { PageHeader, StatusBadge } from './kit'
 import { api, ago, type Live } from './live'
 import type { Me, StudioView } from './flow'
 import { DocumentPanel } from './sources'
@@ -100,58 +108,108 @@ export function BoardView({ live, me, buildNow, changeView, setToast, children }
     } catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
   }
 
-  return <div className="page-wrap pilot-page">
-    <div className="page-intro"><div><p className="eyebrow eyebrow-with-dot"><span className="status-dot" />The build stays connected to the why</p><h1>Make the next move<br /><em>traceable.</em></h1><p>Cards move themselves as {ASSISTANT_NAME}, the builds and your answers settle them. You can also drag a card, use its arrows, or open it to read and edit everything on it and attach files. Every change is logged and {ASSISTANT_NAME} hears it.</p></div>
-      <div className="intro-actions"><button className="button button-primary" type="button" onClick={() => buildNow()} disabled={live.generateBusy}><Play size={15} /> {live.generateBusy ? 'Building…' : 'Stage pilot build'}</button><button className="button button-quiet" type="button" onClick={() => setAdding(true)}><Plus size={15} /> Add a card</button><span><Network size={14} /> {cards.length} cards · {cards.filter((c) => c.status === 'done').length} done</span></div></div>
+  const done = cards.filter((c) => c.status === 'done').length
+  return (
+    <div data-ui className="mx-auto grid w-full max-w-[96rem] grid-cols-1 gap-6 px-4 py-8 md:px-8">
+      <PageHeader
+        title="Board" eyebrow="The build stays connected to the why" headline={<>Make the next move<br /><em>traceable.</em></>}
+        description={<>Cards move themselves as {ASSISTANT_NAME}, the builds and your answers settle them. You can also drag a card, use its arrows, or open it to edit it and attach files. Every change is logged and {ASSISTANT_NAME} hears it.</>}
+        actions={<>
+          <Button variant="outline" onClick={() => setAdding(true)}><Plus className="size-4" /> Add a card</Button>
+          <Button onClick={() => buildNow()} disabled={live.generateBusy}><Play className="size-4" /> {live.generateBusy ? 'Building…' : 'Stage pilot build'}</Button>
+        </>}
+      />
+      <p className="-mt-3 flex items-center gap-2 text-sm text-muted-foreground"><Network className="size-4" /> {cards.length} cards · {done} done · {ASSISTANT_NAME} is watching for a blocker, not micromanaging the work.</p>
 
-    <div className="kanban-board studio-board">{COLUMNS.map((col) => {
-      const items = cards.filter((c) => c.status === col.id)
-      return <section key={col.id} className={`kanban-column ${col.id} ${over === col.id ? 'is-drop' : ''}`}
-        onDragOver={(e) => { if (dragging) { e.preventDefault(); setOver(col.id) } }}
-        onDragLeave={() => setOver((o) => (o === col.id ? '' : o))}
-        onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('text/plain') || dragging; setOver(''); setDragging(''); if (id) void move(id, col.id, 'dragged on the Board') }}>
-        <div className="kanban-column-header"><div><strong>{col.label}</strong><small>{col.description}</small></div><span>{items.length}</span></div>
-        <div className="kanban-cards">
-          {col.id === 'queued' && fresh.length > 0 && <p className="studio-triage-head"><span className="studio-red-dot" /> {fresh.filter((b) => !b.triage).length} new · needs you</p>}
-          {col.id === 'queued' && fresh.map((b) => {
-            const from = b.state === 'suggested' || b.state === 'probing' ? `${ASSISTANT_NAME} suggests` : b.annotationId || /mark/i.test(b.source) ? 'From a mark-up' : /Socra|Muse/i.test(b.source) ? `From ${ASSISTANT_NAME}` : 'You said'
-            return <article key={b.id} className={`build-card studio-board-card ${b.triage ? '' : 'studio-triage-card'}`} aria-label={`New: ${b.title}`}>
-              <div className="build-card-top"><span className="studio-triage-tag">{b.triage === 'working' ? <><MessageCircleQuestion size={11} /> Working on it</> : <><span className="studio-red-dot" /> New · {from}</>}</span><small className="studio-board-kind">{ago(b.createdAt)}</small></div>
-              <h3>{b.title}</h3>
-              {b.note && <p className="studio-moved-by">{b.note.slice(0, 160)}</p>}
-              <div className="studio-triage-actions">
-                {b.triage !== 'working' && <button className="button button-quiet button-small" type="button" disabled={triaging === b.id} onClick={() => void triage(b.id, 'working')} title={`${ASSISTANT_NAME} asks the questions that make it a clear requirement`}><MessageCircleQuestion size={12} /> Work on it</button>}
-                <button className="button button-primary button-small" type="button" disabled={triaging === b.id} onClick={() => void triage(b.id, 'accepted')} title="Put it on the Board as a card in Backlog"><Check size={12} /> Accept</button>
-                <button className="button button-quiet button-small" type="button" disabled={triaging === b.id} onClick={() => void triage(b.id, 'rejected')} title="Set it aside; it stays in the history"><X size={12} /> Reject</button>
+      <div className="-mx-4 grid auto-cols-[minmax(13rem,1fr)] grid-flow-col gap-3 overflow-x-auto px-4 pb-2 md:-mx-8 md:px-8" role="list" aria-label="Board columns">
+        {COLUMNS.map((col) => {
+          const items = cards.filter((c) => c.status === col.id)
+          return (
+            <section key={col.id} role="listitem" aria-label={col.label}
+              className={cn('flex min-h-80 flex-col rounded-xl border bg-card/60 transition-colors', over === col.id ? 'border-primary bg-primary/5' : 'border-border')}
+              onDragOver={(e) => { if (dragging || e.dataTransfer.types.includes('text/plain')) { e.preventDefault(); setOver(col.id) } }}
+              onDragLeave={() => setOver((o) => (o === col.id ? '' : o))}
+              onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('text/plain') || dragging; setOver(''); setDragging(''); if (id) void move(id, col.id, 'dragged on the Board') }}>
+              <header className="flex items-start justify-between gap-2 border-b border-border px-4 py-3">
+                <div className="grid gap-0.5"><h2 className="text-base font-semibold">{col.label}</h2><p className="text-xs text-muted-foreground">{col.description}</p></div>
+                <Badge variant="secondary" className="tabular-nums">{items.length}</Badge>
+              </header>
+              <div className="grid grid-cols-1 content-start gap-2.5 p-2.5">
+                {col.id === 'queued' && fresh.length > 0 && <p className="flex items-center gap-2 px-1 text-xs font-semibold text-destructive"><span className="size-2 rounded-full bg-destructive" /> {fresh.filter((b) => !b.triage).length} new · needs you</p>}
+                {col.id === 'queued' && fresh.map((b) => {
+                  const from = b.state === 'suggested' || b.state === 'probing' ? `${ASSISTANT_NAME} suggests` : b.annotationId || /mark/i.test(b.source) ? 'From a mark-up' : /Socra|Muse/i.test(b.source) ? `From ${ASSISTANT_NAME}` : 'You said'
+                  return (
+                    <article key={b.id} aria-label={`New: ${b.title}`} className={cn('grid min-w-0 grid-cols-1 gap-2 rounded-lg border bg-background p-3 animate-in fade-in slide-in-from-top-1 duration-300', b.triage ? 'border-border' : 'border-destructive/60 shadow-[inset_3px_0_0_var(--destructive)]')}>
+                      <div className="flex flex-wrap items-center justify-between gap-1.5">
+                        {b.triage === 'working'
+                          ? <Badge variant="outline" className="gap-1 text-xs"><MessageCircleQuestion className="size-3.5" /> Working on it</Badge>
+                          : <Badge variant="outline" className="gap-1.5 border-destructive/40 text-xs text-destructive"><span className="size-1.5 rounded-full bg-destructive" /> New · {from}</Badge>}
+                        <span className="text-xs text-muted-foreground">{ago(b.createdAt)}</span>
+                      </div>
+                      <h3 className="text-sm leading-snug font-semibold [overflow-wrap:anywhere]">{b.title}</h3>
+                      {b.note && <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">{b.note.slice(0, 160)}</p>}
+                      <div className="flex flex-wrap gap-1.5">
+                        {b.triage !== 'working' && <Button type="button" size="sm" variant="outline" disabled={triaging === b.id} onClick={() => void triage(b.id, 'working')} title={`${ASSISTANT_NAME} asks the questions that make it a clear requirement`}><MessageCircleQuestion className="size-4" /> Work on it</Button>}
+                        <Button type="button" size="sm" disabled={triaging === b.id} onClick={() => void triage(b.id, 'accepted')} title="Put it on the Board as a card in Backlog"><Check className="size-4" /> Accept</Button>
+                        <Button type="button" size="sm" variant="ghost" disabled={triaging === b.id} onClick={() => void triage(b.id, 'rejected')} title="Set it aside; it stays in the history"><X className="size-4" /> Reject</Button>
+                      </div>
+                    </article>
+                  )
+                })}
+                {col.id === 'queued' && adding && (
+                  <div className="grid gap-2 rounded-lg border border-primary/40 bg-background p-3">
+                    <Input autoFocus aria-label="New card title" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void add(); if (e.key === 'Escape') setAdding(false) }} placeholder="What should the product do?" />
+                    <div className="flex gap-2"><Button size="sm" onClick={() => void add()} disabled={!newTitle.trim()}><Check className="size-4" /> Add</Button><Button size="sm" variant="ghost" onClick={() => setAdding(false)}>Cancel</Button></div>
+                  </div>
+                )}
+                {items.map((item) => {
+                  const back = LABEL[ORDER[ORDER.indexOf(item.status) - 1]]
+                  const next = LABEL[ORDER[ORDER.indexOf(item.status) + 1]]
+                  return (
+                    <article key={item.id} draggable tabIndex={0} role="button" aria-label={`Open ${item.title}`}
+                      className={cn('grid min-w-0 cursor-grab grid-cols-1 gap-2 rounded-lg border border-border bg-background p-3 text-left transition-colors outline-none hover:border-primary/40 focus-visible:ring-[3px] focus-visible:ring-ring/50 active:cursor-grabbing', dragging === item.id && 'opacity-50')}
+                      onDragStart={(e) => { e.dataTransfer.setData('text/plain', item.id); e.dataTransfer.effectAllowed = 'move'; setDragging(item.id) }}
+                      onDragEnd={() => { setDragging(''); setOver('') }}
+                      onClick={() => setOpen(item.id)} onDoubleClick={() => setOpen(item.id)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(item.id) } }}>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <StatusBadge tone={TONE[item.status]}>{item.signal || LABEL[item.status]}</StatusBadge>
+                        {item.hidden && item.hidden !== 'story' && <span className="text-xs text-muted-foreground">{item.hidden}</span>}
+                      </div>
+                      <h3 className="text-base leading-snug font-semibold">{item.title}</h3>
+                      {(item.capability || item.decision) && (
+                        <div className="grid gap-1 text-sm text-muted-foreground">
+                          {item.capability && <span className="flex gap-1.5"><Target className="mt-0.5 size-4 shrink-0" /> {item.capability}</span>}
+                          {item.decision && <span className="flex gap-1.5"><Check className="mt-0.5 size-4 shrink-0" /> “{item.decision}”</span>}
+                        </div>
+                      )}
+                      {item.moveReason && <p className="flex gap-1.5 text-xs text-muted-foreground"><History className="mt-0.5 size-3.5 shrink-0" /> {item.movedBy || 'Moved'}: {item.moveReason}</p>}
+                      <div className="flex items-center gap-2 border-t border-border pt-2">
+                        <span className="grid size-6 shrink-0 place-items-center rounded-full bg-secondary text-xs font-semibold">{ownerMark(item.owner)}</span>
+                        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={item.owner}>{item.owner}</span>
+                        <Button type="button" size="icon" variant="ghost" className="size-9" disabled={item.status === 'queued'} aria-label="Move back" title={back ? `Back to ${back}` : ''} onClick={(e) => { e.stopPropagation(); step(item.id, -1) }}><ArrowLeft className="size-4" /></Button>
+                        <Button type="button" size="icon" variant="ghost" className="size-9" disabled={item.status === 'done'} aria-label="Move forward" title={next ? `On to ${next}` : ''} onClick={(e) => { e.stopPropagation(); step(item.id, 1) }}><ArrowRight className="size-4" /></Button>
+                      </div>
+                    </article>
+                  )
+                })}
+                {items.length === 0 && !(col.id === 'queued' && (adding || fresh.length > 0)) && <p className={cn('rounded-lg border border-dashed px-3 py-6 text-center text-sm text-muted-foreground', dragging ? 'border-primary/50' : 'border-border')}>{dragging ? 'Drop it here.' : <>Nothing here yet. That’s okay: the shape is still moving.</>}</p>}
               </div>
-            </article>
-          })}
-          {col.id === 'queued' && adding && <div className="build-card studio-board-new"><input autoFocus value={newTitle} onChange={(e) => setNewTitle(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void add(); if (e.key === 'Escape') setAdding(false) }} placeholder="What should the product do?" /><div><button className="button button-primary button-small" type="button" onClick={() => void add()} disabled={!newTitle.trim()}><Check size={12} /> Add</button><button className="button button-quiet button-small" type="button" onClick={() => setAdding(false)}>Cancel</button></div></div>}
-          {items.map((item) => <article key={item.id} className={`build-card studio-board-card ${dragging === item.id ? 'is-dragging' : ''}`} draggable
-            onDragStart={(e) => { e.dataTransfer.setData('text/plain', item.id); e.dataTransfer.effectAllowed = 'move'; setDragging(item.id) }}
-            onDragEnd={() => { setDragging(''); setOver('') }}
-            onClick={() => setOpen(item.id)} onDoubleClick={() => setOpen(item.id)}
-            onKeyDown={(e) => { if (e.key === 'Enter') setOpen(item.id) }} tabIndex={0} role="button" aria-label={`Open ${item.title}`}>
-            <div className="build-card-top"><span className={`status-pill ${item.status === 'done' ? 'review' : item.status}`}>{item.signal || LABEL[item.status].toUpperCase()}</span>{item.hidden && item.hidden !== 'story' && <small className="studio-board-kind">{item.hidden}</small>}</div>
-            <h3>{item.title}</h3>
-            {(item.capability || item.decision) && <div className="build-trace">{item.capability && <span><Target size={13} /> {item.capability}</span>}{item.decision && <span><Check size={13} /> “{item.decision}”</span>}</div>}
-            {item.moveReason && <p className="studio-moved-by"><History size={11} /> {item.movedBy || 'Moved'}: {item.moveReason}</p>}
-            <div className="build-card-footer"><span className="owner-avatar">{ownerMark(item.owner)}</span><small>{item.owner}</small>
-              <span className="studio-board-arrows">
-                <button className="card-next" type="button" disabled={item.status === 'queued'} aria-label="Move back" title={item.status === 'queued' ? '' : `Back to ${LABEL[ORDER[ORDER.indexOf(item.status) - 1]]}`} onClick={(e) => { e.stopPropagation(); step(item.id, -1) }}><ArrowLeft size={14} /></button>
-                <button className="card-next" type="button" disabled={item.status === 'done'} aria-label="Move forward" title={item.status === 'done' ? '' : `On to ${LABEL[ORDER[ORDER.indexOf(item.status) + 1]]}`} onClick={(e) => { e.stopPropagation(); step(item.id, 1) }}><ArrowRight size={14} /></button>
-              </span></div>
-          </article>)}
-          {items.length === 0 && !(col.id === 'queued' && (adding || fresh.length > 0)) && <div className="empty-column">{dragging ? 'Drop it here.' : <>Nothing here yet.<br />That’s okay — the shape is still moving.</>}</div>}
-        </div>
-      </section>
-    })}</div>
+            </section>
+          )
+        })}
+      </div>
 
-    {children}
-    <div className="pilot-footer"><div><span className="live-pulse" /> {ASSISTANT_NAME} is watching for a blocker, not micromanaging the work.</div><button className="text-button" type="button" onClick={() => changeView('storymap')}>See how the stories connect <ArrowRight size={14} /></button></div>
-    {open && <CardPanel key={open} live={live} id={open} by={by} guide={guide?.id === open ? guide.status : undefined} onClose={() => { setOpen(''); setGuide(null) }} onMove={(s) => void move(open, s, 'moved from the card')} setToast={setToast} buildNow={buildNow} changeView={changeView} />}
-  </div>
+      {children}
+      <div><Button variant="link" className="h-auto p-0" onClick={() => changeView('storymap')}>See how the stories connect <ArrowRight className="size-4" /></Button></div>
+      <Sheet open={!!open} onOpenChange={(v) => { if (!v) { setOpen(''); setGuide(null) } }}>
+        {open && <CardPanel key={open} live={live} id={open} by={by} guide={guide?.id === open ? guide.status : undefined} onClose={() => { setOpen(''); setGuide(null) }} onMove={(s) => void move(open, s, 'moved from the card')} setToast={setToast} buildNow={buildNow} changeView={changeView} />}
+      </Sheet>
+    </div>
+  )
 }
+
+const TONE: Record<Status, 'ok' | 'warn' | 'off' | 'info' | 'suggest'> = { queued: 'off', ready: 'info', building: 'suggest', review: 'warn', done: 'ok' }
 
 function CardPanel({ live, id, by, guide, onClose, onMove, setToast, buildNow, changeView }: { live: Live; id: string; by: string; guide?: Status; onClose: () => void; onMove: (s: Status) => void; setToast: (v: string) => void; buildNow: (opts?: { force?: boolean }) => void; changeView: (v: StudioView) => void }) {
   const details = useRef<HTMLTextAreaElement>(null)
@@ -169,11 +227,6 @@ function CardPanel({ live, id, by, guide, onClose, onMove, setToast, buildNow, c
     catch (e) { setError(e instanceof Error ? e.message : String(e)) }
   }, [live.id, id])
   useEffect(() => { void load() }, [load, live.updatedAt])
-  useEffect(() => {
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', esc)
-    return () => window.removeEventListener('keydown', esc)
-  }, [onClose])
 
   const m = d?.move
   const val = <K extends keyof CardDetail['move']>(k: K) => (draft[k] ?? m?.[k] ?? '') as CardDetail['move'][K]
@@ -206,60 +259,90 @@ function CardPanel({ live, id, by, guide, onClose, onMove, setToast, buildNow, c
     finally { setUploading(false); if (fileInput.current) fileInput.current.value = '' }
   }
 
-  return <div className="studio-card-overlay" onClick={() => { if (Date.now() - openedAt.current > 450) onClose() }}>
-    <aside className="studio-card-panel" onClick={(e) => e.stopPropagation()} aria-label="Card details"
+  const label = (t: string) => <span className="text-xs font-medium text-muted-foreground">{t}</span>
+  return (
+    <SheetContent data-ui side="right" className="w-full gap-0 overflow-y-auto p-0 sm:max-w-xl"
+      onInteractOutside={(e) => { if (Date.now() - openedAt.current < 450) e.preventDefault() }}
       onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); void attach(e.dataTransfer.files) }}>
+      <SheetHeader className="border-b border-border px-5 py-4 pr-12">
+        <SheetTitle className="text-xs font-medium text-muted-foreground">{m ? `${LABEL[m.status] ?? m.status}${m.hidden ? ` · ${m.hidden}` : ''}` : 'Card'}</SheetTitle>
+        <SheetDescription className="sr-only">Read and edit everything on this card, attach files and see what happened to it.</SheetDescription>
+      </SheetHeader>
       {docOpen && <DocumentPanel live={live} docId={docOpen} onClose={() => setDocOpen('')} />}
-      <div className="studio-card-head"><p className="eyebrow">{m ? `${LABEL[m.status] ?? m.status}${m.hidden ? ` · ${m.hidden}` : ''}` : 'Card'}</p><button className="icon-button subtle" type="button" onClick={onClose} aria-label="Close"><X size={16} /></button></div>
-      {!m ? <p className="studio-muted">{error || 'Opening the card…'}</p> : <>
-        <textarea className="studio-card-title" rows={2} value={val('title')} onChange={(e) => setDraft({ ...draft, title: e.target.value })} aria-label="Title" />
+      {!m ? <p className="px-5 py-4 text-sm text-muted-foreground">{error || 'Opening the card…'}</p> : <div className="grid grid-cols-1 gap-5 px-5 py-4">
+        <Textarea rows={2} value={val('title')} onChange={(e) => setDraft({ ...draft, title: e.target.value })} aria-label="Title" className="min-h-0 resize-none border-0 bg-transparent px-0 !text-xl font-semibold shadow-none focus-visible:ring-0 dark:bg-transparent" />
         {guide && <MoveGuide status={guide} detailed={hasDetail(String(val('prompt')))} busy={live.generateBusy} hasApp={live.preview.hasApp}
           onDetail={() => { details.current?.focus(); details.current?.scrollIntoView({ block: 'center', behavior: 'smooth' }) }}
           onSocra={() => { onClose(); changeView('conversation') }}
           onGenerate={() => { onClose(); buildNow({ force: true }) }}
           onTry={() => { onClose(); changeView('review') }} />}
-        <div className="studio-card-status">{COLUMNS.map((c) => <button key={c.id} type="button" className={m.status === c.id ? 'is-active' : ''} onClick={() => { if (m.status !== c.id) { onMove(c.id); setD({ ...d!, move: { ...m, status: c.id } }) } }}>{c.label}</button>)}</div>
-        <div className="studio-card-grid">
-          <label><span>Area</span><input value={val('capability')} onChange={(e) => setDraft({ ...draft, capability: e.target.value })} placeholder="Which capability" /></label>
-          <label><span>Owner</span><input value={val('owner')} onChange={(e) => setDraft({ ...draft, owner: e.target.value })} /></label>
-          <label><span>Kind</span><select value={val('hidden') || 'story'} onChange={(e) => setDraft({ ...draft, hidden: e.target.value })}>{[...new Set([...KINDS, m.hidden || 'story'])].map((k) => <option key={k} value={k}>{k}</option>)}</select></label>
-          <label><span>Tag</span><input value={val('signal')} onChange={(e) => setDraft({ ...draft, signal: e.target.value })} placeholder="e.g. THIN SLICE" /></label>
+        <div className="grid gap-1.5">
+          {label('Where it is')}
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Move the card">{COLUMNS.map((c) => <Button key={c.id} type="button" size="sm" variant={m.status === c.id ? 'default' : 'outline'} aria-pressed={m.status === c.id} onClick={() => { if (m.status !== c.id) { onMove(c.id); setD({ ...d!, move: { ...m, status: c.id } }) } }}>{c.label}</Button>)}</div>
         </div>
-        <label className="studio-card-field"><span>Decision it traces to</span><textarea rows={2} value={val('decision')} onChange={(e) => setDraft({ ...draft, decision: e.target.value })} placeholder="The decision or promise this card delivers" /></label>
-        <label className="studio-card-field"><span>Details and acceptance criteria</span><textarea ref={details} rows={8} value={val('prompt')} onChange={(e) => setDraft({ ...draft, prompt: e.target.value })} placeholder="What it does, for whom, and how we'll know it works" /></label>
-        <div className="studio-card-actions"><button className="button button-primary button-small" type="button" disabled={!dirty || saving} onClick={() => void save()}><Check size={13} /> {saving ? 'Saving…' : 'Save changes'}</button>{dirty && <button className="button button-quiet button-small" type="button" onClick={() => setDraft({})}>Undo edits</button>}</div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-1.5">{label('Area')}<Input value={val('capability')} onChange={(e) => setDraft({ ...draft, capability: e.target.value })} placeholder="Which capability" /></label>
+          <label className="grid gap-1.5">{label('Owner')}<Input value={val('owner')} onChange={(e) => setDraft({ ...draft, owner: e.target.value })} /></label>
+          <div className="grid gap-1.5">{label('Kind')}
+            <Select value={val('hidden') || 'story'} onValueChange={(v) => setDraft({ ...draft, hidden: v })}>
+              <SelectTrigger aria-label="Kind" className="w-full capitalize"><SelectValue /></SelectTrigger>
+              <SelectContent>{[...new Set([...KINDS, m.hidden || 'story'])].map((k) => <SelectItem key={k} value={k} className="capitalize">{k}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <label className="grid gap-1.5">{label('Tag')}<Input value={val('signal')} onChange={(e) => setDraft({ ...draft, signal: e.target.value })} placeholder="e.g. THIN SLICE" /></label>
+        </div>
+        <label className="grid gap-1.5">{label('Decision it traces to')}<Textarea rows={2} value={val('decision')} onChange={(e) => setDraft({ ...draft, decision: e.target.value })} placeholder="The decision or promise this card delivers" /></label>
+        <label className="grid gap-1.5">{label('Details and acceptance criteria')}<Textarea ref={details} rows={8} value={val('prompt')} onChange={(e) => setDraft({ ...draft, prompt: e.target.value })} placeholder="What it does, for whom, and how we'll know it works" className="min-h-40" /></label>
+        <div className="flex gap-2"><Button type="button" disabled={!dirty || saving} onClick={() => void save()}><Check className="size-4" /> {saving ? 'Saving…' : 'Save changes'}</Button>{dirty && <Button type="button" variant="ghost" onClick={() => setDraft({})}>Undo edits</Button>}</div>
 
-        <section className="studio-card-section"><div className="studio-card-section-head"><span className="eyebrow"><Paperclip size={11} /> Files · {d!.files.length}</span><button className="text-button" type="button" disabled={uploading} onClick={() => fileInput.current?.click()}><Upload size={12} /> {uploading ? 'Attaching…' : 'Attach files'}</button><input ref={fileInput} type="file" multiple hidden onChange={(e) => void attach(e.target.files)} /></div>
-          {d!.files.length === 0 ? <p className="studio-card-empty">Drop screens, specs, data or recordings here. {ASSISTANT_NAME} reads them as evidence for this card.</p> :
-            <ul className="studio-card-files">{d!.files.map((f) => <li key={f.id}><FileText size={13} /><button type="button" className="studio-link-button" onClick={() => setDocOpen(f.id)}>{f.fileName}</button><small>{size(f.sizeBytes)} · {ago(f.createdAt)}</small><a className="studio-card-dl" href={`/api/use-cases/${live.id}/moves/${id}/files/${f.id}`} download={f.fileName} aria-label={`Download ${f.fileName}`}><Download size={12} /></a>{f.summary && <p>{f.summary}</p>}</li>)}</ul>}
+        <section className="grid gap-2 border-t border-border pt-4">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="flex items-center gap-1.5 text-sm font-semibold"><Paperclip className="size-4" /> Files · {d!.files.length}</h3>
+            <Button type="button" size="sm" variant="outline" disabled={uploading} onClick={() => fileInput.current?.click()}><Upload className="size-4" /> {uploading ? 'Attaching…' : 'Attach files'}</Button>
+            <input ref={fileInput} type="file" multiple hidden onChange={(e) => void attach(e.target.files)} />
+          </div>
+          {d!.files.length === 0 ? <p className="rounded-lg border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">Drop screens, specs, data or recordings here. {ASSISTANT_NAME} reads them as evidence for this card.</p> :
+            <ul className="grid gap-1.5">{d!.files.map((f) => (
+              <li key={f.id} className="grid gap-1 rounded-lg border border-border px-3 py-2">
+                <div className="flex items-center gap-2"><FileText className="size-4 shrink-0 text-muted-foreground" /><button type="button" className="min-w-0 flex-1 truncate text-left text-sm font-medium text-primary hover:underline" onClick={() => setDocOpen(f.id)} title="Open the file">{f.fileName}</button><span className="shrink-0 text-xs text-muted-foreground">{size(f.sizeBytes)} · {ago(f.createdAt)}</span>
+                  <Button asChild size="icon" variant="ghost" className="size-9"><a href={`/api/use-cases/${live.id}/moves/${id}/files/${f.id}`} download={f.fileName} aria-label={`Download ${f.fileName}`}><Download className="size-4" /></a></Button></div>
+                {f.summary && <p className="text-sm text-muted-foreground">{f.summary}</p>}
+              </li>))}</ul>}
         </section>
 
-        {(m.components.length > 0 || m.routes.length > 0 || m.trackerUrl) && <section className="studio-card-section"><span className="eyebrow">Build</span>
-          {m.components.length > 0 && <p className="studio-card-tags">{m.components.map((c) => <em key={c}>{c}</em>)}</p>}
-          {m.routes.length > 0 && <p className="studio-card-tags">{m.routes.map((r) => <em key={r}>{r}</em>)}</p>}
-          {m.trackerUrl && <a className="text-button" href={m.trackerUrl} target="_blank" rel="noreferrer">Open in the tracker <ArrowRight size={12} /></a>}
+        {(m.components.length > 0 || m.routes.length > 0 || m.trackerUrl) && <section className="grid gap-2 border-t border-border pt-4"><h3 className="text-sm font-semibold">Build</h3>
+          {m.components.length > 0 && <div className="flex flex-wrap gap-1.5">{m.components.map((c) => <Badge key={c} variant="secondary">{c}</Badge>)}</div>}
+          {m.routes.length > 0 && <div className="flex flex-wrap gap-1.5">{m.routes.map((r) => <Badge key={r} variant="outline" className="font-mono">{r}</Badge>)}</div>}
+          {m.trackerUrl && <Button asChild variant="link" className="h-auto justify-self-start p-0"><a href={m.trackerUrl} target="_blank" rel="noreferrer">Open in the tracker <ArrowRight className="size-4" /></a></Button>}
         </section>}
 
-        <section className="studio-card-section"><span className="eyebrow"><History size={11} /> What happened · {d!.history.length}</span>
-          {d!.history.length === 0 ? <p className="studio-card-empty">Nothing logged yet.</p> :
-            <ol className="studio-card-history">{d!.history.map((h) => <li key={h.id}><span>{plain(h.summary, live)}</span><small>{ago(h.createdAt)}</small></li>)}</ol>}
+        <section className="grid gap-2 border-t border-border pt-4"><h3 className="flex items-center gap-1.5 text-sm font-semibold"><History className="size-4" /> What happened · {d!.history.length}</h3>
+          {d!.history.length === 0 ? <p className="text-sm text-muted-foreground">Nothing logged yet.</p> :
+            <ol className="grid gap-2">{d!.history.map((h) => <li key={h.id} className="flex gap-3 text-sm"><span className="mt-2 size-1.5 shrink-0 rounded-full bg-primary" /><span className="min-w-0 flex-1">{plain(h.summary, live)}</span><span className="shrink-0 text-xs text-muted-foreground">{ago(h.createdAt)}</span></li>)}</ol>}
         </section>
-      </>}
-    </aside>
-  </div>
+      </div>}
+    </SheetContent>
+  )
 }
 
 /** What moving a card asks for: Ready wants detail, Being made real wants something to build, Review wants a try. */
 function MoveGuide({ status, detailed, busy, hasApp, onDetail, onSocra, onGenerate, onTry }: { status: Status; detailed: boolean; busy: boolean; hasApp: boolean; onDetail: () => void; onSocra: () => void; onGenerate: () => void; onTry: () => void }) {
-  if (status === 'ready') return <div className="studio-move-guide">
-    <strong><MessageCircleQuestion size={14} /> {ASSISTANT_NAME}: let’s get some detail before this is built.</strong>
-    <ol><li>Who uses this, and at what moment?</li><li>What does “done” look like? What can they do afterwards that they couldn’t before?</li><li>Which rules, limits or edge cases must it handle?</li></ol>
-    <p className="studio-muted" style={{ margin: 0 }}>Write it below, or answer {ASSISTANT_NAME} in the conversation: it is asking the same now and writes your answers onto this card.</p>
-    <div className="studio-move-guide-actions"><button className="button button-primary button-small" type="button" onClick={onDetail}>Add detail here</button><button className="button button-quiet button-small" type="button" onClick={onSocra}>Answer {ASSISTANT_NAME} <ArrowRight size={12} /></button></div>
-  </div>
+  const box = (warn: boolean, title: React.ReactNode, body: React.ReactNode, actions: React.ReactNode) => (
+    <div className={cn('grid gap-2 rounded-lg border p-4 animate-in fade-in slide-in-from-top-1 duration-300', warn ? 'border-destructive/40 bg-destructive/5' : 'border-primary/30 bg-accent/60')}>
+      <p className="flex items-center gap-2 text-sm font-semibold">{title}</p>
+      <div className="text-sm text-muted-foreground">{body}</div>
+      <div className="flex flex-wrap gap-2">{actions}</div>
+    </div>
+  )
+  if (status === 'ready') return box(false, <><MessageCircleQuestion className="size-4 text-primary" /> {ASSISTANT_NAME}: let’s get some detail before this is built.</>,
+    <><ol className="mb-2 grid list-decimal gap-1 pl-5 text-foreground"><li>Who uses this, and at what moment?</li><li>What does “done” look like? What can they do afterwards that they couldn’t before?</li><li>Which rules, limits or edge cases must it handle?</li></ol>Write it below, or answer {ASSISTANT_NAME} in the conversation: it is asking the same now and writes your answers onto this card.</>,
+    <><Button type="button" size="sm" onClick={onDetail}>Add detail here</Button><Button type="button" size="sm" variant="outline" onClick={onSocra}>Answer {ASSISTANT_NAME} <ArrowRight className="size-4" /></Button></>)
   if (status === 'building') return detailed
-    ? <div className="studio-move-guide"><strong><Play size={14} /> Ready to build.</strong><p className="studio-muted" style={{ margin: 0 }}>This card has enough detail. Generate the prototype to have Claude Code build it{hasApp ? ' into the next version' : ''}.</p><div className="studio-move-guide-actions"><button className="button button-primary button-small" type="button" disabled={busy} onClick={onGenerate}><Play size={12} /> {busy ? 'A build is running…' : 'Generate the prototype'}</button></div></div>
-    : <div className="studio-move-guide is-warn"><strong>This card has almost no detail yet.</strong><p className="studio-muted" style={{ margin: 0 }}>If you generate now, Claude Code has nothing clear to build for it. Add what it does and how you’ll know it works, or let {ASSISTANT_NAME} ask you.</p><div className="studio-move-guide-actions"><button className="button button-primary button-small" type="button" onClick={onDetail}>Add detail here</button><button className="button button-quiet button-small" type="button" onClick={onSocra}>Let {ASSISTANT_NAME} ask me</button><button className="button button-quiet button-small" type="button" disabled={busy} onClick={onGenerate}>Generate anyway</button></div></div>
-  if (status === 'review') return <div className="studio-move-guide"><strong>Your turn to review.</strong><p className="studio-muted" style={{ margin: 0 }}>Try it in the prototype. Say yes if it works, or mark what is wrong: each mark comes back as a new backlog item.</p><div className="studio-move-guide-actions"><button className="button button-primary button-small" type="button" onClick={onTry}>Try & mark up <ArrowRight size={12} /></button></div></div>
+    ? box(false, <><Play className="size-4 text-primary" /> Ready to build.</>, <>This card has enough detail. Generate the prototype to have Claude Code build it{hasApp ? ' into the next version' : ''}.</>,
+      <Button type="button" size="sm" disabled={busy} onClick={onGenerate}><Play className="size-4" /> {busy ? 'A build is running…' : 'Generate the prototype'}</Button>)
+    : box(true, <>This card has almost no detail yet.</>, <>If you generate now, Claude Code has nothing clear to build for it. Add what it does and how you’ll know it works, or let {ASSISTANT_NAME} ask you.</>,
+      <><Button type="button" size="sm" onClick={onDetail}>Add detail here</Button><Button type="button" size="sm" variant="outline" onClick={onSocra}>Let {ASSISTANT_NAME} ask me</Button><Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onGenerate}>Generate anyway</Button></>)
+  if (status === 'review') return box(false, <>Your turn to review.</>, <>Try it in the prototype. Say yes if it works, or mark what is wrong: each mark comes back as a new backlog item.</>,
+    <Button type="button" size="sm" onClick={onTry}>Try & mark up <ArrowRight className="size-4" /></Button>)
   return null
 }
