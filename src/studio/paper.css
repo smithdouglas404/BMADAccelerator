@@ -24,32 +24,38 @@ html[data-theme="paper"] .sidebar { background: #efe7d3; }
 html[data-theme="paper"] input, html[data-theme="paper"] textarea, html[data-theme="paper"] select { color: var(--ink); background: #fffdf5; }
 html[data-theme="paper"] ::placeholder { color: #7b776c; }
 
-/* Clean: a white, corporate-light look with one warm orange accent (inspired by Kyndryl's light screens).
-   Applied when <html data-theme="clean">. Orange fills use dark text so contrast stays above 4.5:1. */
+/* Clean: shadcn "Modern Minimal" (white, soft greys, Inter, 6px corners) with Kyndryl orange as the only accent
+   in place of its blue. Applied when <html data-theme="clean">. Orange fills use dark text; orange used as text is
+   #c9361f so it passes 4.5:1 on white. Muted text #6b7280 is 4.8:1 on white. */
 html[data-theme="clean"] {
   color-scheme: light;
-  color: #1f2328;
+  color: #333333;
   background: #ffffff;
-  --ink: #1f2328;
-  --muted: #4b525b;
-  --faint: #5f6670;
+  --ink: #333333;
+  --muted: #4b5563;
+  --faint: #6b7280;
   --panel: #ffffff;
   --panel-strong: #f3f4f6;
-  --line: rgba(31, 35, 40, 0.12);
-  --line-strong: rgba(31, 35, 40, 0.24);
+  --line: #e5e7eb;
+  --line-strong: #d1d5db;
   --acid: #ff462d;
   --acid-ink: #1f2328;
   /* Kyndryl orange is the only brand colour; the other accent hues become neutral greys. */
-  --blue: #4b525b;
-  --warm: #4b525b;
-  --lilac: #4b525b;
-  --shadow: 0 10px 30px rgba(15, 23, 42, .10);
+  --blue: #4b5563;
+  --warm: #4b5563;
+  --lilac: #4b5563;
+  --shadow: 0 1px 3px rgba(0, 0, 0, .08), 0 4px 16px rgba(0, 0, 0, .05);
+  --radius: 6px;
+  --sans-face: 'Inter';
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
 }
 html[data-theme="clean"] body { background: #ffffff; color: var(--ink); }
 html[data-theme="clean"] .app-shell { background: #ffffff; }
-html[data-theme="clean"] .sidebar { background: #f3f4f6; }
-html[data-theme="clean"] input, html[data-theme="clean"] textarea, html[data-theme="clean"] select { color: var(--ink); background: #ffffff; }
+html[data-theme="clean"] .sidebar, html[data-theme="clean"] .app-shell > .sidebar { background: #f9fafb; }
+html[data-theme="clean"] input, html[data-theme="clean"] textarea, html[data-theme="clean"] select { color: var(--ink); background: #ffffff; border-color: #e5e7eb; }
 html[data-theme="clean"] ::placeholder { color: #6b7280; }
+/* Active rows and highlights: a light orange wash instead of Modern Minimal's sky blue. */
+html[data-theme="clean"] .nav-item.is-active { background: #fff1ee; }
 
 /* Colour channels used by the stylesheets' tints and overlays (rgba(var(--x-rgb), a)), so every tint follows the theme.
    Dark keeps its original values; paper turns white overlays into soft brown shading and uses the deeper accents. */
@@ -63,9 +69,9 @@ html[data-theme="paper"] {
   --raised: #fffdf5; --deep: #efe7d3; --scrim: rgba(60,45,20,.35); --avatar: #8a5a3c; --acid-hover: #2f5717;
 }
 html[data-theme="clean"] {
-  --hi-rgb: 31,35,40; --acid-rgb: 255,70,45; --blue-rgb: 75,82,91; --warm-rgb: 75,82,91;
-  --lilac-rgb: 75,82,91; --shade-rgb: 15,23,42; --glow-rgb: 255,255,255; --bg: #ffffff; --dk-rgb: 255,255,255;
-  --raised: #ffffff; --deep: #f3f4f6; --scrim: rgba(15,23,42,.35); --avatar: #5b6470; --acid-hover: #ff6a55;
+  --hi-rgb: 51,51,51; --acid-rgb: 255,70,45; --blue-rgb: 75,85,99; --warm-rgb: 75,85,99;
+  --lilac-rgb: 75,85,99; --shade-rgb: 0,0,0; --glow-rgb: 255,255,255; --bg: #ffffff; --dk-rgb: 255,255,255;
+  --raised: #ffffff; --deep: #f9fafb; --scrim: rgba(15,23,42,.35); --avatar: #4b5563; --acid-hover: #ff6a55;
   /* Orange as text on white needs a deeper shade to pass 4.5:1 (#ff462d is 3.4:1); fills keep the bright orange with dark text. */
   --acid-text: #c9361f;
 }
