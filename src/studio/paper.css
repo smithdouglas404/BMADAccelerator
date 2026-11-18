@@ -39,9 +39,10 @@ html[data-theme="clean"] {
   --line-strong: rgba(31, 35, 40, 0.24);
   --acid: #ff462d;
   --acid-ink: #1f2328;
-  --blue: #0b5cad;
-  --warm: #b45309;
-  --lilac: #6b3fb0;
+  /* Kyndryl orange is the only brand colour; the other accent hues become neutral greys. */
+  --blue: #4b525b;
+  --warm: #4b525b;
+  --lilac: #4b525b;
   --shadow: 0 10px 30px rgba(15, 23, 42, .10);
 }
 html[data-theme="clean"] body { background: #ffffff; color: var(--ink); }
@@ -62,8 +63,8 @@ html[data-theme="paper"] {
   --raised: #fffdf5; --deep: #efe7d3; --scrim: rgba(60,45,20,.35); --avatar: #8a5a3c; --acid-hover: #2f5717;
 }
 html[data-theme="clean"] {
-  --hi-rgb: 31,35,40; --acid-rgb: 255,70,45; --blue-rgb: 11,92,173; --warm-rgb: 180,83,9;
-  --lilac-rgb: 107,63,176; --shade-rgb: 15,23,42; --glow-rgb: 255,255,255; --bg: #ffffff; --dk-rgb: 255,255,255;
+  --hi-rgb: 31,35,40; --acid-rgb: 255,70,45; --blue-rgb: 75,82,91; --warm-rgb: 75,82,91;
+  --lilac-rgb: 75,82,91; --shade-rgb: 15,23,42; --glow-rgb: 255,255,255; --bg: #ffffff; --dk-rgb: 255,255,255;
   --raised: #ffffff; --deep: #f3f4f6; --scrim: rgba(15,23,42,.35); --avatar: #5b6470; --acid-hover: #ff6a55;
   /* Orange as text on white needs a deeper shade to pass 4.5:1 (#ff462d is 3.4:1); fills keep the bright orange with dark text. */
   --acid-text: #c9361f;
@@ -114,3 +115,9 @@ html:is([data-theme="paper"], [data-theme="clean"]) .studio-agent-status.is-runn
 html:is([data-theme="paper"], [data-theme="clean"]) .studio-agent-status.is-rejected, html:is([data-theme="paper"], [data-theme="clean"]) .studio-agent-status.is-failed { background: #f5cfc6; color: #6b1a0c; }
 /* Capability colours come from the design data as pastels made for dark screens: deepen them on paper. */
 html:is([data-theme="paper"], [data-theme="clean"]) .capability-color, html:is([data-theme="paper"], [data-theme="clean"]) .focus-mark, html:is([data-theme="paper"], [data-theme="clean"]) .lens-swatch { filter: saturate(1.6) brightness(.7); }
+
+/* Clean (Kyndryl): orange is the only brand colour. The design data's per-capability pastels become neutral swatches,
+   and readiness bars use the orange. Status meaning (red needs-you, error, success chips) keeps its own colour. */
+html[data-theme="clean"] .capability-color, html[data-theme="clean"] .focus-mark, html[data-theme="clean"] .lens-swatch { background: #8a9099 !important; filter: none; }
+html[data-theme="clean"] .capability-track span, html[data-theme="clean"] .ceiling-track span { background: var(--acid) !important; }
+html[data-theme="clean"] .truth-node-dot.evidence { background: #5f6670; }
