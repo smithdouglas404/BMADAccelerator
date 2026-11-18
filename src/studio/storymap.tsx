@@ -2,11 +2,15 @@
 // The Story map (Doug, Nov 16): every story and Socra's open ideas, read left to right like a PERT chart
 // by what depends on what, with no durations. Solid lines are links a person made or accepted; dashed
 // ones are Socra's guesses to accept or dismiss. Stories with no link stand out. Pick two stories to
-// connect them and Socra asks the questions that firm up the link. Built from the team's classes; the
-// new ones are in studio-extras.css.
+// connect them and Socra asks the questions that firm up the link. On shadcn/ui + Animate UI.
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, Check, Crosshair, GitBranch, Link2, Sparkles, X } from 'lucide-react'
+import { ArrowLeftRight, ArrowRight, Check, Crosshair, Link2, Sparkles, X } from 'lucide-react'
 import { ASSISTANT_NAME } from '@/lib/brand'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
+import { PageHeader, Section, SectionBody, StatusBadge } from './kit'
 import { LINK_LABEL, columns, neighbourhood, type LinkKind, type StoryLinkRow, type StoryNode } from '@/lib/studio/storymap'
 import { api, type Live } from './live'
 import type { Me, StudioView } from './flow'
@@ -15,8 +19,11 @@ type MapData = { nodes: StoryNode[]; links: StoryLinkRow[]; unlinked: string[]; 
 
 const STATE_LABEL: Record<StoryNode['state'], string> = { idea: `${ASSISTANT_NAME}'s idea`, backlog: 'Backlog', shaping: 'Ready to shape', building: 'Being built', review: 'Human review', done: 'Done' }
 const STATE_ORDER: StoryNode['state'][] = ['done', 'review', 'building', 'shaping', 'backlog', 'idea']
-const W = 214, H = 88, GX = 86, GY = 16, PAD = 18
+const W = 224, H = 96, GX = 86, GY = 16, PAD = 18
 const MANY = 40
+const STATE_BAR: Record<StoryNode['state'], string> = { done: 'border-l-primary', review: 'border-l-info', building: 'border-l-suggest', shaping: 'border-l-warning', backlog: 'border-l-muted-foreground', idea: 'border-l-warning' }
+const STATE_TEXT: Record<StoryNode['state'], string> = { done: 'text-primary', review: 'text-info', building: 'text-suggest', shaping: 'text-warning', backlog: 'text-muted-foreground', idea: 'text-warning' }
+const PAGE = 'mx-auto grid w-full max-w-[96rem] grid-cols-1 gap-6 px-4 py-8 md:px-8'
 
 type Props = { live: Live; me: Me; changeView: (v: StudioView) => void; setToast: (v: string) => void }
 
@@ -83,7 +90,7 @@ export function StoryMapView({ live, me, changeView, setToast }: Props) {
     return { pos, width, height, looseTop: loose.length ? top - 26 : -1, looseCount: loose.length, looseStories: loose.filter((n) => n.state !== 'idea').length }
   }, [visible, shownLinks])
 
-  if (!data) return <div className="page-wrap storymap-page"><div className="page-intro"><div><p className="eyebrow eyebrow-with-dot"><span className="status-dot" />Story map</p><h1>Drawing how the<br /><em>stories connect…</em></h1></div></div></div>
+  if (!data) return <div data-ui className={PAGE}><PageHeader title="Story map" eyebrow="Story map" headline={<>Drawing how the<br /><em>stories connect…</em></>} description="Drawing how the stories connect…" /></div>
 
   const unlinked = new Set(data.unlinked)
   const node = (id: string) => nodes.find((n) => n.id === id)
@@ -113,63 +120,107 @@ export function StoryMapView({ live, me, changeView, setToast }: Props) {
   }
   const pair = connecting?.length === 2 ? connecting.map((id) => node(id)!).filter(Boolean) : null
 
-  return <div className="page-wrap storymap-page">
-    <div className="page-intro"><div><p className="eyebrow eyebrow-with-dot"><span className="status-dot" />Story map · how the work fits together</p><h1>See how the stories<br /><em>connect.</em></h1><p>Read left to right: a story sits after the stories it depends on. Solid lines are links a person made; dashed ones are {ASSISTANT_NAME}’s guesses for you to accept or dismiss. A story with a warm outline has no links yet. Pick two stories to connect them and {ASSISTANT_NAME} asks what firms up the link.</p></div>
-      <div className="intro-actions"><button className="button button-primary" type="button" onClick={() => { setConnecting(connecting ? null : []); setSelected('') }}><Link2 size={16} /> {connecting ? 'Cancel connecting' : 'Connect two stories'}</button>{!connecting && nodes.length > 1 && <button className="button button-quiet" type="button" disabled={busy} onClick={() => void post({ action: 'suggest' }, (r) => r.by === 'jev' ? (r.added ? `Jev suggested ${r.added} link${r.added === 1 ? '' : 's'}, drawn dashed. Accept or dismiss each one.` : 'Jev found no new links worth suggesting.') : `${ASSISTANT_NAME} is looking for links. Its guesses appear here dashed.`)}><Sparkles size={16} /> Ask {ASSISTANT_NAME} to suggest links</button>}<span>{nodes.filter((n) => n.state !== 'idea').length} stories · {links.filter((l) => l.status === 'confirmed').length} links · {suggested.length} suggested · {nodes.filter((n) => n.state === 'idea').length} ideas</span></div></div>
+  const suggestLinks = () => void post({ action: 'suggest' }, (r) => r.by === 'jev' ? (r.added ? `Jev suggested ${r.added} link${r.added === 1 ? '' : 's'}, drawn dashed. Accept or dismiss each one.` : 'Jev found no new links worth suggesting.') : `${ASSISTANT_NAME} is looking for links. Its guesses appear here dashed.`)
+  const accept = (l: StoryLinkRow) => void post({ action: 'accept', link: l.id }, 'Link accepted')
+  const dismiss = (l: StoryLinkRow) => void post({ action: 'dismiss', link: l.id }, `Dismissed. ${ASSISTANT_NAME} won't offer it again.`)
+  const LINE: Record<string, string> = { confirmed: 'stroke-primary opacity-75', suggested: 'stroke-warning opacity-70 [stroke-dasharray:5_4]' }
 
-    <div className="storymap-layout">
-      <section className="truth-graph-card storymap-card">
-        <div className="truth-card-heading"><div><p className="eyebrow">{focus ? `Focus · ${node(focus)?.title ?? ''}` : area ? `Area · ${area}` : 'Every story'}</p><h2>{connecting ? (connecting.length === 0 ? 'Pick the story that comes first' : connecting.length === 1 ? 'Now pick the one that comes after it' : 'How are they linked?') : 'The stories, left to right'}</h2></div>
-          <div className="truth-filters">
-            {focus && <button type="button" className="is-active" onClick={() => setFocus('')}><X size={11} /> Leave focus</button>}
-            <button type="button" className={!area ? 'is-active' : ''} onClick={() => setArea('')}>All areas</button>
-            {areas.slice(0, 8).map((a) => <button type="button" key={a} className={area === a ? 'is-active' : ''} onClick={() => { setArea(a); setFocus('') }}>{a}</button>)}
-          </div></div>
-        {visible.length > MANY && !focus && !area && <p className="storymap-hint"><Crosshair size={13} /> {visible.length} stories is a lot to read at once. Pick a story and press Focus, or choose an area above.</p>}
-        {nodes.length === 0 ? <p className="studio-muted">No stories yet. They appear here as {ASSISTANT_NAME} and the team turn the conversation into board cards; nothing is made up.</p> :
-          <div className="storymap-scroll"><div className="storymap-canvas" style={{ width: layout.width, height: layout.height }}>
-            {layout.looseTop >= 0 && <p className="storymap-loose-label" style={{ top: layout.looseTop, left: PAD }}>Not linked yet · {layout.looseStories} {layout.looseStories === 1 ? 'story' : 'stories'}{layout.looseCount > layout.looseStories ? ` and ${layout.looseCount - layout.looseStories} of ${ASSISTANT_NAME}’s ideas` : ''}, grouped by area</p>}
-            <svg width={layout.width} height={layout.height} className="storymap-lines" aria-hidden="true">
-              <defs><marker id="sm-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" /></marker></defs>
-              {shownLinks.map((l) => <path key={l.id} d={edgePath(l)} className={`sm-line is-${l.status} is-${l.kind} ${sel && (l.from === sel.id || l.to === sel.id) ? 'is-hot' : ''}`} markerEnd={l.kind === 'related' ? undefined : 'url(#sm-arrow)'} />)}
-            </svg>
-            {visible.map((n) => { const p = layout.pos.get(n.id)!; return (
-              <button type="button" key={n.id} style={{ left: p.x, top: p.y, width: W, height: H }}
-                className={`sm-node is-${n.state} ${n.suggested || n.state === 'idea' ? 'is-suggested' : ''} ${unlinked.has(n.id) ? 'is-unlinked' : ''} ${selected === n.id ? 'is-selected' : ''} ${connecting?.includes(n.id) ? 'is-picked' : ''}`}
-                onClick={() => pick(n.id)} title={n.note || n.title}>
-                <span className="sm-state">{STATE_LABEL[n.state]}{n.kind !== 'story' && n.kind !== 'recommendation' ? ` · ${n.kind}` : ''}</span>
-                <strong>{n.title}</strong>
-                <small>{n.capability || 'No area yet'}</small>
-              </button>) })}
-          </div></div>}
-        <div className="truth-graph-footer storymap-legend"><span><i className="sm-key is-confirmed" /> linked by a person</span><span><i className="sm-key is-suggested" /> {ASSISTANT_NAME}’s guess</span><span><i className="sm-box is-unlinked" /> no links yet</span><span><i className="sm-box is-idea" /> {ASSISTANT_NAME}’s idea, not a story yet</span><span>{data.dismissed} dismissed (never offered again)</span></div>
-      </section>
+  return <div data-ui className={PAGE}>
+    <PageHeader
+      title="Story map" eyebrow="Story map · how the work fits together" headline={<>See how the stories<br /><em>connect.</em></>}
+      description={<>Read left to right: a story sits after the stories it depends on. Solid lines are links a person made; dashed ones are {ASSISTANT_NAME}’s guesses to accept or dismiss. A story with a warm outline has no links yet.</>}
+      actions={<>
+        <Button type="button" variant={connecting ? 'secondary' : 'default'} onClick={() => { setConnecting(connecting ? null : []); setSelected('') }} className="gap-1.5"><Link2 className="size-4" /> {connecting ? 'Cancel connecting' : 'Connect two stories'}</Button>
+        {!connecting && nodes.length > 1 && <Button type="button" variant="outline" disabled={busy} onClick={suggestLinks} className="gap-1.5"><Sparkles className="size-4" /> Ask {ASSISTANT_NAME} to suggest links</Button>}
+      </>}
+    />
+    <p className="-mt-3 text-sm text-muted-foreground">{nodes.filter((n) => n.state !== 'idea').length} stories · {links.filter((l) => l.status === 'confirmed').length} {links.filter((l) => l.status === 'confirmed').length === 1 ? 'link' : 'links'} · {suggested.length} suggested · {nodes.filter((n) => n.state === 'idea').length} ideas · {data.dismissed} dismissed</p>
 
-      <aside className="truth-detail-column">
-        {pair && pair.length === 2 ? <section className="truth-detail-card"><div className="truth-card-heading"><div><p className="eyebrow">Connect two stories</p><h3>How are they linked?</h3></div><GitBranch size={15} /></div>
-          <div className="sm-kinds">{(['depends_on', 'split_from', 'related'] as LinkKind[]).map((k) => <button type="button" key={k} className={kind === k ? 'is-active' : ''} onClick={() => setKind(k)}><strong>{k === 'related' ? pair[0].title : pair[1].title}</strong> <em>{LINK_LABEL[k]}</em> <strong>{k === 'related' ? pair[1].title : pair[0].title}</strong></button>)}</div>
-          <button type="button" className="sm-swap text-button" onClick={() => setConnecting([connecting![1], connecting![0]])}>Swap which comes first <ArrowRight size={12} /></button>
-          <label className="sm-ask"><input type="checkbox" checked={ask} onChange={(e) => setAsk(e.target.checked)} /> Ask {ASSISTANT_NAME} two or three questions to firm up the link</label>
-          <div className="truth-detail-actions"><button className="button button-primary button-small" type="button" disabled={busy} onClick={() => void post({ action: 'connect', from: kind === 'related' ? pair[0].id : pair[1].id, to: kind === 'related' ? pair[1].id : pair[0].id, kind, ask }, ask ? `Linked. ${ASSISTANT_NAME} is asking what firms it up in the conversation.` : 'Linked.').then(() => { setConnecting(null); if (ask) changeView('conversation') })}><Check size={13} /> Connect</button><button className="button button-quiet button-small" type="button" onClick={() => setConnecting(null)}>Cancel</button></div>
-        </section>
-        : sel ? <section className="truth-detail-card"><div className="truth-card-heading"><div><p className="eyebrow">{STATE_LABEL[sel.state]}{sel.capability ? ` · ${sel.capability}` : ''}</p><h3>{sel.title}</h3></div></div>
-          {sel.note && <p className="truth-detail-copy">{sel.note}</p>}
-          {unlinked.has(sel.id) && <p className="sm-gap"><Sparkles size={13} /> No links yet. Is it really on its own, or does it need something, or feed something?</p>}
-          <div className="truth-edge-list"><span className="eyebrow">Links · {selLinks.length}</span>
+    <div className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
+      <Section
+        title={connecting ? (connecting.length === 0 ? 'Pick the story that comes first' : connecting.length === 1 ? 'Now pick the one that comes after it' : 'How are they linked?') : 'The stories, left to right'}
+        description={focus ? `Focused on ${node(focus)?.title ?? ''} and what it touches` : area ? `Area: ${area}` : 'Every story and idea'}
+      >
+        <div role="group" aria-label="Filter by area" className="flex flex-wrap gap-1.5 border-b border-border px-5 py-3">
+          {focus && <Button type="button" size="sm" variant="secondary" onClick={() => setFocus('')} className="gap-1.5"><X className="size-4" /> Leave focus</Button>}
+          <Button type="button" size="sm" variant={!area ? 'secondary' : 'ghost'} aria-pressed={!area} onClick={() => setArea('')}>All areas</Button>
+          {areas.slice(0, 8).map((a) => <Button type="button" size="sm" key={a} variant={area === a ? 'secondary' : 'ghost'} aria-pressed={area === a} onClick={() => { setArea(a); setFocus('') }}>{a}</Button>)}
+        </div>
+        {visible.length > MANY && !focus && !area && <p className="flex items-center gap-2 border-b border-border bg-warning/5 px-5 py-2.5 text-sm text-warning"><Crosshair className="size-4" /> {visible.length} stories is a lot to read at once. Pick a story and press Focus, or choose an area.</p>}
+        {nodes.length === 0 ? <p className="px-5 py-4 text-sm text-muted-foreground">No stories yet. They appear here as {ASSISTANT_NAME} and the team turn the conversation into board cards; nothing is made up.</p> :
+          <div className="max-h-[72vh] overflow-auto">
+            <div className="relative min-w-full bg-[radial-gradient(rgba(255,255,255,.05)_1px,transparent_1px)] [background-size:18px_18px]" style={{ width: layout.width, height: layout.height }}>
+              {layout.looseTop >= 0 && <p className="absolute text-xs font-medium tracking-wide text-warning uppercase" style={{ top: layout.looseTop, left: PAD }}>Not linked yet · {layout.looseStories} {layout.looseStories === 1 ? 'story' : 'stories'}{layout.looseCount > layout.looseStories ? ` and ${layout.looseCount - layout.looseStories} of ${ASSISTANT_NAME}’s ideas` : ''}, grouped by area</p>}
+              <svg width={layout.width} height={layout.height} className="pointer-events-none absolute inset-0 overflow-visible" aria-hidden="true">
+                <defs><marker id="sm-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" className="fill-muted-foreground" /></marker></defs>
+                {shownLinks.map((l) => <path key={l.id} d={edgePath(l)} fill="none" className={cn('stroke-muted-foreground', LINE[l.status], l.kind === 'split_from' && l.status !== 'suggested' && 'stroke-suggest', sel && (l.from === sel.id || l.to === sel.id) ? '[stroke-width:2.5] opacity-100' : '[stroke-width:1.5]')} markerEnd={l.kind === 'related' ? undefined : 'url(#sm-arrow)'} />)}
+              </svg>
+              {visible.map((n) => { const p = layout.pos.get(n.id)!; const dashed = n.suggested || n.state === 'idea'; return (
+                <button type="button" key={n.id} style={{ left: p.x, top: p.y, width: W, height: H }} aria-pressed={selected === n.id || !!connecting?.includes(n.id)}
+                  className={cn('absolute flex flex-col gap-1 overflow-hidden rounded-lg border border-l-[3px] border-white/15 bg-background px-3 py-2 text-left shadow-sm transition hover:-translate-y-px hover:border-primary/50', STATE_BAR[n.state], dashed && 'border-dashed bg-background/50', unlinked.has(n.id) && 'ring-1 ring-warning/50', selected === n.id && 'border-primary bg-primary/10 ring-2 ring-primary/30', connecting?.includes(n.id) && 'border-warning bg-warning/10 ring-2 ring-warning/40')}
+                  onClick={() => pick(n.id)} title={n.note || n.title}>
+                  <span className={cn('truncate text-xs font-medium', STATE_TEXT[n.state])}>{STATE_LABEL[n.state]}{n.kind !== 'story' && n.kind !== 'recommendation' ? ` · ${n.kind}` : ''}</span>
+                  <span className="line-clamp-2 text-sm leading-snug font-semibold">{n.title}</span>
+                  <span className="mt-auto truncate text-xs text-muted-foreground">{n.capability || 'No area yet'}</span>
+                </button>) })}
+            </div>
+          </div>}
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-border px-5 py-3 text-xs text-muted-foreground">
+          <span className="flex items-center gap-2"><i className="inline-block w-6 border-t-2 border-primary" /> linked by a person</span>
+          <span className="flex items-center gap-2"><i className="inline-block w-6 border-t-2 border-dashed border-warning" /> {ASSISTANT_NAME}’s guess</span>
+          <span className="flex items-center gap-2"><i className="inline-block h-2.5 w-3.5 rounded-sm border border-border ring-1 ring-warning/60" /> no links yet</span>
+          <span className="flex items-center gap-2"><i className="inline-block h-2.5 w-3.5 rounded-sm border border-dashed border-warning" /> {ASSISTANT_NAME}’s idea, not a story yet</span>
+        </div>
+      </Section>
+
+      <aside className="grid min-w-0 grid-cols-1 content-start gap-6">
+        {pair && pair.length === 2 ? (
+          <Section title="How are they linked?" description="Pick the sentence that reads true.">
+            <SectionBody>
+              <div role="radiogroup" aria-label="Kind of link" className="grid gap-2">
+                {(['depends_on', 'split_from', 'related'] as LinkKind[]).map((k) => <button type="button" role="radio" aria-checked={kind === k} key={k} onClick={() => setKind(k)} className={cn('rounded-lg border px-3 py-2.5 text-left text-sm transition-colors', kind === k ? 'border-primary bg-primary/10' : 'border-border hover:bg-accent/50')}><span className="font-semibold">{k === 'related' ? pair[0].title : pair[1].title}</span> <span className="text-warning">{LINK_LABEL[k]}</span> <span className="font-semibold">{k === 'related' ? pair[1].title : pair[0].title}</span></button>)}
+              </div>
+              <Button type="button" size="sm" variant="ghost" onClick={() => setConnecting([connecting![1], connecting![0]])} className="justify-self-start gap-1.5 px-2"><ArrowLeftRight className="size-4" /> Swap which comes first</Button>
+              <div className="flex items-start gap-2"><Checkbox id="sm-ask" checked={ask} onCheckedChange={(v) => setAsk(!!v)} className="mt-0.5" /><Label htmlFor="sm-ask" className="text-sm font-normal">Ask {ASSISTANT_NAME} two or three questions to firm up the link</Label></div>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" size="sm" disabled={busy} className="gap-1.5" onClick={() => void post({ action: 'connect', from: kind === 'related' ? pair[0].id : pair[1].id, to: kind === 'related' ? pair[1].id : pair[0].id, kind, ask }, ask ? `Linked. ${ASSISTANT_NAME} is asking what firms it up in the conversation.` : 'Linked.').then(() => { setConnecting(null); if (ask) changeView('conversation') })}><Check className="size-4" /> Connect</Button>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setConnecting(null)}>Cancel</Button>
+              </div>
+            </SectionBody>
+          </Section>
+        ) : sel ? (
+          <Section title={sel.title} description={<>{STATE_LABEL[sel.state]}{sel.capability ? ` · ${sel.capability}` : ''}</>} action={<Button type="button" size="icon" variant="ghost" aria-label="Close" onClick={() => setSelected('')}><X className="size-4" /></Button>}>
+            <SectionBody>
+              {sel.note && <p className="text-sm">{sel.note}</p>}
+              {unlinked.has(sel.id) && <p className="flex gap-2 rounded-lg border border-dashed border-warning/40 p-3 text-sm text-warning"><Sparkles className="mt-0.5 size-4 shrink-0" /> No links yet. Is it really on its own, or does it need something, or feed something?</p>}
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" size="sm" className="gap-1.5" onClick={() => { setFocus(sel.id); setArea('') }}><Crosshair className="size-4" /> Focus on this</Button>
+                <Button type="button" size="sm" variant="outline" className="gap-1.5" onClick={() => { setConnecting([sel.id]); setSelected('') }}><Link2 className="size-4" /> Connect to…</Button>
+                <Button type="button" size="sm" variant="ghost" className="gap-1.5" onClick={() => changeView(sel.id.startsWith('move:') ? 'pilot' : 'overview')}>Open on the {sel.id.startsWith('move:') ? 'Board' : 'backlog'} <ArrowRight className="size-4" /></Button>
+              </div>
+            </SectionBody>
+            <div className="border-t border-border px-5 pt-3 pb-1 text-sm font-semibold">Links · {selLinks.length}</div>
+            {selLinks.length === 0 && <p className="px-5 pb-4 text-sm text-muted-foreground">Nothing linked to this yet.</p>}
             {selLinks.map((l) => { const other = node(l.from === sel.id ? l.to : l.from); const text = l.from === sel.id ? `${LINK_LABEL[l.kind as LinkKind]} ${other?.title}` : `${other?.title} ${LINK_LABEL[l.kind as LinkKind]} this`; return (
-              <div className={`sm-link is-${l.status}`} key={l.id}><button type="button" onClick={() => setSelected(other?.id ?? '')}><span className="truth-edge-relation">{l.status === 'suggested' ? `${ASSISTANT_NAME}’s guess` : 'linked'}</span><span>{text}</span></button>
-                {l.why && <small>{l.why}</small>}
-                <div>{l.status === 'suggested' ? <><button type="button" className="text-button" onClick={() => void post({ action: 'accept', link: l.id }, 'Link accepted')}><Check size={12} /> Accept</button><button type="button" className="text-button" onClick={() => void post({ action: 'dismiss', link: l.id }, `Dismissed. ${ASSISTANT_NAME} won't offer it again.`)}><X size={12} /> Dismiss</button></> : <button type="button" className="text-button" onClick={() => void post({ action: 'remove', link: l.id }, 'Link removed')}><X size={12} /> Remove</button>}</div>
+              <div key={l.id} className="grid gap-1.5 border-t border-border px-5 py-3">
+                <button type="button" onClick={() => setSelected(other?.id ?? '')} className="flex flex-wrap items-center gap-2 text-left text-sm hover:underline"><StatusBadge tone={l.status === 'suggested' ? 'warn' : 'ok'}>{l.status === 'suggested' ? `${ASSISTANT_NAME}’s guess` : 'Linked'}</StatusBadge>{text}</button>
+                {l.why && <span className="text-xs text-muted-foreground">{l.why}</span>}
+                <div className="flex flex-wrap gap-1">{l.status === 'suggested' ? <><Button type="button" size="sm" variant="ghost" className="gap-1.5 px-2" onClick={() => accept(l)}><Check className="size-4" /> Accept</Button><Button type="button" size="sm" variant="ghost" className="gap-1.5 px-2" onClick={() => dismiss(l)}><X className="size-4" /> Dismiss</Button></> : <Button type="button" size="sm" variant="ghost" className="gap-1.5 px-2" onClick={() => void post({ action: 'remove', link: l.id }, 'Link removed')}><X className="size-4" /> Remove</Button>}</div>
               </div>) })}
-            {selLinks.length === 0 && <small className="studio-muted">Nothing linked to this yet.</small>}
-          </div>
-          <div className="truth-detail-actions"><button className="button button-primary button-small" type="button" onClick={() => { setFocus(sel.id); setArea('') }}><Crosshair size={13} /> Focus on this</button><button className="button button-quiet button-small" type="button" onClick={() => { setConnecting([sel.id]); setSelected('') }}><Link2 size={13} /> Connect to…</button><button className="text-button" type="button" onClick={() => changeView(sel.id.startsWith('move:') ? 'pilot' : 'overview')}>Open on the {sel.id.startsWith('move:') ? 'Board' : 'backlog'} <ArrowRight size={12} /></button></div>
-        </section>
-        : <section className="truth-detail-card"><div className="truth-card-heading"><div><p className="eyebrow">{ASSISTANT_NAME}’s guesses</p><h3>Links worth a look</h3></div><Sparkles size={15} /></div>
-          {suggested.length === 0 ? <p className="truth-detail-copy">None waiting. When something changes, {ASSISTANT_NAME} looks for connections you haven’t made and offers the strongest here, at most three per story.</p> :
-            <div className="truth-edge-list">{suggested.slice(0, 8).map((l) => <div className="sm-link is-suggested" key={l.id}><button type="button" onClick={() => setSelected(l.from)}><span>{node(l.from)?.title} <em>{LINK_LABEL[l.kind as LinkKind]}</em> {node(l.to)?.title}</span></button>{l.why && <small>{l.why}</small>}<div><button type="button" className="text-button" onClick={() => void post({ action: 'accept', link: l.id }, 'Link accepted')}><Check size={12} /> Accept</button><button type="button" className="text-button" onClick={() => void post({ action: 'dismiss', link: l.id }, `Dismissed. ${ASSISTANT_NAME} won't offer it again.`)}><X size={12} /> Dismiss</button></div></div>)}</div>}
-          {data.unlinked.length > 0 && <p className="sm-gap"><Sparkles size={13} /> {data.unlinked.length} {data.unlinked.length === 1 ? 'story has' : 'stories have'} no links yet (warm outline). Pick one to see it.</p>}
-        </section>}
+          </Section>
+        ) : (
+          <Section statement={<>Links worth <em>a second look.</em></>} title="Links worth a look" description={`${ASSISTANT_NAME}’s guesses, at most three per story.`} action={<Sparkles className="size-4 text-primary" />}>
+            {suggested.length === 0 && <p className="px-5 py-4 text-sm text-muted-foreground">None waiting. When something changes, {ASSISTANT_NAME} looks for connections you haven’t made and offers the strongest here.</p>}
+            {suggested.slice(0, 8).map((l) => (
+              <div key={l.id} className="grid gap-1.5 border-b border-border px-5 py-3 last:border-b-0">
+                <button type="button" onClick={() => setSelected(l.from)} className="text-left text-sm hover:underline"><span className="font-semibold">{node(l.from)?.title}</span> <span className="text-warning">{LINK_LABEL[l.kind as LinkKind]}</span> <span className="font-semibold">{node(l.to)?.title}</span></button>
+                {l.why && <span className="text-xs text-muted-foreground">{l.why}</span>}
+                <div className="flex flex-wrap gap-1"><Button type="button" size="sm" variant="ghost" className="gap-1.5 px-2" onClick={() => accept(l)}><Check className="size-4" /> Accept</Button><Button type="button" size="sm" variant="ghost" className="gap-1.5 px-2" onClick={() => dismiss(l)}><X className="size-4" /> Dismiss</Button></div>
+              </div>
+            ))}
+            {data.unlinked.length > 0 && <p className="mx-5 my-4 flex gap-2 rounded-lg border border-dashed border-warning/40 p-3 text-sm text-warning"><Sparkles className="mt-0.5 size-4 shrink-0" /> {data.unlinked.length} {data.unlinked.length === 1 ? 'story has' : 'stories have'} no links yet (warm outline). Pick one to see it.</p>}
+          </Section>
+        )}
       </aside>
     </div>
   </div>

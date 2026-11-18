@@ -1,6 +1,6 @@
 /* Reading comfort: fixed standard sizes. Body text 14px, nothing under 12px (applied in styles.css and studio-extras.css),
    buttons at least 36px tall. No automatic resizing. Themes (dark, paper) are in paper.css. */
-button, .text-button, .button, .button-primary, .button-quiet, .button-small, .send-button, .voice-button, .file-button, .icon-button { min-height: 36px; }
+button:not([data-ui] [role="group"] button), .text-button, .button, .button-primary, .button-quiet, .button-small, .send-button, .voice-button, .file-button, .icon-button { min-height: 36px; }
 .icon-button, .voice-button, .send-button { min-width: 36px; }
 input, textarea, select { font-size: 14px; }
 .view-controls { position: fixed; left: 12px; bottom: 12px; z-index: 60; display: flex; gap: 4px; padding: 4px; border-radius: 999px;

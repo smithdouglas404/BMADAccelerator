@@ -1,35 +1,33 @@
 'use client'
 // The pages around the Studio: every product, a new product in a few lines (spoken or typed, plus any
-// documents), and the phone capture page. Same system as the team's screens: their classes and tokens.
+// documents), and the phone capture page. On shadcn/ui + Animate UI.
 import { useEffect, useState, type ReactNode } from 'react'
-import { ArrowRight, Check, Mic, Plus, Settings2, Upload } from 'lucide-react'
+import { ArrowRight, Check, FileText, Mic, Plus, Upload, X } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Progress } from '@/components/ui/progress'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
+import { Field, PageHeader, Section, SectionBody, StatusBadge } from './kit'
 import { api, ago } from './live'
 import { useVoice } from './vibe'
 import { useMe } from './flow'
-import { ASSISTANT_NAME, PRODUCT_LINE } from '@/lib/brand'
 import { IDLE_DAYS } from '@/lib/studio/journey'
+import { StudioFrame, StudioSidebar, StudioTopBar } from './shell'
 
 type ProductRow = { id: string; name: string; statement: string; category: string; stageLabel: string; customer: string; businessArea: string; lastView: string; readiness: number; versions: number; thoughts: number; decisions: number; busy: boolean; updatedAt: string; progress?: number; nextStep?: { label: string; view: string; gain: number } | null; needsYou?: number; idleDays?: number }
 
-export function StudioTop({ active }: { active?: 'home' | 'new' | 'settings' | 'capture' }) {
-  return (
-    <header className="studio-page-top">
-      <a href="/" className="brand-lockup" style={{ padding: 0, textDecoration: 'none' }}>
-        <div className="brand-mark"><span /><span /><span /></div>
-        <div><p className="eyebrow">{PRODUCT_LINE}</p><p className="brand-name">{ASSISTANT_NAME}<span>.</span></p></div>
-      </a>
-      <nav>
-        <a href="/" className={active === 'home' ? 'is-active' : ''}>Products</a>
-        <a href="/new" className={active === 'new' ? 'is-active' : ''}>New product</a>
-        <a href="/capture" className={active === 'capture' ? 'is-active' : ''}>Capture</a>
-        <a href="/settings" className={active === 'settings' ? 'is-active' : ''}><Settings2 size={12} /> Settings</a>
-      </nav>
-    </header>
-  )
-}
+const PLACE_TITLES = { home: 'All use cases', new: 'New use case', capture: 'Capture a thought', settings: 'Settings' } as const
 
-function Shell({ active, children }: { active: 'home' | 'new' | 'settings' | 'capture'; children: ReactNode }) {
-  return <div className="studio-page"><StudioTop active={active} />{children}</div>
+/** Home, New, Capture and Settings: the same sidebar as inside a use case, the place's title in the top bar. */
+export function Shell({ active, children }: { active: 'home' | 'new' | 'settings' | 'capture'; children: ReactNode }) {
+  return (
+    <StudioFrame sidebar={<StudioSidebar place={active} />}>
+      <StudioTopBar crumbs={<strong className="font-semibold text-foreground">{PLACE_TITLES[active]}</strong>} />
+      <div className="min-w-0 flex-1 bg-background">{children}</div>
+    </StudioFrame>
+  )
 }
 
 export const BUSINESS_AREAS = ['Finance', 'IT', 'HR', 'Operations', 'Sales', 'Marketing', 'Customer service', 'Legal / Compliance', 'Supply chain'] as const
@@ -45,35 +43,53 @@ export function HomePage() {
   }, [])
   return (
     <Shell active="home">
-      <div className="page-wrap">
-        <div className="page-intro">
-          <div><p className="eyebrow eyebrow-with-dot"><span className="status-dot" />Every product you are shaping</p><h1>Make the product <em>legible</em><br />before you make it real.</h1><p>Say what you want in a few lines. Socra finds what kind of product it is, lays down everything the leading products of that kind have, and asks only what it can’t know.</p></div>
-          <div className="intro-actions"><a className="button button-primary" href="/new" style={{ textDecoration: 'none' }}><Plus size={15} /> New product</a><span>{rows ? `${rows.length} products` : ''}</span></div>
-        </div>
-        {error && <p className="studio-muted">{error}</p>}
-        {customers.length > 1 && <div className="truth-filters studio-customer-filter"><button type="button" className={!customer ? 'is-active' : ''} onClick={() => setCustomer('')}>Every customer</button>{customers.map((c) => <button type="button" key={c} className={customer === c ? 'is-active' : ''} onClick={() => setCustomer(c)}>{c}</button>)}</div>}
+      <div data-ui className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-6 px-4 py-8 md:px-8">
+        <PageHeader
+          title="All use cases" eyebrow="Every product you are shaping" headline={<>Make the product <em>legible</em><br />before you make it real.</>}
+          description="Say what you want in a few lines. Socra works out what kind of product it is, lays down everything the leading products of that kind have, and asks only what it can’t know."
+          actions={<Button asChild><a href="/new"><Plus className="size-4" /> New use case</a></Button>}
+        />
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        {customers.length > 1 && (
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Customer">
+            <Button type="button" size="sm" variant={!customer ? 'secondary' : 'ghost'} aria-pressed={!customer} onClick={() => setCustomer('')}>Every customer</Button>
+            {customers.map((c) => <Button key={c} type="button" size="sm" variant={customer === c ? 'secondary' : 'ghost'} aria-pressed={customer === c} onClick={() => setCustomer(c)}>{c}</Button>)}
+          </div>
+        )}
         {(() => {
           const waiting = shown.filter((r) => (r.needsYou ?? 0) > 0)
           const idle = shown.filter((r) => (r.idleDays ?? 0) >= IDLE_DAYS)
           if (!waiting.length && !idle.length) return null
-          return <div className="studio-attention" role="region" aria-label="Needs your attention">
-            <p className="eyebrow"><span className="studio-red-dot" /> &nbsp;Needs your attention</p>
-            {waiting.map((r) => <a key={`w${r.id}`} href={`/use-cases/${r.id}?view=pilot`}><span className="studio-needs-you">{r.needsYou}</span> {r.name}: {r.needsYou === 1 ? 'one new item or decision waits' : `${r.needsYou} new items or decisions wait`} for you <ArrowRight size={12} /></a>)}
-            {idle.map((r) => <a key={`i${r.id}`} href={`/use-cases/${r.id}${r.nextStep ? `?view=${r.nextStep.view}` : ''}`}><span className="studio-idle">●</span> {r.name} has been idle for {r.idleDays} days{r.nextStep ? `. Next: ${r.nextStep.label}` : ''} <ArrowRight size={12} /></a>)}
-          </div>
+          return (
+            <div role="region" aria-label="Needs your attention" className="grid gap-1 rounded-lg border border-destructive/30 bg-destructive/5 p-3 animate-in fade-in duration-300">
+              <p className="flex items-center gap-2 px-2 pb-1 text-xs font-semibold tracking-wide text-destructive uppercase"><span className="size-2 rounded-full bg-destructive" /> Needs your attention</p>
+              {waiting.map((r) => <a key={`w${r.id}`} href={`/use-cases/${r.id}?view=pilot`} className="flex min-h-9 items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-background"><span className="grid h-5 min-w-5 place-items-center rounded-full bg-destructive px-1.5 text-xs font-semibold text-white">{r.needsYou}</span><span className="min-w-0 flex-1"><strong>{r.name}</strong>: {r.needsYou === 1 ? 'one new item or decision waits' : `${r.needsYou} new items or decisions wait`} for you</span><ArrowRight className="size-4 shrink-0 text-muted-foreground" /></a>)}
+              {idle.map((r) => <a key={`i${r.id}`} href={`/use-cases/${r.id}${r.nextStep ? `?view=${r.nextStep.view}` : ''}`} className="flex min-h-9 items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-background"><span className="mx-1.5 size-2 shrink-0 rounded-full bg-amber-500" /><span className="min-w-0 flex-1"><strong>{r.name}</strong> has been idle for {r.idleDays} days{r.nextStep ? `. Next: ${r.nextStep.label}` : ''}</span><ArrowRight className="size-4 shrink-0 text-muted-foreground" /></a>)}
+            </div>
+          )
         })()}
-        <div className="studio-products">
-          {rows?.length === 0 && <div className="empty-column">No use cases yet. Start one in a few lines.</div>}
+        {rows === null && !error && <p className="text-sm text-muted-foreground">Loading your use cases…</p>}
+        {rows?.length === 0 && (
+          <div className="grid justify-items-start gap-3 rounded-xl border border-dashed border-border px-6 py-10">
+            <p className="text-lg font-semibold">No use cases yet</p>
+            <p className="text-base text-muted-foreground">Start one in a few lines, typed or spoken. A deck or a business case helps if you have one.</p>
+            <Button asChild><a href="/new"><Plus className="size-4" /> New use case</a></Button>
+          </div>
+        )}
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {shown.map((r) => (
-            <a key={r.id} className="studio-product" href={`/use-cases/${r.id}${r.nextStep ? `?view=${r.nextStep.view}` : r.lastView ? `?view=${r.lastView}` : ''}`}>
-              <span className="eyebrow">{[r.customer, r.businessArea].filter(Boolean).join(' · ') || r.category || r.stageLabel}</span>
-              <h3>{r.name}</h3>
-              <p>{r.statement}</p>
-              <div className="ceiling-track" title="How far this use case has come"><span style={{ width: `${r.progress ?? r.readiness}%`, background: 'var(--acid)' }} /></div>
-              {r.nextStep && <p className="studio-product-next">Next: <strong>{r.nextStep.label}</strong> · +{r.nextStep.gain}% → {(r.progress ?? 0) + r.nextStep.gain}%</p>}
-              {((r.needsYou ?? 0) > 0 || (r.idleDays ?? 0) >= IDLE_DAYS) && <div className="studio-product-flags">{(r.needsYou ?? 0) > 0 && <span><span className="studio-red-dot" /> {r.needsYou} {r.needsYou === 1 ? 'needs' : 'need'} you</span>}{(r.idleDays ?? 0) >= IDLE_DAYS && <span className="studio-idle">Idle {r.idleDays} days</span>}</div>}
-              <div className="studio-product-meta"><span>{r.progress ?? r.readiness}% along</span><span>{r.readiness}% pilot-ready</span><span>{r.versions} versions</span><span>{r.thoughts} thoughts</span><span>{r.busy ? 'working…' : `updated ${ago(r.updatedAt)}`}</span></div>
-              <span className="studio-product-resume">{r.nextStep ? 'Take the next step' : 'Pick up where you left off'} <ArrowRight size={12} /></span>
+            <a key={r.id} href={`/use-cases/${r.id}${r.nextStep ? `?view=${r.nextStep.view}` : r.lastView ? `?view=${r.lastView}` : ''}`} className="group grid min-w-0 content-start gap-3 rounded-lg border border-border bg-card p-5 shadow-xs transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none">
+              <div className="flex items-start justify-between gap-2">
+                <p className="min-w-0 truncate text-xs text-muted-foreground">{[r.customer, r.businessArea].filter(Boolean).join(' · ') || r.category || r.stageLabel}</p>
+                {r.busy ? <StatusBadge tone="suggest">working…</StatusBadge> : <StatusBadge tone="off">{r.stageLabel || 'shaping'}</StatusBadge>}
+              </div>
+              <h2 className="text-lg font-semibold">{r.name}</h2>
+              <p className="line-clamp-3 text-sm text-muted-foreground">{r.statement}</p>
+              <div className="flex items-center gap-3" title="How far this use case has come"><Progress value={r.progress ?? r.readiness} className="h-1.5" /><span className="shrink-0 text-xs font-medium tabular-nums">{r.progress ?? r.readiness}% along</span></div>
+              {r.nextStep && <p className="text-sm">Next: <strong>{r.nextStep.label}</strong> <span className="text-xs text-primary">+{r.nextStep.gain}% → {(r.progress ?? 0) + r.nextStep.gain}%</span></p>}
+              {((r.needsYou ?? 0) > 0 || (r.idleDays ?? 0) >= IDLE_DAYS) && <div className="flex flex-wrap gap-1.5">{(r.needsYou ?? 0) > 0 && <span className="inline-flex items-center gap-1.5 rounded-full border border-destructive/40 px-2 py-0.5 text-xs font-medium text-destructive"><span className="size-1.5 rounded-full bg-destructive" /> {r.needsYou} {r.needsYou === 1 ? 'needs' : 'need'} you</span>}{(r.idleDays ?? 0) >= IDLE_DAYS && <span className="inline-flex items-center rounded-full border border-amber-500/40 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">Idle {r.idleDays} days</span>}</div>}
+              <p className="text-xs text-muted-foreground">{r.readiness}% pilot-ready · {r.versions} {r.versions === 1 ? 'version' : 'versions'} · {r.thoughts} thoughts · {r.decisions} decisions · {r.busy ? 'working…' : `updated ${ago(r.updatedAt)}`}</p>
+              <span className="flex items-center gap-1 text-sm font-medium text-primary">{r.nextStep ? 'Take the next step' : 'Pick up where you left off'} <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" /></span>
             </a>
           ))}
         </div>
@@ -121,26 +137,48 @@ export function NewProductPage() {
   }
   return (
     <Shell active="new">
-      <div className="page-wrap">
-        <div className="page-intro"><div><p className="eyebrow eyebrow-with-dot"><span className="status-dot" />A new product</p><h1>Say it the way<br />you’d <em>say it.</em></h1><p>A few lines is enough, and a business case or a deck helps if you have one. Socra works out what kind of product it is, names it, lays out everything the leading products of that kind have, and asks you what only you can answer. Its specialists join in as the product takes shape.</p></div></div>
-        <div className="studio-form">
-          <div className="studio-form-grid">
-            <label>Customer<input value={customer} onChange={(e) => setCustomer(e.target.value)} list="studio-customers" placeholder="Who it’s for, e.g. Acme Insurance" /><datalist id="studio-customers">{known.map((c) => <option key={c} value={c} />)}</datalist></label>
-            <label>Use case name<input value={useCase} onChange={(e) => setUseCase(e.target.value)} placeholder="Optional: Socra suggests one" /></label>
-            <label>Business area<select value={area} onChange={(e) => setArea(e.target.value)}><option value="">Choose one</option>{BUSINESS_AREAS.map((a) => <option key={a} value={a}>{a}</option>)}<option value="Other">Other</option></select></label>
-            {area === 'Other' && <label>Which area?<input value={areaOther} onChange={(e) => setAreaOther(e.target.value)} placeholder="Say it in your words" /></label>}
-          </div>
-          <label>Short description<input value={summary} onChange={(e) => setSummary(e.target.value)} maxLength={300} placeholder="One or two lines: the problem and who has it" /></label>
-          <label>What do you want to make?<textarea rows={7} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Who it’s for, what it should let them do, anything you already know… or just the idea in one line." autoFocus /></label>
-          <div className="studio-form-row">
-            <button type="button" className={`voice-button ${voice.listening ? 'is-listening' : ''}`} onClick={voice.toggle} disabled={voice.working}><Mic size={14} /> {voice.listening ? 'Listening… press again to stop' : voice.working ? 'Writing it down…' : 'Say it instead'}</button>
-            <label className="button button-quiet file-button" style={{ textTransform: 'none', letterSpacing: 0, font: 'inherit', display: 'inline-flex' }}><Upload size={14} /> Add documents<input type="file" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.txt,.md,.rtf,.png,.jpg,.jpeg,.webp,.json,.html" onChange={(e) => setFiles([...files, ...Array.from(e.target.files ?? [])])} /></label>
-            <small className="studio-muted">Decks, business cases, spreadsheets, PDFs, notes or screenshots: Socra reads them all.</small>
-          </div>
-          {files.length > 0 && <div className="studio-files">{files.map((f, i) => <span key={`${f.name}-${i}`}>{f.name}<button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles(files.filter((_, j) => j !== i))}>×</button></span>)}</div>}
-          {note && <p className="studio-muted">{note}</p>}
-          <div className="studio-form-row"><button type="button" className="button button-primary" disabled={busy || voice.listening} onClick={() => void start()}>{busy ? 'Opening the room…' : 'Start with Socra'} <ArrowRight size={15} /></button><small className="studio-muted">Each customer’s use cases, documents, memory and agents are kept apart.</small></div>
-        </div>
+      <div data-ui className="mx-auto grid w-full max-w-3xl grid-cols-1 gap-6 px-4 py-8 md:px-8">
+        <PageHeader title="New use case" eyebrow="A new product" headline={<>Say it the way<br />you’d <em>say it.</em></>} description="A few lines is enough, and a business case or a deck helps if you have one. Socra works out what kind of product it is, names it, lays out everything the leading products of that kind have, and asks you what only you can answer." />
+        <Section statement={<>Start with <em>the person.</em></>} title="Who it’s for" description="Each customer’s use cases, documents, memory and agents are kept apart.">
+          <SectionBody className="items-start sm:grid-cols-2">
+            <Field id="new-customer" label="Customer">
+              <Input id="new-customer" value={customer} onChange={(e) => setCustomer(e.target.value)} list="studio-customers" placeholder="e.g. Acme Insurance" />
+            </Field>
+            <datalist id="studio-customers">{known.map((c) => <option key={c} value={c} />)}</datalist>
+            <Field id="new-name" label="Use case name" hint="Optional: Socra suggests one.">
+              <Input id="new-name" value={useCase} onChange={(e) => setUseCase(e.target.value)} placeholder="e.g. Claims intake" />
+            </Field>
+            <Field id="new-area" label="Business area">
+              <Select value={area || undefined} onValueChange={setArea}>
+                <SelectTrigger id="new-area" className="w-full"><SelectValue placeholder="Choose one" /></SelectTrigger>
+                <SelectContent>{BUSINESS_AREAS.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}<SelectItem value="Other">Other</SelectItem></SelectContent>
+              </Select>
+            </Field>
+            {area === 'Other' && <Field id="new-area-other" label="Which area?"><Input id="new-area-other" value={areaOther} onChange={(e) => setAreaOther(e.target.value)} placeholder="Say it in your words" /></Field>}
+          </SectionBody>
+        </Section>
+        <Section statement={<>Say what it <em>should do.</em></>} title="What you want to make" description="Type it, say it, or add what you already have. Socra reads it all.">
+          <SectionBody>
+            <Field id="new-summary" label="Short description">
+              <Input id="new-summary" value={summary} onChange={(e) => setSummary(e.target.value)} maxLength={300} placeholder="One or two lines: the problem and who has it" />
+            </Field>
+            <Field id="new-description" label="In your own words">
+              <Textarea id="new-description" rows={7} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Who it’s for, what it should let them do, anything you already know… or just the idea in one line." autoFocus className="min-h-40 text-base md:text-base" />
+            </Field>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant={voice.listening ? 'default' : 'outline'} onClick={voice.toggle} disabled={voice.working} aria-pressed={voice.listening} className={cn(voice.listening && 'animate-pulse')}><Mic className="size-4" /> {voice.listening ? 'Listening… press again to stop' : voice.working ? 'Writing it down…' : 'Say it instead'}</Button>
+              <Button asChild variant="outline"><label className="cursor-pointer"><Upload className="size-4" /> Add documents<input type="file" multiple hidden accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.txt,.md,.rtf,.png,.jpg,.jpeg,.webp,.json,.html" onChange={(e) => setFiles([...files, ...Array.from(e.target.files ?? [])])} /></label></Button>
+            </div>
+            <p className="text-xs text-muted-foreground">Decks, business cases, spreadsheets, PDFs, notes or screenshots.</p>
+            {files.length > 0 && (
+              <ul className="flex flex-wrap gap-2">{files.map((f, i) => (
+                <li key={`${f.name}-${i}`} className="flex items-center gap-1 rounded-full border border-border py-1 pr-1 pl-3 text-sm"><FileText className="size-4 text-muted-foreground" /> {f.name}<Button type="button" size="icon" variant="ghost" className="size-9" aria-label={`Remove ${f.name}`} onClick={() => setFiles(files.filter((_, j) => j !== i))}><X className="size-3.5" /></Button></li>
+              ))}</ul>
+            )}
+          </SectionBody>
+        </Section>
+        {note && <p className="text-sm text-muted-foreground" role="status">{note}</p>}
+        <div><Button size="lg" disabled={busy || voice.listening} onClick={() => void start()}>{busy ? 'Opening the room…' : 'Start with Socra'} <ArrowRight className="size-4" /></Button></div>
       </div>
     </Shell>
   )
@@ -172,17 +210,26 @@ export function CapturePage() {
   }
   return (
     <Shell active="capture">
-      <div className="page-wrap">
-        <div className="page-intro"><div><p className="eyebrow eyebrow-with-dot"><span className="live-pulse" />Ambient capture</p><h1>Catch the thought<br /><em>before it’s a task.</em></h1><p>Phone, voice, or a half-sentence is enough. It waits in the backlog until Socra finds its home.</p></div></div>
-        <div className="studio-form">
-          <label>Product<select value={product} onChange={(e) => setProduct(e.target.value)}>{rows.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
-          <label>The thought<textarea rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder="I keep thinking about…" /></label>
-          <div className="studio-form-row">
-            <button type="button" className={`voice-button ${voice.listening ? 'is-listening' : ''}`} onClick={voice.toggle}><Mic size={14} /> {voice.listening ? 'Listening… press to stop' : 'Say it'}</button>
-            <button type="button" className="button button-primary" onClick={() => void send()} disabled={!text.trim() || !product}><Plus size={14} /> Hold this thought</button>
-          </div>
-          {note && <p className="studio-muted">{saved > 0 && <Check size={12} className="studio-ok" />} {note}</p>}
-        </div>
+      <div data-ui className="mx-auto grid w-full max-w-2xl grid-cols-1 gap-6 px-4 py-8 md:px-8">
+        <PageHeader title="Capture a thought" eyebrow="Ambient capture" headline={<>Catch the thought<br /><em>before it’s a task.</em></>} description="Phone, voice, or a half-sentence is enough. It waits in the backlog until Socra finds its home." />
+        <Section title="The thought">
+          <SectionBody>
+            <Field id="capture-product" label="Use case">
+              <Select value={product || undefined} onValueChange={setProduct}>
+                <SelectTrigger id="capture-product" className="w-full"><SelectValue placeholder="Choose a use case" /></SelectTrigger>
+                <SelectContent>{rows.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </Field>
+            <Field id="capture-text" label="What’s on your mind">
+              <Textarea id="capture-text" rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder="I keep thinking about…" className="min-h-28 text-base md:text-base" />
+            </Field>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant={voice.listening ? 'default' : 'outline'} onClick={voice.toggle} aria-pressed={voice.listening} className={cn(voice.listening && 'animate-pulse')}><Mic className="size-4" /> {voice.listening ? 'Listening… press to stop' : 'Say it'}</Button>
+              <Button type="button" onClick={() => void send()} disabled={!text.trim() || !product}><Plus className="size-4" /> Hold this thought</Button>
+            </div>
+            {note && <p className="flex items-center gap-1.5 text-sm text-muted-foreground" role="status">{saved > 0 && <Check className="size-4 text-primary" />} {note}</p>}
+          </SectionBody>
+        </Section>
       </div>
     </Shell>
   )

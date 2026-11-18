@@ -21,7 +21,7 @@ html[data-theme="paper"] {
 html[data-theme="paper"] body { background: #f6f0e1; color: var(--ink); }
 html[data-theme="paper"] .app-shell { background: #f6f0e1; }
 html[data-theme="paper"] .sidebar { background: #efe7d3; }
-html[data-theme="paper"] input, html[data-theme="paper"] textarea, html[data-theme="paper"] select { color: var(--ink); background: #fffdf5; }
+html[data-theme="paper"] :is(input, textarea, select):not([data-slot]) { color: var(--ink); background: #fffdf5; }
 html[data-theme="paper"] ::placeholder { color: #7b776c; }
 
 /* Clean: shadcn "Modern Minimal" as published (white, soft greys, Inter, 6px corners, blue #3b82f6 primary with
@@ -51,7 +51,7 @@ html[data-theme="clean"] {
 html[data-theme="clean"] body { background: #ffffff; color: var(--ink); }
 html[data-theme="clean"] .app-shell { background: #ffffff; }
 html[data-theme="clean"] .sidebar, html[data-theme="clean"] .app-shell > .sidebar { background: #f9fafb; }
-html[data-theme="clean"] input, html[data-theme="clean"] textarea, html[data-theme="clean"] select { color: var(--ink); background: #ffffff; border-color: #e5e7eb; }
+html[data-theme="clean"] :is(input, textarea, select):not([data-slot]) { color: var(--ink); background: #ffffff; border-color: #e5e7eb; }
 html[data-theme="clean"] ::placeholder { color: #6b7280; }
 /* Active rows: Modern Minimal's sky-blue accent with its dark blue text. */
 html[data-theme="clean"] .nav-item.is-active { background: #e0f2fe; color: #1e3a8a; }
