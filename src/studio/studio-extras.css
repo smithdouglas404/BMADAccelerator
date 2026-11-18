@@ -505,3 +505,4 @@ a.studio-home-brand { color: inherit; text-decoration: none; padding-bottom: 12p
 .app-shell > .sidebar { z-index: 30; }
 /* Standard text sizes (14px body) need a little more menu width so step names stay on one line. */
 @media (min-width: 1101px) { .app-shell > .sidebar { width: 284px; } }
+.studio-message-docs { margin-top: 8px; }
