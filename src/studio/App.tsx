@@ -139,7 +139,7 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
     try { window.localStorage.setItem('studio-persona-chosen', '1') } catch { /* private window */ }
     if (me.name) void api(`/api/use-cases/${live.id}/members`, { json: { name: me.name, role: p.role } }).catch(() => undefined)
     changeView(p.start)
-    setToast(`You’re in as ${p.label.toLowerCase()}. The menu shows your stages first; everything else is under More.`)
+    setToast(`You’re in as ${p.label.toLowerCase()}. You start in the right place, and Socra talks your language. The path is the same for everyone; other tools are under More.`)
   }
   const [talkTo, setTalkTo] = useState('')
 
@@ -392,7 +392,7 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
         <nav className="primary-nav studio-nav" aria-label="Product workspace">
           {menu.groups.map((group) => (<div className="studio-nav-group" key={group.title}><div className="sidebar-section-label studio-stage-label">{group.title}<small>{group.about}</small></div>{group.items.map(navButton)}</div>))}
           {menu.more.length > 0 && <div className="studio-nav-group studio-nav-more">
-            <button type="button" className="sidebar-section-label studio-stage-label studio-more-toggle" onClick={() => setMoreOpen(!moreOpen)} aria-expanded={moreOpen || menu.more.some((i) => i.id === activeView)}>More <small>{menu.more.length} more places {moreOpen || menu.more.some((i) => i.id === activeView) ? '▴' : '▾'}</small></button>
+            <button type="button" className="sidebar-section-label studio-stage-label studio-more-toggle" onClick={() => setMoreOpen(!moreOpen)} aria-expanded={moreOpen || menu.more.some((i) => i.id === activeView)}> More tools <small>{menu.more.length} more {moreOpen || menu.more.some((i) => i.id === activeView) ? '▴' : '▾'}</small></button>
             {(moreOpen || menu.more.some((i) => i.id === activeView)) && menu.more.map(navButton)}
           </div>}
         </nav>
