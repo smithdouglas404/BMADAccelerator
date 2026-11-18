@@ -529,3 +529,12 @@ a.studio-home-brand { color: inherit; text-decoration: none; padding-bottom: 12p
 .studio-evidence-editing { display: grid; gap: 10px; }
 .studio-edit-label { display: grid; gap: 4px; color: var(--muted); font-size: 12px; font-weight: 500; }
 .studio-edit-label .studio-input, .studio-edit-label .spec-editor { margin-top: 0; color: var(--ink); font-size: 14px; }
+
+/* Layout sweep (Doug, Nov 18: "things like this out of place"). */
+/* PRD/TRD outline: show whole section titles instead of cutting them off mid-word. */
+.spec-section-copy strong { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.35; }
+/* Board: the red "needs you" buttons wrap as a group inside a narrow column instead of spilling out of the card. */
+.studio-triage-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.studio-triage-actions .button { flex: 1 1 auto; justify-content: center; white-space: nowrap; }
+/* Header buttons keep their label on one line. */
+.intro-actions .button, .truth-intro .button { white-space: nowrap; }
