@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" data-size="large" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body>{children}<ViewControls /></body>
     </html>
   );
