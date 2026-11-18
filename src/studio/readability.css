@@ -1,15 +1,12 @@
 /* Reading comfort: fixed standard sizes. Body text 14px, nothing under 12px (applied in styles.css and studio-extras.css),
-   buttons at least 36px tall. No automatic resizing. The light option flips the dark screens. */
+   buttons at least 36px tall. No automatic resizing. Themes (dark, paper) are in paper.css. */
 button, .text-button, .button, .button-primary, .button-quiet, .button-small, .send-button, .voice-button, .file-button, .icon-button { min-height: 36px; }
 .icon-button, .voice-button, .send-button { min-width: 36px; }
 input, textarea, select { font-size: 14px; }
-html[data-theme="light"] { filter: invert(1) hue-rotate(180deg); background: #111412; }
-html[data-theme="light"] img, html[data-theme="light"] video, html[data-theme="light"] iframe, html[data-theme="light"] canvas,
-html[data-theme="light"] .brand-mark, html[data-theme="light"] .view-controls { filter: invert(1) hue-rotate(180deg); }
 .view-controls { position: fixed; left: 12px; bottom: 12px; z-index: 60; display: flex; gap: 4px; padding: 4px; border-radius: 999px;
   background: var(--panel-strong, #202720); border: 1px solid var(--line-strong, rgba(255,255,255,.15)); box-shadow: var(--shadow); }
 .view-controls button { min-width: 34px; height: 32px; padding: 0 12px; border-radius: 999px; background: transparent; color: var(--ink, #f3f2ec); font-size: 13px; font-weight: 600; }
 .view-controls button[aria-pressed="true"] { background: var(--acid, #d7f58b); color: var(--acid-ink, #17200f); }
 /* At the foot of the side menu: part of the menu, never on top of it. */
 .view-controls.is-docked { position: static; display: inline-flex; margin: 14px 0 0; box-shadow: none; align-self: flex-start; }
-html[data-theme="light"] .view-controls.is-docked { filter: none; }
+.studio-page-top .view-controls.is-docked { margin: 0; align-self: center; }

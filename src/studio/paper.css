@@ -1,0 +1,116 @@
+/* Paper: a warm, Kindle-like light theme with real colour tokens (not an inverted dark theme).
+   Applied when <html data-theme="paper">. Contrast: body text 12:1, muted 6:1, faint 4.6:1 on the page colour. */
+html[data-theme="paper"] {
+  color-scheme: light;
+  color: #2b2a26;
+  background: #f6f0e1;
+  --ink: #2b2a26;
+  --muted: #55524a;
+  --faint: #6a665c;
+  --panel: #fbf7ec;
+  --panel-strong: #efe7d3;
+  --line: rgba(60, 50, 30, 0.14);
+  --line-strong: rgba(60, 50, 30, 0.26);
+  --acid: #3b6a1e;
+  --acid-ink: #fffdf5;
+  --blue: #1f5f93;
+  --warm: #a35f00;
+  --lilac: #6b3fb0;
+  --shadow: 0 14px 40px rgba(80, 60, 20, .12);
+}
+html[data-theme="paper"] body { background: #f6f0e1; color: var(--ink); }
+html[data-theme="paper"] .app-shell { background: #f6f0e1; }
+html[data-theme="paper"] .sidebar { background: #efe7d3; }
+html[data-theme="paper"] input, html[data-theme="paper"] textarea, html[data-theme="paper"] select { color: var(--ink); background: #fffdf5; }
+html[data-theme="paper"] ::placeholder { color: #7b776c; }
+
+/* Clean: a white, corporate-light look with one warm orange accent (inspired by Kyndryl's light screens).
+   Applied when <html data-theme="clean">. Orange fills use dark text so contrast stays above 4.5:1. */
+html[data-theme="clean"] {
+  color-scheme: light;
+  color: #1f2328;
+  background: #ffffff;
+  --ink: #1f2328;
+  --muted: #4b525b;
+  --faint: #5f6670;
+  --panel: #ffffff;
+  --panel-strong: #f3f4f6;
+  --line: rgba(31, 35, 40, 0.12);
+  --line-strong: rgba(31, 35, 40, 0.24);
+  --acid: #ff462d;
+  --acid-ink: #1f2328;
+  --blue: #0b5cad;
+  --warm: #b45309;
+  --lilac: #6b3fb0;
+  --shadow: 0 10px 30px rgba(15, 23, 42, .10);
+}
+html[data-theme="clean"] body { background: #ffffff; color: var(--ink); }
+html[data-theme="clean"] .app-shell { background: #ffffff; }
+html[data-theme="clean"] .sidebar { background: #f3f4f6; }
+html[data-theme="clean"] input, html[data-theme="clean"] textarea, html[data-theme="clean"] select { color: var(--ink); background: #ffffff; }
+html[data-theme="clean"] ::placeholder { color: #6b7280; }
+
+/* Colour channels used by the stylesheets' tints and overlays (rgba(var(--x-rgb), a)), so every tint follows the theme.
+   Dark keeps its original values; paper turns white overlays into soft brown shading and uses the deeper accents. */
+:root {
+  --hi-rgb: 255,255,255; --acid-rgb: 215,245,139; --blue-rgb: 169,216,255; --warm-rgb: 245,200,138;
+  --lilac-rgb: 213,184,255; --shade-rgb: 0,0,0; --glow-rgb: 91,119,73; --bg: #111412; --dk-rgb: 16,19,17;
+}
+html[data-theme="paper"] {
+  --hi-rgb: 70,55,25; --acid-rgb: 59,106,30; --blue-rgb: 31,95,147; --warm-rgb: 163,95,0;
+  --lilac-rgb: 107,63,176; --shade-rgb: 90,70,30; --glow-rgb: 59,106,30; --bg: #f6f0e1; --dk-rgb: 255,253,245;
+  --raised: #fffdf5; --deep: #efe7d3; --scrim: rgba(60,45,20,.35); --avatar: #8a5a3c; --acid-hover: #2f5717;
+}
+html[data-theme="clean"] {
+  --hi-rgb: 31,35,40; --acid-rgb: 255,70,45; --blue-rgb: 11,92,173; --warm-rgb: 180,83,9;
+  --lilac-rgb: 107,63,176; --shade-rgb: 15,23,42; --glow-rgb: 255,255,255; --bg: #ffffff; --dk-rgb: 255,255,255;
+  --raised: #ffffff; --deep: #f3f4f6; --scrim: rgba(15,23,42,.35); --avatar: #5b6470; --acid-hover: #ff6a55;
+  /* Orange as text on white needs a deeper shade to pass 4.5:1 (#ff462d is 3.4:1); fills keep the bright orange with dark text. */
+  --acid-text: #c9361f;
+}
+
+/* Light themes (paper, clean): the places the stylesheets hard-code a dark colour. */
+html:is([data-theme="paper"], [data-theme="clean"]) .studio-page { background: var(--bg); }
+html:is([data-theme="paper"], [data-theme="clean"]) .sidebar-section-label { color: var(--faint); }
+html:is([data-theme="paper"], [data-theme="clean"]) .nav-icon { color: var(--muted); }
+html:is([data-theme="paper"], [data-theme="clean"]) .ambient-card-top svg { color: var(--acid); }
+html:is([data-theme="paper"], [data-theme="clean"]) .avatar, html:is([data-theme="paper"], [data-theme="clean"]) .top-avatar,
+html:is([data-theme="paper"], [data-theme="clean"]) .message-avatar.user, html:is([data-theme="paper"], [data-theme="clean"]) .preview-avatar { color: #fff; background: var(--avatar); }
+html:is([data-theme="paper"], [data-theme="clean"]) .button-primary:hover { background: var(--acid-hover); }
+html:is([data-theme="paper"], [data-theme="clean"]) .wordmark-orbit { box-shadow: 5px 2px 0 -2px var(--bg); }
+html:is([data-theme="paper"], [data-theme="clean"]) .quote-line, html:is([data-theme="paper"], [data-theme="clean"]) .composer-suggestions button,
+html:is([data-theme="paper"], [data-theme="clean"]) .build-trace span:first-child { color: var(--muted); }
+html:is([data-theme="paper"], [data-theme="clean"]) .product-preview-shell { background: linear-gradient(140deg, var(--raised), var(--deep)); }
+html:is([data-theme="paper"], [data-theme="clean"]) .preview-preview-label, html:is([data-theme="paper"], [data-theme="clean"]) .preview-salute small,
+html:is([data-theme="paper"], [data-theme="clean"]) .preview-input, html:is([data-theme="paper"], [data-theme="clean"]) .preview-footer,
+html:is([data-theme="paper"], [data-theme="clean"]) .held-quote small, html:is([data-theme="paper"], [data-theme="clean"]) .backlog-tags span { color: var(--faint); }
+html:is([data-theme="paper"], [data-theme="clean"]) .backlog-tags span + span::before { color: var(--line-strong); }
+html:is([data-theme="paper"], [data-theme="clean"]) .preview-salute strong, html:is([data-theme="paper"], [data-theme="clean"]) .held-quote p,
+html:is([data-theme="paper"], [data-theme="clean"]) .spec-body-copy { color: var(--ink); }
+html:is([data-theme="paper"], [data-theme="clean"]) .capture-input input::placeholder, html:is([data-theme="paper"], [data-theme="clean"]) .composer-input textarea::placeholder { color: #7b776c; }
+html:is([data-theme="paper"], [data-theme="clean"]) .toast { background: var(--raised); }
+html:is([data-theme="paper"], [data-theme="clean"]) .voice-button.is-listening { color: var(--acid-ink); }
+html:is([data-theme="paper"], [data-theme="clean"]) .sidebar, html:is([data-theme="paper"], [data-theme="clean"]) .app-shell > .sidebar { background: var(--deep); }
+html:is([data-theme="paper"], [data-theme="clean"]) .spec-rail, html:is([data-theme="paper"], [data-theme="clean"]) .trace-rail,
+html:is([data-theme="paper"], [data-theme="clean"]) .sync-preview-card { background: var(--raised); }
+html:is([data-theme="paper"], [data-theme="clean"]) .spec-document { background: var(--raised); }
+html:is([data-theme="paper"], [data-theme="clean"]) .truth-node-dot.evidence { background: #b8442f; }
+/* Inputs and fields that sit on a dark wash: paper gives them a raised white page instead. */
+html:is([data-theme="paper"], [data-theme="clean"]) .preview-input, html:is([data-theme="paper"], [data-theme="clean"]) .capture-input, html:is([data-theme="paper"], [data-theme="clean"]) .connection-card input,
+html:is([data-theme="paper"], [data-theme="clean"]) .annotation-target-row, html:is([data-theme="paper"], [data-theme="clean"]) .annotation-composer, html:is([data-theme="paper"], [data-theme="clean"]) .studio-input,
+html:is([data-theme="paper"], [data-theme="clean"]) .studio-form input, html:is([data-theme="paper"], [data-theme="clean"]) .studio-form textarea, html:is([data-theme="paper"], [data-theme="clean"]) .studio-form select,
+html:is([data-theme="paper"], [data-theme="clean"]) .studio-kv input, html:is([data-theme="paper"], [data-theme="clean"]) .studio-kv select, html:is([data-theme="paper"], [data-theme="clean"]) .studio-kv textarea,
+html:is([data-theme="paper"], [data-theme="clean"]) .studio-library-search, html:is([data-theme="paper"], [data-theme="clean"]) .studio-board-new input,
+html:is([data-theme="paper"], [data-theme="clean"]) .studio-card-grid select, html:is([data-theme="paper"], [data-theme="clean"]) .studio-card-field textarea,
+html:is([data-theme="paper"], [data-theme="clean"]) .studio-card-title:hover, html:is([data-theme="paper"], [data-theme="clean"]) .studio-card-title:focus { background: var(--raised); }
+html:is([data-theme="paper"], [data-theme="clean"]) .studio-diff, html:is([data-theme="paper"], [data-theme="clean"]) .studio-markup-thumb { background: var(--deep); }
+html:is([data-theme="paper"], [data-theme="clean"]) .live-open { background: var(--raised); }
+html:is([data-theme="paper"], [data-theme="clean"]) .studio-card-panel { background: var(--panel); }
+html:is([data-theme="paper"], [data-theme="clean"]) .studio-card-overlay { background: var(--scrim); }
+html:is([data-theme="paper"], [data-theme="clean"]) .studio-triage-tag, html:is([data-theme="paper"], [data-theme="clean"]) .studio-triage-head { color: #b3261e; }
+html:is([data-theme="paper"], [data-theme="clean"]) .studio-needs-you, html:is([data-theme="paper"], [data-theme="clean"]) .studio-red-dot { background: #c62828; }
+html:is([data-theme="paper"], [data-theme="clean"]) .studio-agent-status.is-approved, html:is([data-theme="paper"], [data-theme="clean"]) .studio-agent-status.is-done { background: #dcebc6; color: #24420f; }
+html:is([data-theme="paper"], [data-theme="clean"]) .studio-agent-status.is-running, html:is([data-theme="paper"], [data-theme="clean"]) .studio-agent-status.is-queued { background: #f6dfb8; color: #5a3500; }
+html:is([data-theme="paper"], [data-theme="clean"]) .studio-agent-status.is-rejected, html:is([data-theme="paper"], [data-theme="clean"]) .studio-agent-status.is-failed { background: #f5cfc6; color: #6b1a0c; }
+/* Capability colours come from the design data as pastels made for dark screens: deepen them on paper. */
+html:is([data-theme="paper"], [data-theme="clean"]) .capability-color, html:is([data-theme="paper"], [data-theme="clean"]) .focus-mark, html:is([data-theme="paper"], [data-theme="clean"]) .lens-swatch { filter: saturate(1.6) brightness(.7); }

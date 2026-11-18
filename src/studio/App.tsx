@@ -327,7 +327,7 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
     }
     const target = mode === 'screen' ? document.body : document.querySelector('.product-preview-shell') as HTMLElement | null
     if (!target) return
-    const canvas = await html2canvas(target, { backgroundColor: '#111412', scale: mode === 'screen' ? 1 : 1.5 })
+    const canvas = await html2canvas(target, { backgroundColor: getComputedStyle(document.body).backgroundColor || '#111412', scale: mode === 'screen' ? 1 : 1.5 })
     setCapturedFrame(canvas.toDataURL('image/png'))
     setToast(mode === 'screen' ? 'Captured the full Studio screen with its annotation context' : `${annotationShape === 'circle' ? 'Captured a circled region' : 'Captured the selected product surface'} with its annotation context`)
   }
