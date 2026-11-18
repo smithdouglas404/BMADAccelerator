@@ -2,16 +2,16 @@
 // Text size (A / A+ / A++) and a light option, remembered in this browser. Applied to <html> as data-size / data-theme.
 import { useEffect, useState } from 'react'
 
-const SIZES = [['normal', 'A', 'Normal text'], ['large', 'A+', 'Larger text'], ['xl', 'A++', 'Largest text']] as const
+const SIZES = [['normal', 'A', 'Original size'], ['large', 'A+', 'Comfortable (default)'], ['xl', 'A++', 'Largest']] as const
 
 function read(key: string, fallback: string) {
   try { return window.localStorage.getItem(key) || fallback } catch { return fallback }
 }
 
 export function ViewControls() {
-  const [size, setSize] = useState('normal')
+  const [size, setSize] = useState('large')
   const [theme, setTheme] = useState('dark')
-  useEffect(() => { setSize(read('studio-size', 'normal')); setTheme(read('studio-theme', 'dark')) }, [])
+  useEffect(() => { setSize(read('studio-size', 'large')); setTheme(read('studio-theme', 'dark')) }, [])
   useEffect(() => {
     document.documentElement.dataset.size = size
     document.documentElement.dataset.theme = theme

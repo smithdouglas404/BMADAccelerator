@@ -1,6 +1,6 @@
 /* Reading comfort: text size and a light option for the current screens. Set by ViewControls (data-size, data-theme on <html>). */
-html[data-size="large"] { zoom: 1.15; }
-html[data-size="xl"] { zoom: 1.3; }
+html[data-size="large"] { zoom: 1.1; }
+html[data-size="xl"] { zoom: 1.25; }
 /* Light option: flip the dark screens, keep photos, videos, the app preview and the lime accent natural. */
 html[data-theme="light"] { filter: invert(1) hue-rotate(180deg); background: #111412; }
 html[data-theme="light"] img, html[data-theme="light"] video, html[data-theme="light"] iframe, html[data-theme="light"] canvas,
