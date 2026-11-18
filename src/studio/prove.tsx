@@ -21,7 +21,7 @@ type Act = (fn: () => Promise<unknown>, ok?: string) => Promise<void>
 type Role = 'owner' | 'engineer'
 type Tone = 'ok' | 'warn' | 'off' | 'info' | 'suggest'
 const PAGE = 'mx-auto grid w-full max-w-[96rem] grid-cols-1 gap-6 px-4 py-8 md:px-8'
-const SPLIT = 'grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_26rem]'
+const SPLIT = 'grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_26rem]'
 const COLUMN = 'grid min-w-0 grid-cols-1 content-start gap-6'
 
 /** A thin bar in a given colour (capability colours aren't theme tokens). */
