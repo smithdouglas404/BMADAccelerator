@@ -133,7 +133,7 @@ export async function freePort(port: number) {
 
 // Starts (or restarts) the generated app: `npm install` + `npm start` with PORT set,
 // or a static server when the app is plain HTML.
-export async function startPreview(useCaseId: string) {
+export async function startPreview(useCaseId: string, opts: { resume?: boolean } = {}) {
   if (starting.has(useCaseId)) return;
   starting.add(useCaseId);
   try {
@@ -151,8 +151,11 @@ export async function startPreview(useCaseId: string) {
     let child: ChildProcess;
     if (await exists(path.join(dir, "package.json"))) {
       const pkg = JSON.parse(await fs.readFile(path.join(dir, "package.json"), "utf8"));
-      await runOnce("npm", ["install", "--no-audit", "--no-fund"], dir, log, env);
-      if (pkg.scripts?.build && pkg.bacc?.build !== false) await runOnce("npm", ["run", "build"], dir, log, env);
+      const ready = opts.resume && (await exists(path.join(dir, "node_modules"))) && ((await exists(path.join(dir, ".next"))) || (await exists(path.join(dir, "dist"))) || (await exists(path.join(dir, "build"))) || !pkg.scripts?.build);
+      if (!ready) {
+        await runOnce("npm", ["install", "--no-audit", "--no-fund"], dir, log, env);
+        if (pkg.scripts?.build && pkg.bacc?.build !== false) await runOnce("npm", ["run", "build"], dir, log, env);
+      }
       child = spawn("npm", ["start"], { cwd: dir, env, stdio: ["ignore", "pipe", "pipe"], detached: true });
     } else {
       child = spawn(process.execPath, [path.join(process.cwd(), "scripts/static-server.mjs"), dir, String(port)], {
@@ -184,7 +187,7 @@ export async function syncPreviewState(uc: UseCase) {
   const hasApp = uc.generateCount > 0 && (await exists(path.join(appDir(uc.slug))));
   if (!hasApp || !uc.previewPort) return { hasApp, port: uc.previewPort, running: false, starting: false };
   const running = await isUp(uc.previewPort);
-  if (!running && !uc.generateBusy && !procs.has(uc.id) && !starting.has(uc.id)) void startPreview(uc.id);
+  if (!running && !uc.generateBusy && !procs.has(uc.id) && !starting.has(uc.id)) void startPreview(uc.id, { resume: true });
   return { hasApp, port: uc.previewPort, running, starting: starting.has(uc.id) };
 }
 
@@ -192,5 +195,6 @@ export async function syncPreviewState(uc: UseCase) {
 export async function resumePreviews() {
   if (process.env.BACC_NO_RESUME_PREVIEWS === "1") return;
   const built = await prisma.useCase.findMany({ where: { generateCount: { gt: 0 }, generateBusy: false }, select: { id: true }, orderBy: { updatedAt: "desc" }, take: 29 });
-  for (const uc of built) await startPreview(uc.id).catch((e) => console.error("resume preview", uc.id, e));
+  const queue = [...built];
+  await Promise.all(Array.from({ length: 4 }, async () => { for (let uc = queue.shift(); uc; uc = queue.shift()) await startPreview(uc.id, { resume: true }).catch((e) => console.error("resume preview", uc.id, e)); }));
 }

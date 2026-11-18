@@ -11,6 +11,7 @@ import { truthExport } from "./truthlog";
 import { readInterpretation } from "./truth";
 import { truthGraphSchema } from "@/studio/graph";
 import { SPEC_DEFS, explainReadiness, specDiff, type SpecSnapshot } from "./spec";
+import { withDocuments } from "./evidenceDocs";
 
 /** The four routes exist for every product, in order. */
 export async function ensureRoutes(useCaseId: string) {
@@ -80,6 +81,8 @@ export async function studioState(id: string) {
     backlog: uc.backlog.map((x) => ({ ...x, group: b(x.group), source: b(x.source), ...(x.recKind ? { title: b(x.title), note: b(x.note) } : {}) })),
     routes: uc.routes.map((r) => ({ ...r, agent: b(r.agent), detail: b(r.detail) })),
     moves: uc.moves.map((m) => ({ ...m, movedBy: b(m.movedBy), moveReason: b(m.moveReason) })),
+    // Each evidence card points at the stored document it came from, wherever that can be found.
+    evidence: withDocuments(uc.evidence, uc.documents),
     validation,
     validationScore: validationScore(validation),
     overallReadiness: overallReadiness(uc.capabilities),
