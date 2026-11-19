@@ -90,7 +90,7 @@ const viewTitles: Record<StudioView, string> = {
 }
 
 // What picking a backlog item can do: say yes to working on it now (it goes to Ready to shape and Socra starts), or open the Board.
-const BacklogCtx = createContext<{ workOn: (id: string) => void; openBoard: () => void } | null>(null)
+const BacklogCtx = createContext<{ workOn: (id: string) => void; decide: (id: string, to: 'accepted' | 'rejected' | 'deferred') => void; openBoard: () => void } | null>(null)
 
 const kindLabels: Record<BacklogItem['kind'], string> = {
   capture: 'new thought',
@@ -170,6 +170,13 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
   const workOn = (itemId: string) => {
     const item = live.backlog.find((b) => b.id === itemId)
     void act(() => api(`/api/use-cases/${live.id}/backlog/${itemId}`, { method: 'PATCH', json: { triage: 'accepted', ready: true, by: me.name || me.role } }), `“${item?.title ?? 'It'}” is Ready to shape on the Board, and ${ASSISTANT_NAME} is shaping it.`)
+  }
+  // Accept (not yet working on it), Reject or Defer, from the item's detail view.
+  const decide = (itemId: string, to: 'accepted' | 'rejected' | 'deferred') => {
+    const item = live.backlog.find((b) => b.id === itemId)
+    const name = item?.title ?? 'It'
+    const done = to === 'accepted' ? `“${name}” is accepted onto the Board (Backlog column).` : to === 'rejected' ? `“${name}” is rejected (kept in history).` : `“${name}” is deferred: kept, not on the Board.`
+    void act(() => api(`/api/use-cases/${live.id}/backlog/${itemId}`, { method: 'PATCH', json: { triage: to, by: me.name || me.role } }), done)
   }
   const validationChecks = useMemo(() => Object.fromEntries(['problem', 'customer', 'evidence', 'proof', 'thinSlice'].map((k) => [k, live.validation?.[k]?.state === 'confirmed'])), [live.validation])
   const validationScore = live.validationScore
@@ -393,7 +400,7 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
             </button>
           )}
   return (
-    <BacklogCtx.Provider value={{ workOn, openBoard: () => changeView('pilot') }}>
+    <BacklogCtx.Provider value={{ workOn, decide, openBoard: () => changeView('pilot') }}>
     <div className="app-shell">
       <aside className="sidebar">
         <a className="brand-lockup studio-home-brand" href="/" title="All use cases">
@@ -652,12 +659,25 @@ function BacklogPanel({ capture, setCapture, captureIdea, visibleBacklog, showAl
 
 function BacklogList({ items, curate }: { items: BacklogItem[]; curate: (id: string, kind: BacklogItem['kind'] | 'edit' | 'withdraw') => void }) {
   const ctx = useContext(BacklogCtx)
-  const [picked, setPicked] = useState('')
+  const [detail, setDetail] = useState('')
+  const [confirm, setConfirm] = useState(false)
   type Extra = { needsYou?: boolean; triage?: string; onBoard?: string }
   // What waits on a person comes first, marked red.
   const ordered = [...items].sort((a, b) => Number(!!(b as Extra).needsYou) - Number(!!(a as Extra).needsYou))
   const BOARD_NAME: Record<string, string> = { queued: 'Backlog', ready: 'Ready to shape', building: 'Being made real', review: 'Human review', done: 'Done' }
-  return <div className="backlog-items">{ordered.map((item) => { const x = item as BacklogItem & Extra; return <div className={`backlog-item ${x.needsYou ? 'studio-needs-item' : ''} ${picked === item.id ? 'is-picked' : ''}`} key={item.id} onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a')) setPicked(picked === item.id ? '' : item.id) }}><div className={`backlog-kind ${item.kind}`}><span>{item.kind === 'capture' ? <Lightbulb size={14} /> : item.kind === 'epic' ? <Layers3 size={14} /> : <Timer size={14} />}</span></div><div className="backlog-item-copy"><div><strong>{x.needsYou && <span className="studio-red-dot" title="Waiting on you" />} {item.title}</strong><span className="backlog-age">{item.age}</span></div><p>{item.note}</p>{(item as BacklogItem & { annotationId?: string }).annotationId && <a className="studio-markup-thumb" href={`/api/feedback/${(item as BacklogItem & { annotationId?: string }).annotationId}/image`} target="_blank" rel="noreferrer"><img src={`/api/feedback/${(item as BacklogItem & { annotationId?: string }).annotationId}/image`} alt="The marked-up screen" loading="lazy" /></a>}{x.onBoard && <button type="button" className="studio-on-board" onClick={() => ctx?.openBoard()}>On the Board · {BOARD_NAME[x.onBoard] ?? x.onBoard} <ArrowRight size={12} /></button>}{picked === item.id && ctx && !x.onBoard && x.triage !== 'rejected' && item.kind !== 'distraction' && <div className="studio-work-ask" role="group" aria-label="Work on this now?"><strong>Work on this now?</strong><small>Yes puts it in Ready to shape on the Board and {ASSISTANT_NAME} starts shaping it.</small><span><button type="button" className="button button-primary button-small" onClick={() => { setPicked(''); ctx.workOn(item.id) }}>Yes, work on it</button><button type="button" className="button button-quiet button-small" onClick={() => setPicked('')}>Not now</button></span></div>}<div className="backlog-tags"><span>{(item as BacklogItem & { ownerState?: string }).ownerState ?? kindLabels[item.kind]}</span><span>{item.group}</span><span>{item.source}</span></div></div><div className="backlog-actions"><button type="button" onClick={() => curate(item.id, 'epic')} title="Group as capability"><Layers3 size={14} /></button><button type="button" onClick={() => curate(item.id, 'distraction')} title="Park for later"><Timer size={14} /></button><button type="button" onClick={() => curate(item.id, 'edit')} title="Change it"><PenLine size={14} /></button><button type="button" onClick={() => curate(item.id, 'withdraw')} title="Withdraw (kept in history)"><X size={14} /></button></div></div> })}</div>
+  return <div className="backlog-items">{ordered.map((item) => { const x = item as BacklogItem & Extra; return <div className={`backlog-item ${x.needsYou ? 'studio-needs-item' : ''} `} key={item.id} onDoubleClick={(e) => { if (!(e.target as HTMLElement).closest('button, a')) setDetail(item.id) }}><div className={`backlog-kind ${item.kind}`}><span>{item.kind === 'capture' ? <Lightbulb size={14} /> : item.kind === 'epic' ? <Layers3 size={14} /> : <Timer size={14} />}</span></div><div className="backlog-item-copy"><div><strong>{x.needsYou && <span className="studio-red-dot" title="Waiting on you" />} {item.title}</strong><span className="backlog-age">{item.age}</span></div><p>{item.note}</p>{(item as BacklogItem & { annotationId?: string }).annotationId && <a className="studio-markup-thumb" href={`/api/feedback/${(item as BacklogItem & { annotationId?: string }).annotationId}/image`} target="_blank" rel="noreferrer"><img src={`/api/feedback/${(item as BacklogItem & { annotationId?: string }).annotationId}/image`} alt="The marked-up screen" loading="lazy" /></a>}{x.onBoard && <button type="button" className="studio-on-board" onClick={() => ctx?.openBoard()}>On the Board · {BOARD_NAME[x.onBoard] ?? x.onBoard} <ArrowRight size={12} /></button>}<button type="button" className="studio-open-detail" onClick={() => { setConfirm(false); setDetail(item.id) }}>Open details</button><div className="backlog-tags"><span>{(item as BacklogItem & { ownerState?: string }).ownerState ?? kindLabels[item.kind]}</span><span>{item.group}</span><span>{item.source}</span></div></div><div className="backlog-actions"><button type="button" onClick={() => curate(item.id, 'epic')} title="Group as capability"><Layers3 size={14} /></button><button type="button" onClick={() => curate(item.id, 'distraction')} title="Park for later"><Timer size={14} /></button><button type="button" onClick={() => curate(item.id, 'edit')} title="Change it"><PenLine size={14} /></button><button type="button" onClick={() => curate(item.id, 'withdraw')} title="Withdraw (kept in history)"><X size={14} /></button></div></div> })}{(() => { const it = items.find((i) => i.id === detail); if (!it || !ctx) return null; const x = it as BacklogItem & Extra & { annotationId?: string; ownerState?: string }; const open = !x.onBoard && x.triage !== 'rejected'; const close = () => { setDetail(''); setConfirm(false) }
+    return <div className="studio-card-overlay" onClick={close}><aside className="studio-card-panel" onClick={(e) => e.stopPropagation()} aria-label="Backlog item details">
+      <div className="studio-card-head"><p className="eyebrow">Backlog item</p><button className="icon-button subtle" type="button" onClick={close} aria-label="Close"><X size={16} /></button></div>
+      <h3>{x.needsYou && <span className="studio-red-dot" title="Waiting on you" />} {it.title}</h3>
+      <p>{it.note || 'No more detail yet.'}</p>
+      <div className="backlog-tags"><span>{x.ownerState ?? kindLabels[it.kind]}</span><span>{it.group}</span><span>{it.source}</span><span>{it.age}</span></div>
+      {x.annotationId && <a className="studio-markup-thumb" href={`/api/feedback/${x.annotationId}/image`} target="_blank" rel="noreferrer"><img src={`/api/feedback/${x.annotationId}/image`} alt="The marked-up screen" loading="lazy" /></a>}
+      {x.onBoard && <button type="button" className="studio-on-board" onClick={() => { close(); ctx.openBoard() }}>On the Board · {BOARD_NAME[x.onBoard] ?? x.onBoard} <ArrowRight size={12} /></button>}
+      {x.triage === 'rejected' && <p><small>Rejected. Kept in history.</small></p>}
+      {x.triage === 'deferred' && <p><small>Deferred. Kept for later; accept it to bring it back.</small></p>}
+      {open && !confirm && <div className="studio-detail-actions"><button type="button" className="button button-primary" onClick={() => setConfirm(true)}>Accept</button><button type="button" className="button button-quiet" onClick={() => { close(); ctx.decide(it.id, 'deferred') }}>Defer</button><button type="button" className="button button-quiet" onClick={() => { close(); ctx.decide(it.id, 'rejected') }}>Reject</button></div>}
+      {open && confirm && <div className="studio-work-ask" role="group" aria-label="Work on this now?"><strong>Work on this now?</strong><small>Yes puts it in Ready to shape on the Board and {ASSISTANT_NAME} starts shaping it. No just adds it to the Board&apos;s Backlog.</small><span><button type="button" className="button button-primary button-small" onClick={() => { close(); ctx.workOn(it.id) }}>Yes, work on it now</button><button type="button" className="button button-quiet button-small" onClick={() => { close(); ctx.decide(it.id, 'accepted') }}>Not yet, add to Backlog</button></span></div>}
+    </aside></div> })()}</div>
 }
 
 type ReadinessProps = { live: Live; capabilities: Capability[]; readiness: Record<string, number>; overallReadiness: number; selected: Capability; focusCapability: (capability: Capability) => void; changeView: (view: ViewId) => void }
