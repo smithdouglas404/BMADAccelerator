@@ -120,3 +120,4 @@ html:is([data-theme="paper"], [data-theme="clean"]) .studio-agent-status.is-runn
 html:is([data-theme="paper"], [data-theme="clean"]) .studio-agent-status.is-rejected, html:is([data-theme="paper"], [data-theme="clean"]) .studio-agent-status.is-failed { background: #f5cfc6; color: #6b1a0c; }
 /* Capability colours come from the design data as pastels made for dark screens: deepen them on paper. */
 html:is([data-theme="paper"], [data-theme="clean"]) .capability-color, html:is([data-theme="paper"], [data-theme="clean"]) .focus-mark, html:is([data-theme="paper"], [data-theme="clean"]) .lens-swatch { filter: saturate(1.6) brightness(.7); }
+html:is([data-theme="paper"], [data-theme="clean"]) .studio-needs-label, html:is([data-theme="paper"], [data-theme="clean"]) .studio-needs-label strong, html:is([data-theme="paper"], [data-theme="clean"]) .nav-copy.studio-needs-label strong, html:is([data-theme="paper"], [data-theme="clean"]) .studio-needs-line { color: #c62828; }
