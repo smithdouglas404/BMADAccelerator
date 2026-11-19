@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { Textarea } from '@/components/ui/textarea'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { api, ago, sessionLine, type Live, type StudioMessage } from './live'
@@ -119,7 +120,8 @@ function Stat({ label, value, children }: { label: string; value: string; childr
 /** Everything people thought of, held in their words: catch a new one, group it into the product, park it, change it or withdraw it. */
 export function HeldThoughts({ live, act, me, selected, items, capture, setCapture, captureIdea, action, limit = 4, openBoard }: { live: Live; act: Act; me: Me; selected: Capability; items: HeldItem[]; capture: string; setCapture: (v: string) => void; captureIdea: () => void; action?: ReactNode; limit?: number; openBoard?: () => void }) {
   const [all, setAll] = useState(false)
-  const [picked, setPicked] = useState('')
+  const [detail, setDetail] = useState('')
+  const [confirm, setConfirm] = useState(false)
   const [editing, setEditing] = useState<HeldItem | null>(null)
   const [draft, setDraft] = useState('')
   const [withdrawing, setWithdrawing] = useState<HeldItem | null>(null)
@@ -129,10 +131,20 @@ export function HeldThoughts({ live, act, me, selected, items, capture, setCaptu
   const waiting = items.filter((i) => i.needsYou).length
   const shown = all ? ordered : ordered.slice(0, Math.max(limit, waiting))
   // Yes to "Work on this now?": its card goes straight to Ready to shape and Socra runs its skills on it.
+  const close = () => { setDetail(''); setConfirm(false) }
+  const openDetail = (id: string) => { setConfirm(false); setDetail(id) }
   const workOn = (item: HeldItem) => {
-    setPicked('')
+    close()
     void act(() => api(`/api/use-cases/${live.id}/backlog/${item.id}`, { method: 'PATCH', json: { triage: 'accepted', ready: true, by } }), `“${item.title}” is Ready to shape on the Board, and ${ASSISTANT_NAME} is shaping it.`)
   }
+  // Accept without working on it yet, Defer or Reject, from the item's details (Doug, Nov 19).
+  const decide = (item: HeldItem, to: 'accepted' | 'rejected' | 'deferred') => {
+    close()
+    const done = to === 'accepted' ? `“${item.title}” is accepted onto the Board (Backlog column).` : to === 'rejected' ? `“${item.title}” is rejected (kept in history).` : `“${item.title}” is deferred: kept, not on the Board.`
+    void act(() => api(`/api/use-cases/${live.id}/backlog/${item.id}`, { method: 'PATCH', json: { triage: to, by } }), done)
+  }
+  const it = items.find((i) => i.id === detail)
+  const undecided = !!it && !it.onBoard && it.triage !== 'rejected' && it.triage !== 'accepted'
   const group = (item: HeldItem, kind: 'epic' | 'distraction') =>
     void act(() => api(`/api/use-cases/${live.id}/backlog/${item.id}`, { method: 'PATCH', json: { kind, group: kind === 'distraction' ? undefined : selected.label } }), kind === 'distraction' ? 'Parked without losing the thought' : `Kept with ${selected.label}`)
   const saveEdit = () => {
@@ -146,7 +158,7 @@ export function HeldThoughts({ live, act, me, selected, items, capture, setCaptu
   }
   return (
     <Section className={cn(waiting > 0 && 'border-destructive/60 ring-1 ring-destructive/20')} statement={<>Everything you thought of. <em>Not everything you need to do.</em></>} title={<NeedsLabel count={waiting}>{`Thoughts held · ${items.length}`}</NeedsLabel>}
-      description={<>Everything you thought of, in your words. Not everything you need to do.{waiting > 0 && <span className="mt-1.5 flex items-center gap-1.5 font-semibold text-needs"><CircleAlert className="size-4" />{waiting} {waiting === 1 ? 'is' : 'are'} waiting on you. Pick one to work on it.</span>}</>} action={action}>
+      description={<>Everything you thought of, in your words. Not everything you need to do.{waiting > 0 && <span className="mt-1.5 flex items-center gap-1.5 font-semibold text-needs"><CircleAlert className="size-4" />{waiting} {waiting === 1 ? 'is' : 'are'} waiting on you. Double-click one to decide.</span>}</>} action={action}>
       <div className="flex gap-2 border-b border-border px-5 py-3">
         <Input aria-label="Catch a thought" value={capture} onChange={(e) => setCapture(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') captureIdea() }} placeholder="I keep thinking about…" />
         <Button type="button" onClick={captureIdea} disabled={!capture.trim()}><Plus className="size-4" /> Hold it</Button>
@@ -155,10 +167,10 @@ export function HeldThoughts({ live, act, me, selected, items, capture, setCaptu
       {shown.map((item) => {
         const k = KIND[item.kind] ?? KIND.capture
         return (
-          <div key={item.id} role={item.needsYou ? 'button' : undefined} tabIndex={item.needsYou ? 0 : undefined} aria-expanded={item.needsYou ? picked === item.id : undefined}
-            onClick={(e) => { if (item.needsYou && !(e.target as HTMLElement).closest('button, a')) setPicked(picked === item.id ? '' : item.id) }}
-            onKeyDown={(e) => { if (item.needsYou && (e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); setPicked(picked === item.id ? '' : item.id) } }}
-            className={cn('flex flex-wrap items-start gap-x-4 gap-y-2 border-b border-border px-5 py-3.5 last:border-b-0', item.needsYou && 'cursor-pointer border-l-[3px] border-l-destructive hover:bg-destructive/5 focus-visible:bg-destructive/5 focus-visible:outline-none', picked === item.id && 'bg-destructive/5')}>
+          <div key={item.id} tabIndex={0} aria-label={`${item.title}. Double-click or press Enter for details`}
+            onDoubleClick={(e) => { if (!(e.target as HTMLElement).closest('button, a')) openDetail(item.id) }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) { e.preventDefault(); openDetail(item.id) } }}
+            className={cn('flex cursor-default flex-wrap items-start gap-x-4 gap-y-2 border-b border-border px-5 py-3.5 select-none last:border-b-0 hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none', item.needsYou && 'border-l-[3px] border-l-needs hover:bg-destructive/5 focus-visible:bg-destructive/5', detail === item.id && 'bg-destructive/5')}>
             <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-full bg-secondary text-muted-foreground">{k.icon}</span>
             <div className="grid min-w-0 flex-1 basis-64 gap-1">
               <div className="flex flex-wrap items-baseline gap-x-2">{item.needsYou && <span className="inline-flex items-center gap-1 self-center rounded-full bg-destructive px-2 py-0.5 text-xs font-semibold text-white">New · needs you</span>}<p className="text-base font-medium">{item.title}</p><span className="text-xs text-muted-foreground">{item.age}</span></div>
@@ -166,13 +178,9 @@ export function HeldThoughts({ live, act, me, selected, items, capture, setCaptu
               {item.annotationId && <a className="block max-w-56 overflow-hidden rounded-lg border border-border" href={`/api/feedback/${item.annotationId}/image`} target="_blank" rel="noreferrer"><img src={`/api/feedback/${item.annotationId}/image`} alt="The marked-up screen" loading="lazy" className="w-full" onError={(e) => { (e.currentTarget.parentElement as HTMLElement).style.display = 'none' }} /></a>}
               <div className="flex flex-wrap items-center gap-1.5"><StatusBadge tone={k.tone}>{item.ownerState || k.label}</StatusBadge><span className="text-xs text-muted-foreground">{[item.group, item.source].filter(Boolean).join(' · ')}</span></div>
               {item.triage === 'accepted' && item.onBoard && <div><Button type="button" size="sm" variant="outline" className="rounded-full" onClick={openBoard} disabled={!openBoard}><KanbanSquare className="size-4" /> On the Board · {BOARD_NAME[item.onBoard] ?? item.onBoard}</Button></div>}
-              {picked === item.id && <div className="mt-1 grid gap-2 rounded-lg border border-border bg-background p-3" role="group" aria-label="Work on this now?">
-                <p className="text-sm font-semibold">Work on this now?</p>
-                <p className="text-sm text-muted-foreground">Yes puts its card in Ready to shape on the Board, and {ASSISTANT_NAME} starts shaping it with the right specialist.</p>
-                <div className="flex flex-wrap gap-2"><Button type="button" size="sm" onClick={() => workOn(item)}><Check className="size-4" /> Yes, work on it now</Button><Button type="button" size="sm" variant="ghost" onClick={() => setPicked('')}>Not now</Button>{openBoard && <Button type="button" size="sm" variant="ghost" onClick={openBoard}>Open the Board <ArrowRight className="size-4" /></Button>}</div>
-              </div>}
             </div>
             <div className="flex items-center gap-1">
+              <Button type="button" size="sm" variant={item.needsYou ? 'outline' : 'ghost'} onClick={() => openDetail(item.id)}>Open details</Button>
               <Button type="button" size="sm" variant="ghost" onClick={() => group(item, 'epic')} title={`Keep it with ${selected.label}`}><Layers3 className="size-4" /> Keep</Button>
               <Button type="button" size="sm" variant="ghost" onClick={() => group(item, 'distraction')} title="Park it for later"><Timer className="size-4" /> Park</Button>
               <Button type="button" size="icon" variant="ghost" className="size-9" aria-label={`Change “${item.title}”`} onClick={() => { setEditing(item); setDraft(item.title) }}><PenLine className="size-4" /></Button>
@@ -183,6 +191,33 @@ export function HeldThoughts({ live, act, me, selected, items, capture, setCaptu
       })}
       {items.length > limit && <div className="px-5 py-3"><Button type="button" variant="ghost" size="sm" onClick={() => setAll(!all)}>{all ? 'Show fewer' : `Show all ${items.length}`} <ArrowRight className="size-4" /></Button></div>}
 
+
+      <Sheet open={!!it} onOpenChange={(v) => { if (!v) close() }}>
+        {it && <SheetContent data-ui side="right" className="w-full gap-0 overflow-y-auto p-0 sm:max-w-lg">
+          <SheetHeader className="border-b border-border px-5 py-4 pr-14">
+            <SheetDescription className="text-xs font-medium text-muted-foreground">Backlog item</SheetDescription>
+            <SheetTitle className="flex items-start gap-2 text-xl leading-snug font-semibold text-balance">{it.needsYou && <span className="mt-2.5 size-2 shrink-0 rounded-full bg-needs" title="Waiting on you" />}{it.title}</SheetTitle>
+          </SheetHeader>
+          <div className="grid gap-4 px-5 py-4">
+            <p className="text-sm leading-relaxed">{it.note && it.note !== it.title ? it.note : 'No more detail yet.'}</p>
+            <div className="flex flex-wrap items-center gap-1.5"><StatusBadge tone={(KIND[it.kind] ?? KIND.capture).tone}>{it.ownerState || (KIND[it.kind] ?? KIND.capture).label}</StatusBadge><span className="text-xs text-muted-foreground">{[it.group, it.source, it.age].filter(Boolean).join(' · ')}</span></div>
+            {it.annotationId && <a className="block overflow-hidden rounded-lg border border-border" href={`/api/feedback/${it.annotationId}/image`} target="_blank" rel="noreferrer"><img src={`/api/feedback/${it.annotationId}/image`} alt="The marked-up screen" loading="lazy" className="w-full" /></a>}
+            {it.onBoard && <div><Button type="button" size="sm" variant="outline" className="rounded-full" onClick={() => { close(); openBoard?.() }} disabled={!openBoard}><KanbanSquare className="size-4" /> On the Board · {BOARD_NAME[it.onBoard] ?? it.onBoard} <ArrowRight className="size-4" /></Button></div>}
+            {it.triage === 'rejected' && <p className="text-sm text-muted-foreground">Rejected. Kept in history.</p>}
+            {it.triage === 'deferred' && <p className="text-sm text-muted-foreground">Deferred. Kept for later; accept it to bring it back.</p>}
+            {undecided && !confirm && <div className="flex flex-wrap gap-2 border-t border-border pt-4">
+              <Button type="button" onClick={() => setConfirm(true)}><Check className="size-4" /> Accept</Button>
+              <Button type="button" variant="outline" onClick={() => decide(it, 'deferred')}><Timer className="size-4" /> Defer</Button>
+              <Button type="button" variant="ghost" onClick={() => decide(it, 'rejected')}><X className="size-4" /> Reject</Button>
+            </div>}
+            {undecided && confirm && <div className="grid gap-2 rounded-lg border border-border bg-muted/40 p-4" role="group" aria-label="Work on this now?">
+              <p className="text-base font-semibold">Work on this now?</p>
+              <p className="text-sm text-muted-foreground">Yes puts it in Ready to shape on the Board and {ASSISTANT_NAME} starts shaping it. Not yet just adds it to the Board’s Backlog.</p>
+              <div className="flex flex-wrap gap-2"><Button type="button" onClick={() => workOn(it)}><Check className="size-4" /> Yes, work on it now</Button><Button type="button" variant="outline" onClick={() => decide(it, 'accepted')}>Not yet, add to Backlog</Button></div>
+            </div>}
+          </div>
+        </SheetContent>}
+      </Sheet>
       <Dialog open={!!editing} onOpenChange={(v) => { if (!v) setEditing(null) }}>
         <DialogContent data-ui className="sm:max-w-lg">
           <DialogHeader><DialogTitle>Change it in your own words</DialogTitle><DialogDescription>Socra carries the change through the spec and the board.</DialogDescription></DialogHeader>
