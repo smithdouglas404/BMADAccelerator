@@ -549,3 +549,14 @@ a.studio-home-brand { color: inherit; text-decoration: none; padding-bottom: 12p
 .stack-header > svg { flex: 0 0 auto; margin-top: 2px; }
 /* The small line under a page's main buttons reads as a note, not code, and stays tidy. */
 .intro-actions > span.studio-intro-note { display: block; max-width: 300px; font: 12px/1.45 var(--sans-face, 'DM Sans'), ui-sans-serif, system-ui, sans-serif; text-align: right; }
+
+/* Backlog: red when it waits on you, and "Work on this now?" on a picked item. */
+.studio-needs-card { border-color: rgba(229,72,77,.55); box-shadow: 0 0 0 1px rgba(229,72,77,.18); }
+.studio-needs-line { display: flex; align-items: center; gap: 8px; margin: 6px 0 0; color: #e5484d; font-size: 13px; font-weight: 600; }
+.studio-needs-item { border-left: 3px solid #e5484d; cursor: pointer; }
+.backlog-item { cursor: pointer; }
+.backlog-item.is-picked { background: rgba(229,72,77,.06); }
+.studio-work-ask { display: grid; gap: 6px; margin-top: 8px; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--panel-strong); }
+.studio-work-ask strong { font-size: 14px; } .studio-work-ask small { color: var(--muted); font-size: 12px; }
+.studio-work-ask span { display: flex; gap: 8px; flex-wrap: wrap; }
+.studio-on-board { display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; padding: 3px 9px; border: 1px solid var(--line-strong); border-radius: 999px; background: transparent; color: var(--ink); font-size: 12px; font-weight: 600; }
