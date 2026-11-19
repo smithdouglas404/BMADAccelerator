@@ -127,9 +127,9 @@ function NavButton({ item, uc }: { item: NavItem; uc: ShellUseCase }) {
         className="h-auto min-h-9 py-1.5 text-sm data-[active=true]:font-semibold data-[active=true]:shadow-[inset_3px_0_0_var(--primary)]"
       >
         <Icon className="size-[18px]" />
-        <span className="grid min-w-0 leading-tight"><span className="truncate">{item.label}</span><span className="truncate text-xs font-normal text-muted-foreground">{item.hint}</span></span>
+        <span className="grid min-w-0 leading-tight"><span className={cn('truncate', n > 0 && 'font-semibold text-needs')}>{item.label}</span><span className="truncate text-xs font-normal text-muted-foreground">{item.hint}</span></span>
       </SidebarMenuButton>
-      {n > 0 && <SidebarMenuBadge title={`${n} ${n === 1 ? 'thing needs' : 'things need'} you here`} className="top-1/2 -translate-y-1/2 rounded-full bg-destructive px-1.5 text-xs font-semibold text-white peer-hover/menu-button:text-white peer-data-[active=true]/menu-button:text-white">{n}</SidebarMenuBadge>}
+      {n > 0 && <SidebarMenuBadge title={`${n} ${n === 1 ? 'thing needs' : 'things need'} you here`} className="top-1/2 -translate-y-1/2 rounded-full bg-needs px-1.5 text-xs font-semibold text-white peer-hover/menu-button:text-white peer-data-[active=true]/menu-button:text-white">{n}</SidebarMenuBadge>}
     </SidebarMenuItem>
   )
 }

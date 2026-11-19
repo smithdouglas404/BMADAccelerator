@@ -14,7 +14,7 @@ import { api, ago, sessionLine, type Live, type StudioMessage } from './live'
 import { ASSISTANT_NAME } from '@/lib/brand'
 import type { BacklogItem, Capability } from './data'
 import type { Me, StudioView } from './flow'
-import { Empty, PageHeader, Section, SectionBody, StatusBadge } from './kit'
+import { Empty, NeedsLabel, PageHeader, Section, SectionBody, StatusBadge } from './kit'
 
 type Act = (fn: () => Promise<unknown>, ok?: string) => Promise<void>
 export type HeldItem = BacklogItem & { ownerState?: string; annotationId?: string; triage?: string; needsYou?: boolean; onBoard?: string }
@@ -145,8 +145,8 @@ export function HeldThoughts({ live, act, me, selected, items, capture, setCaptu
     setWithdrawing(null)
   }
   return (
-    <Section className={cn(waiting > 0 && 'border-destructive/60 ring-1 ring-destructive/20')} statement={<>Everything you thought of. <em>Not everything you need to do.</em></>} title={`Thoughts held · ${items.length}`}
-      description={<>Everything you thought of, in your words. Not everything you need to do.{waiting > 0 && <span className="mt-1.5 flex items-center gap-1.5 font-semibold text-destructive"><CircleAlert className="size-4" />{waiting} {waiting === 1 ? 'is' : 'are'} waiting on you. Pick one to work on it.</span>}</>} action={action}>
+    <Section className={cn(waiting > 0 && 'border-destructive/60 ring-1 ring-destructive/20')} statement={<>Everything you thought of. <em>Not everything you need to do.</em></>} title={<NeedsLabel count={waiting}>{`Thoughts held · ${items.length}`}</NeedsLabel>}
+      description={<>Everything you thought of, in your words. Not everything you need to do.{waiting > 0 && <span className="mt-1.5 flex items-center gap-1.5 font-semibold text-needs"><CircleAlert className="size-4" />{waiting} {waiting === 1 ? 'is' : 'are'} waiting on you. Pick one to work on it.</span>}</>} action={action}>
       <div className="flex gap-2 border-b border-border px-5 py-3">
         <Input aria-label="Catch a thought" value={capture} onChange={(e) => setCapture(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') captureIdea() }} placeholder="I keep thinking about…" />
         <Button type="button" onClick={captureIdea} disabled={!capture.trim()}><Plus className="size-4" /> Hold it</Button>

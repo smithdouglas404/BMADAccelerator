@@ -131,11 +131,11 @@ export function BoardView({ live, me, buildNow, changeView, setToast, children }
               onDragLeave={() => setOver((o) => (o === col.id ? '' : o))}
               onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('text/plain') || dragging; setOver(''); setDragging(''); if (id) void move(id, col.id, 'dragged on the Board') }}>
               <header className="flex items-start justify-between gap-2 border-b border-border px-4 py-3">
-                <div className="grid gap-0.5"><h2 className="text-base font-semibold">{col.label}</h2><p className="text-xs text-muted-foreground">{col.description}</p></div>
+                <div className="grid gap-0.5"><h2 className={cn('text-base font-semibold', col.id === 'queued' && fresh.length > 0 && 'text-needs')}>{col.label}</h2><p className="text-xs text-muted-foreground">{col.description}</p></div>
                 <Badge variant="secondary" className="tabular-nums">{items.length}</Badge>
               </header>
               <div className="grid grid-cols-1 content-start gap-2.5 p-2.5">
-                {col.id === 'queued' && fresh.length > 0 && <p className="flex items-center gap-2 px-1 text-xs font-semibold text-destructive"><span className="size-2 rounded-full bg-destructive" /> {fresh.filter((b) => !b.triage).length} new · needs you</p>}
+                {col.id === 'queued' && fresh.length > 0 && <p className="flex items-center gap-2 px-1 text-xs font-semibold text-needs"><span className="size-2 rounded-full bg-needs" /> {fresh.filter((b) => !b.triage).length} new · needs you</p>}
                 {col.id === 'queued' && fresh.map((b) => {
                   const from = b.state === 'suggested' || b.state === 'probing' ? `${ASSISTANT_NAME} suggests` : b.annotationId || /mark/i.test(b.source) ? 'From a mark-up' : /Socra|Muse/i.test(b.source) ? `From ${ASSISTANT_NAME}` : 'You said'
                   return (

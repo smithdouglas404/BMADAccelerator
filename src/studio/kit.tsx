@@ -143,3 +143,9 @@ export function Toast({ message, onClose }: { message: string; onClose?: () => v
     </div>
   )
 }
+
+/** A label that waits on a person: red text, a red dot before it and the red count after it (Doug, Nov 19). */
+export function NeedsLabel({ count, children }: { count: number; children: ReactNode }) {
+  if (count <= 0) return <>{children}</>
+  return <span className="inline-flex flex-wrap items-center gap-2 font-semibold text-needs"><span aria-hidden className="size-2 shrink-0 rounded-full bg-needs" />{children}<span className="rounded-full bg-needs px-1.5 py-0.5 text-xs leading-none font-semibold text-white" aria-label={`${count} waiting on you`}>{count}</span></span>
+}

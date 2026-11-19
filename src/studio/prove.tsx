@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { api, ago, type Live } from './live'
 import type { Capability, EvidenceItem, RecommendationItem } from './data'
 import type { Me, StudioView } from './flow'
-import { Empty, Field, PageHeader, Row, Section, SectionBody, StatusBadge } from './kit'
+import { Empty, NeedsLabel, Field, PageHeader, Row, Section, SectionBody, StatusBadge } from './kit'
 import { Prose } from './specview'
 import { HeldThoughts, type HeldItem } from './overview'
 import { EditButton, EditableText } from './editable'
@@ -95,7 +95,7 @@ export function ProductView({ live, act, me, selected, backlog, capture, setCapt
           </Section>
         </div>
         <aside className={COLUMN}>
-          <Section className={cn(needsYou > 0 && 'border-destructive/60 ring-1 ring-destructive/20')} title={waiting ? `${waiting} ${waiting === 1 ? 'thought is' : 'thoughts are'} waiting for a home` : 'Every thought has a home'} description={<>{selected.signal}{needsYou > 0 && <span className="mt-1.5 flex items-center gap-1.5 font-semibold text-destructive"><CircleAlert className="size-4" />{needsYou} {needsYou === 1 ? 'is' : 'are'} waiting on you</span>}</>} action={<Sparkles className="size-4 text-primary" />}>
+          <Section className={cn(needsYou > 0 && 'border-destructive/60 ring-1 ring-destructive/20')} title={<NeedsLabel count={needsYou}>{waiting ? `${waiting} ${waiting === 1 ? 'thought is' : 'thoughts are'} waiting for a home` : 'Every thought has a home'}</NeedsLabel>} description={<>{selected.signal}{needsYou > 0 && <span className="mt-1.5 flex items-center gap-1.5 font-semibold text-needs"><CircleAlert className="size-4" />{needsYou} {needsYou === 1 ? 'is' : 'are'} waiting on you</span>}</>} action={<Sparkles className="size-4 text-primary" />}>
             <SectionBody className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" onClick={() => changeView('conversation')}>Ask Socra <ArrowRight className="size-4" /></Button>{needsYou > 0 && <Button type="button" size="sm" variant="destructive" onClick={() => changeView('pilot')}>Open the Board <ArrowRight className="size-4" /></Button>}</SectionBody>
           </Section>
           <HeldThoughts live={live} act={act} me={me} selected={selected} items={backlog} capture={capture} setCapture={setCapture} captureIdea={captureIdea} limit={6} openBoard={() => changeView('pilot')} />
