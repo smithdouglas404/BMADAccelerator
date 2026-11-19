@@ -3,6 +3,7 @@
 // shapes the design team's screens already use (data.ts and spec.ts types), so their components stay as
 // they are and show real products instead of the sample.
 import { ownerBacklogState } from '@/lib/studio/core'
+import { needsTriage } from '@/lib/studio/journey'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BacklogItem, Capability, ConversationMessage, EvidenceItem, ExecutionItem, RecommendationItem } from './data'
 import type { SpecSection } from './spec'
@@ -112,10 +113,10 @@ export function toMessages(d: Live, me?: { name?: string }): StudioMessage[] {
   }))
 }
 
-export function toBacklog(d: Live): (BacklogItem & { ownerState: string; annotationId: string })[] {
+export function toBacklog(d: Live): (BacklogItem & { ownerState: string; annotationId: string; triage: string; onBoard: string; needsYou: boolean })[] {
   return d.backlog
     .filter((b) => b.state !== 'suggested' && b.state !== 'probing')
-    .map((b) => ({ id: b.id, title: b.title, note: b.note, kind: b.kind, group: b.group || 'Unsorted signal', source: b.source, age: ago(b.createdAt), ownerState: ownerBacklogState(b), annotationId: b.annotationId || '' }))
+    .map((b) => ({ id: b.id, title: b.title, note: b.note, kind: b.kind, group: b.group || 'Unsorted signal', source: b.source, age: ago(b.createdAt), ownerState: ownerBacklogState(b), annotationId: b.annotationId || '', triage: b.triage || '', needsYou: needsTriage(b), onBoard: b.triage === 'accepted' ? (d.moves.find((m) => m.title === b.title.slice(0, 200))?.status ?? '') : '' }))
 }
 
 export function toRecommendations(d: Live): RecommendationItem[] {

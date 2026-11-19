@@ -18,6 +18,8 @@ const Body = z.object({
   withdraw: z.boolean().optional(),
   // The Board's red "needs you" marker: work on it with Socra, accept it onto the Board, or reject it.
   triage: z.enum(["working", "accepted", "rejected"]).optional(),
+  // Doug (Nov 19): picking an item and saying yes to "work on it now" puts its card straight into Ready to shape.
+  ready: z.boolean().optional(),
   by: z.string().max(80).default(""),
 });
 
@@ -30,7 +32,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
   const item = await prisma.backlogItem.findFirst({ where: { id: itemId, useCaseId: id } });
   if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (parsed.data.pull) return NextResponse.json(await pullForward(id, itemId));
-  if (parsed.data.triage) return NextResponse.json(await triage(id, item, parsed.data.triage, parsed.data.by || "A person"));
+  if (parsed.data.triage) return NextResponse.json(await triage(id, item, parsed.data.triage, parsed.data.by || "A person", parsed.data.ready === true));
   const { title, note, withdraw, by } = parsed.data;
   if (title !== undefined || note !== undefined || withdraw) {
     const who = by || "A person";
@@ -78,7 +80,7 @@ type Item = NonNullable<Awaited<ReturnType<typeof prisma.backlogItem.findFirst>>
 // A person deals with a new backlog item from the Board. Accepting puts it on the Board as a card in the
 // Backlog column (it stays there until it moves on); rejecting sets it aside (kept in history); working on
 // it asks Socra to open the conversation about it. Each one is logged and Socra hears it.
-async function triage(useCaseId: string, item: Item, to: "working" | "accepted" | "rejected", by: string) {
+async function triage(useCaseId: string, item: Item, to: "working" | "accepted" | "rejected", by: string, ready = false) {
   const suggestion = item.state === "suggested" || item.state === "probing";
   const group = item.group && !/^(Unsorted signal|Withdrawn|Parked by Socra)$/i.test(item.group) ? item.group : "";
   let moveId = "";
@@ -86,13 +88,13 @@ async function triage(useCaseId: string, item: Item, to: "working" | "accepted" 
     const last = await prisma.move.findFirst({ where: { useCaseId }, orderBy: { position: "desc" }, select: { position: true } });
     const move = await prisma.move.create({
       data: {
-        useCaseId, title: item.title.slice(0, 200), capability: group, prompt: item.note, status: "queued", owner: "Product owner",
-        signal: suggestion ? "SOCRA SUGGESTED" : "ACCEPTED", hidden: "story", position: (last?.position ?? 0) + 1, movedBy: by, moveReason: "accepted from the backlog",
+        useCaseId, title: item.title.slice(0, 200), capability: group, prompt: item.note, status: ready ? "ready" : "queued", owner: "Product owner",
+        signal: suggestion ? "SOCRA SUGGESTED" : "ACCEPTED", hidden: "story", position: (last?.position ?? 0) + 1, movedBy: by, moveReason: ready ? "chosen to work on from the backlog" : "accepted from the backlog",
       },
     });
     moveId = move.id;
     await prisma.backlogItem.update({ where: { id: item.id }, data: { triage: "accepted", ...(suggestion ? { state: "held", kind: "epic" } : {}) } });
-    await recordChange(useCaseId, { node: `move:${move.id}`, kind: "added", summary: `${by} accepted “${item.title}” onto the Board`, after: item.note, by, causes: [`backlog:${item.id}`] });
+    await recordChange(useCaseId, { node: `move:${move.id}`, kind: "added", summary: `${by} ${ready ? "chose to work on" : "accepted"} “${item.title}” ${ready ? "now: it is Ready to shape on the Board" : "onto the Board"}`, after: item.note, by, causes: [`backlog:${item.id}`] });
   } else if (to === "rejected") {
     await prisma.backlogItem.update({ where: { id: item.id }, data: { triage: "rejected", kind: "distraction", group: "Withdrawn", includeInBuild: false, state: "held" } });
     await recordChange(useCaseId, { node: `backlog:${item.id}`, kind: "withdrawn", summary: `${by} rejected “${item.title}” (kept in history)`, before: item.title, after: "Rejected", by });
@@ -103,7 +105,7 @@ async function triage(useCaseId: string, item: Item, to: "working" | "accepted" 
   if (agentsEnabled()) {
     const prompt =
       to === "accepted"
-        ? `${by} accepted the backlog item “${item.title}” (id ${item.id}) onto the Board as a card (move:${moveId}). Shape it: tie it to a capability and a decision, write its acceptance criteria on the card, and ask ${by} the one question that would make it ready to build, with numbered options.`
+        ? `${by} ${ready ? "chose to work on the backlog item now" : "accepted the backlog item"} “${item.title}” (id ${item.id}); it is on the Board as a card${ready ? " in Ready to shape" : ""} (move:${moveId}). Run your skills on it: ${ready ? "have the right specialist look at it, " : ""}shape it: tie it to a capability and a decision, write its acceptance criteria on the card, and ask ${by} the one question that would make it ready to build, with numbered options.`
         : to === "rejected"
           ? `${by} rejected the backlog item “${item.title}” (id ${item.id}). ${suggestion ? "Don't propose it again unless they ask." : "Take it out of the product truth wherever it shaped something, and say in one line what that changes."}`
           : `${by} wants to work on “${item.title}” (id ${item.id}) now${item.note ? ` (${item.note.slice(0, 600)})` : ""}. Open it up: say in one line what you understand it to mean, then ask the two or three questions that would make it a clear requirement, with numbered options and your suggestion marked.`;

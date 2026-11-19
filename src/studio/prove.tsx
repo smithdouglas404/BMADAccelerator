@@ -3,7 +3,7 @@
 // Same calls as the older screens; Product shape reuses the held-thoughts list from Whole product, so
 // its edit and withdraw use dialogs instead of the browser's prompt and confirm.
 import { useState, type ChangeEvent } from 'react'
-import { ArrowRight, Bot, Check, CircleHelp, Database, Download, ExternalLink, FileText, Flame, GitBranch, MoveUpRight, Network, Sparkles, Timer, Upload, UserRound } from 'lucide-react'
+import { ArrowRight, Bot, Check, CircleAlert, CircleHelp, Database, Download, ExternalLink, FileText, Flame, GitBranch, MoveUpRight, Network, Sparkles, Timer, Upload, UserRound } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -40,6 +40,7 @@ export function ProductView({ live, act, me, selected, backlog, capture, setCapt
   const saveField = (field: 'statement' | 'description' | 'audience' | 'customerQuote', label: string) => (next: string) => act(() => api(`/api/use-cases/${live.id}`, { method: 'PATCH', json: { [field]: next, by } }), `${label} saved in your words. Socra will carry it through`)
   const saveDecision = (id: string) => (next: string) => act(() => api(`/api/use-cases/${live.id}/decisions/${id}`, { method: 'PATCH', json: { text: next, by } }), 'Decision updated in your words. Socra is checking what it touches')
   const waiting = backlog.filter((b) => b.kind === 'capture').length
+  const needsYou = backlog.filter((b) => b.needsYou).length
   const decisions = live.decisions.slice(-8)
   return (
     <div data-ui className={PAGE}>
@@ -94,10 +95,10 @@ export function ProductView({ live, act, me, selected, backlog, capture, setCapt
           </Section>
         </div>
         <aside className={COLUMN}>
-          <Section title={waiting ? `${waiting} ${waiting === 1 ? 'thought is' : 'thoughts are'} waiting for a home` : 'Every thought has a home'} description={selected.signal} action={<Sparkles className="size-4 text-primary" />}>
-            <SectionBody><Button type="button" size="sm" variant="outline" onClick={() => changeView('conversation')} className="justify-self-start">Ask Socra <ArrowRight className="size-4" /></Button></SectionBody>
+          <Section className={cn(needsYou > 0 && 'border-destructive/60 ring-1 ring-destructive/20')} title={waiting ? `${waiting} ${waiting === 1 ? 'thought is' : 'thoughts are'} waiting for a home` : 'Every thought has a home'} description={<>{selected.signal}{needsYou > 0 && <span className="mt-1.5 flex items-center gap-1.5 font-semibold text-destructive"><CircleAlert className="size-4" />{needsYou} {needsYou === 1 ? 'is' : 'are'} waiting on you</span>}</>} action={<Sparkles className="size-4 text-primary" />}>
+            <SectionBody className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" onClick={() => changeView('conversation')}>Ask Socra <ArrowRight className="size-4" /></Button>{needsYou > 0 && <Button type="button" size="sm" variant="destructive" onClick={() => changeView('pilot')}>Open the Board <ArrowRight className="size-4" /></Button>}</SectionBody>
           </Section>
-          <HeldThoughts live={live} act={act} me={me} selected={selected} items={backlog} capture={capture} setCapture={setCapture} captureIdea={captureIdea} limit={6} />
+          <HeldThoughts live={live} act={act} me={me} selected={selected} items={backlog} capture={capture} setCapture={setCapture} captureIdea={captureIdea} limit={6} openBoard={() => changeView('pilot')} />
         </aside>
       </div>
     </div>

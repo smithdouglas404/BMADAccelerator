@@ -2,7 +2,7 @@
 // Whole product, and the held-thoughts list it shares with Product shape, on shadcn/ui + Animate UI.
 // The backlog's change and withdraw use a dialog instead of the browser's prompt and confirm boxes.
 import { useState, type ReactNode } from 'react'
-import { ArrowRight, Check, FileText, Layers3, Lightbulb, PenLine, Plus, Sparkles, Timer, Waves, X } from 'lucide-react'
+import { ArrowRight, Check, CircleAlert, FileText, KanbanSquare, Layers3, Lightbulb, PenLine, Plus, Sparkles, Timer, Waves, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,12 +11,14 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { api, ago, sessionLine, type Live, type StudioMessage } from './live'
+import { ASSISTANT_NAME } from '@/lib/brand'
 import type { BacklogItem, Capability } from './data'
 import type { Me, StudioView } from './flow'
 import { Empty, PageHeader, Section, SectionBody, StatusBadge } from './kit'
 
 type Act = (fn: () => Promise<unknown>, ok?: string) => Promise<void>
-export type HeldItem = BacklogItem & { ownerState?: string; annotationId?: string }
+export type HeldItem = BacklogItem & { ownerState?: string; annotationId?: string; triage?: string; needsYou?: boolean; onBoard?: string }
+const BOARD_NAME: Record<string, string> = { queued: 'Backlog', ready: 'Ready to shape', building: 'Being made real', review: 'Human review', done: 'Done' }
 
 const KIND: Record<BacklogItem['kind'], { label: string; icon: ReactNode; tone: 'info' | 'ok' | 'off' }> = {
   capture: { label: 'new thought', icon: <Lightbulb className="size-4" />, tone: 'info' },
@@ -105,7 +107,7 @@ export function OverviewView({ live, act, me, selected, capabilities, readiness,
 
       <div className="grid min-w-0 grid-cols-1 gap-3">{preview}</div>
 
-      <HeldThoughts live={live} act={act} me={me} selected={selected} items={backlog} capture={capture} setCapture={setCapture} captureIdea={captureIdea} action={<Button variant="ghost" size="sm" onClick={() => changeView('product')}>Product shape <ArrowRight className="size-4" /></Button>} />
+      <HeldThoughts live={live} act={act} me={me} selected={selected} items={backlog} capture={capture} setCapture={setCapture} captureIdea={captureIdea} openBoard={() => changeView('pilot')} action={<Button variant="ghost" size="sm" onClick={() => changeView('product')}>Product shape <ArrowRight className="size-4" /></Button>} />
     </div>
   )
 }
@@ -115,13 +117,22 @@ function Stat({ label, value, children }: { label: string; value: string; childr
 }
 
 /** Everything people thought of, held in their words: catch a new one, group it into the product, park it, change it or withdraw it. */
-export function HeldThoughts({ live, act, me, selected, items, capture, setCapture, captureIdea, action, limit = 4 }: { live: Live; act: Act; me: Me; selected: Capability; items: HeldItem[]; capture: string; setCapture: (v: string) => void; captureIdea: () => void; action?: ReactNode; limit?: number }) {
+export function HeldThoughts({ live, act, me, selected, items, capture, setCapture, captureIdea, action, limit = 4, openBoard }: { live: Live; act: Act; me: Me; selected: Capability; items: HeldItem[]; capture: string; setCapture: (v: string) => void; captureIdea: () => void; action?: ReactNode; limit?: number; openBoard?: () => void }) {
   const [all, setAll] = useState(false)
+  const [picked, setPicked] = useState('')
   const [editing, setEditing] = useState<HeldItem | null>(null)
   const [draft, setDraft] = useState('')
   const [withdrawing, setWithdrawing] = useState<HeldItem | null>(null)
   const by = me.name || me.role
-  const shown = all ? items : items.slice(0, limit)
+  // What waits on a person comes first, marked red (Doug, Nov 19).
+  const ordered = [...items].sort((a, b) => Number(!!b.needsYou) - Number(!!a.needsYou))
+  const waiting = items.filter((i) => i.needsYou).length
+  const shown = all ? ordered : ordered.slice(0, Math.max(limit, waiting))
+  // Yes to "Work on this now?": its card goes straight to Ready to shape and Socra runs its skills on it.
+  const workOn = (item: HeldItem) => {
+    setPicked('')
+    void act(() => api(`/api/use-cases/${live.id}/backlog/${item.id}`, { method: 'PATCH', json: { triage: 'accepted', ready: true, by } }), `“${item.title}” is Ready to shape on the Board, and ${ASSISTANT_NAME} is shaping it.`)
+  }
   const group = (item: HeldItem, kind: 'epic' | 'distraction') =>
     void act(() => api(`/api/use-cases/${live.id}/backlog/${item.id}`, { method: 'PATCH', json: { kind, group: kind === 'distraction' ? undefined : selected.label } }), kind === 'distraction' ? 'Parked without losing the thought' : `Kept with ${selected.label}`)
   const saveEdit = () => {
@@ -134,7 +145,8 @@ export function HeldThoughts({ live, act, me, selected, items, capture, setCaptu
     setWithdrawing(null)
   }
   return (
-    <Section statement={<>Everything you thought of. <em>Not everything you need to do.</em></>} title={`Thoughts held · ${items.length}`} description="Everything you thought of, in your words. Not everything you need to do." action={action}>
+    <Section className={cn(waiting > 0 && 'border-destructive/60 ring-1 ring-destructive/20')} statement={<>Everything you thought of. <em>Not everything you need to do.</em></>} title={`Thoughts held · ${items.length}`}
+      description={<>Everything you thought of, in your words. Not everything you need to do.{waiting > 0 && <span className="mt-1.5 flex items-center gap-1.5 font-semibold text-destructive"><CircleAlert className="size-4" />{waiting} {waiting === 1 ? 'is' : 'are'} waiting on you. Pick one to work on it.</span>}</>} action={action}>
       <div className="flex gap-2 border-b border-border px-5 py-3">
         <Input aria-label="Catch a thought" value={capture} onChange={(e) => setCapture(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') captureIdea() }} placeholder="I keep thinking about…" />
         <Button type="button" onClick={captureIdea} disabled={!capture.trim()}><Plus className="size-4" /> Hold it</Button>
@@ -143,13 +155,22 @@ export function HeldThoughts({ live, act, me, selected, items, capture, setCaptu
       {shown.map((item) => {
         const k = KIND[item.kind] ?? KIND.capture
         return (
-          <div key={item.id} className="flex flex-wrap items-start gap-x-4 gap-y-2 border-b border-border px-5 py-3.5 last:border-b-0">
+          <div key={item.id} role={item.needsYou ? 'button' : undefined} tabIndex={item.needsYou ? 0 : undefined} aria-expanded={item.needsYou ? picked === item.id : undefined}
+            onClick={(e) => { if (item.needsYou && !(e.target as HTMLElement).closest('button, a')) setPicked(picked === item.id ? '' : item.id) }}
+            onKeyDown={(e) => { if (item.needsYou && (e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); setPicked(picked === item.id ? '' : item.id) } }}
+            className={cn('flex flex-wrap items-start gap-x-4 gap-y-2 border-b border-border px-5 py-3.5 last:border-b-0', item.needsYou && 'cursor-pointer border-l-[3px] border-l-destructive hover:bg-destructive/5 focus-visible:bg-destructive/5 focus-visible:outline-none', picked === item.id && 'bg-destructive/5')}>
             <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-full bg-secondary text-muted-foreground">{k.icon}</span>
             <div className="grid min-w-0 flex-1 basis-64 gap-1">
-              <div className="flex flex-wrap items-baseline gap-x-2"><p className="text-base font-medium">{item.title}</p><span className="text-xs text-muted-foreground">{item.age}</span></div>
+              <div className="flex flex-wrap items-baseline gap-x-2">{item.needsYou && <span className="inline-flex items-center gap-1 self-center rounded-full bg-destructive px-2 py-0.5 text-xs font-semibold text-white">New · needs you</span>}<p className="text-base font-medium">{item.title}</p><span className="text-xs text-muted-foreground">{item.age}</span></div>
               {item.note && item.note !== item.title && <p className="text-sm text-muted-foreground">{item.note}</p>}
               {item.annotationId && <a className="block max-w-56 overflow-hidden rounded-lg border border-border" href={`/api/feedback/${item.annotationId}/image`} target="_blank" rel="noreferrer"><img src={`/api/feedback/${item.annotationId}/image`} alt="The marked-up screen" loading="lazy" className="w-full" onError={(e) => { (e.currentTarget.parentElement as HTMLElement).style.display = 'none' }} /></a>}
               <div className="flex flex-wrap items-center gap-1.5"><StatusBadge tone={k.tone}>{item.ownerState || k.label}</StatusBadge><span className="text-xs text-muted-foreground">{[item.group, item.source].filter(Boolean).join(' · ')}</span></div>
+              {item.triage === 'accepted' && item.onBoard && <div><Button type="button" size="sm" variant="outline" className="rounded-full" onClick={openBoard} disabled={!openBoard}><KanbanSquare className="size-4" /> On the Board · {BOARD_NAME[item.onBoard] ?? item.onBoard}</Button></div>}
+              {picked === item.id && <div className="mt-1 grid gap-2 rounded-lg border border-border bg-background p-3" role="group" aria-label="Work on this now?">
+                <p className="text-sm font-semibold">Work on this now?</p>
+                <p className="text-sm text-muted-foreground">Yes puts its card in Ready to shape on the Board, and {ASSISTANT_NAME} starts shaping it with the right specialist.</p>
+                <div className="flex flex-wrap gap-2"><Button type="button" size="sm" onClick={() => workOn(item)}><Check className="size-4" /> Yes, work on it now</Button><Button type="button" size="sm" variant="ghost" onClick={() => setPicked('')}>Not now</Button>{openBoard && <Button type="button" size="sm" variant="ghost" onClick={openBoard}>Open the Board <ArrowRight className="size-4" /></Button>}</div>
+              </div>}
             </div>
             <div className="flex items-center gap-1">
               <Button type="button" size="sm" variant="ghost" onClick={() => group(item, 'epic')} title={`Keep it with ${selected.label}`}><Layers3 className="size-4" /> Keep</Button>

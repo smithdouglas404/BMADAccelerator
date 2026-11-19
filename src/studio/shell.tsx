@@ -5,7 +5,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import {
   Bot, Check, ChevronDown, ChevronsUpDown, CircleHelp, Code2, Database, FileText, FolderGit2, Home, Layers3, Lightbulb, Mic, MousePointer2,
-  Network, Pencil, Play, Plus, Settings2, Target, Waves, Workflow, Zap, GitBranch,
+  Network, Pencil, Play, Plus, Settings2, Target, Waves, Workflow, KanbanSquare, GitBranch,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { cn } from '@/lib/utils'
@@ -26,7 +26,7 @@ import { menuFor, PersonaSwitch, PERSONAS, type Me, type NavItem, type StudioVie
 
 const ICONS: Record<string, typeof Waves> = {
   overview: Layers3, conversation: Waves, product: FileText, spec: FileText, validation: CircleHelp, evidence: Database,
-  truth: Network, storymap: Workflow, readiness: Target, review: MousePointer2, pilot: Zap, brief: Play, trd: Code2,
+  truth: Network, storymap: Workflow, readiness: Target, review: MousePointer2, pilot: KanbanSquare, brief: Play, trd: Code2,
   agents: Bot, connections: FolderGit2,
 }
 

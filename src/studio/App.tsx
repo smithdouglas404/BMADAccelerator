@@ -47,7 +47,7 @@ const viewTitles: Record<StudioView, string> = {
   trd: 'Technical design (TRD)',
   readiness: 'Pilot readiness',
   brief: 'Generate the prototype',
-  pilot: 'Backlog & board',
+  pilot: 'Board (Kanban)',
   storymap: 'Story map',
   connections: 'Connections',
   agents: 'Agents',
