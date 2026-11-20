@@ -76,6 +76,7 @@ model UseCase {
   recordings    Recording[]
   feedback      Feedback[]
   events        AgentEvent[]
+  turns         AgentTurn[]
   capabilities  Capability[]
   decisions     Decision[]
   backlog       BacklogItem[]
@@ -331,6 +332,11 @@ model Message {
   raw        String   @default("")
   // The decision a "Decision captured" signal recorded, so it can be undone.
   ref        String   @default("")
+  // The backlog items and Board cards this message is about (backlog:<id>, move:<id>), so each item's
+  // Traceability shows the questions asked about it and the answers given (Doug, Nov 20).
+  about      String[] @default([])
+  // The Socra turn that wrote it (AgentTurn id), so its skills and specialists can be shown beside it.
+  turnId     String   @default("")
   createdAt  DateTime @default(now())
   useCase    UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
 }
@@ -388,6 +394,26 @@ model AgentEvent {
   attempts  Int      @default(0)
   createdAt DateTime @default(now())
   useCase   UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+}
+
+// One Socra turn, as it really ran: what caused it (backlog:<id>, move:<id>, msg:<id>...), the core skills
+// loaded into its instructions, and every skill, specialist and Studio tool it actually used. Shown in an
+// item's Traceability, so "were the skills applied?" is answered from the record, never assumed.
+model AgentTurn {
+  id         String    @id @default(cuid())
+  useCaseId  String
+  causes     String[]  @default([])
+  loaded     String[]  @default([])
+  skills     String[]  @default([])
+  agents     String[]  @default([])
+  tools      String[]  @default([])
+  status     String    @default("running") // running | done | failed
+  error      String    @default("")
+  startedAt  DateTime  @default(now())
+  endedAt    DateTime?
+  useCase    UseCase   @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+
+  @@index([useCaseId, startedAt])
 }
 
 // Skills a team uploaded, validated before they are switched on.

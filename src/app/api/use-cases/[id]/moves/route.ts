@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { BOARD, BOARD_LABEL } from "@/lib/studio/board";
 import { recordChange } from "@/lib/studio/truthlog";
 import { agentsEnabled, enqueue } from "@/lib/agent/runner";
+import { itemAsk } from "@/lib/studio/itemAsk";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -30,6 +31,6 @@ export async function POST(req: Request, { params }: Ctx) {
   await recordChange(id, { node: `move:${move.id}`, kind: "added", summary: `${by} added the card “${b.title}” to ${BOARD_LABEL[b.status]}`, after: b.prompt, by });
   await prisma.useCase.update({ where: { id }, data: { updatedAt: new Date() } });
   if (agentsEnabled())
-    await enqueue(id, "user", `${by} added a card to the Board by hand: “${b.title}”${b.capability ? ` (area: ${b.capability})` : ""}${b.prompt ? `. Details: ${b.prompt.slice(0, 1500)}` : ""}. Shape it like any other story: tie it to a capability and a decision, write its acceptance criteria, and suggest its Story map links.`, `move:${move.id}`);
+    await enqueue(id, "user", `${by} added a card to the Board by hand: “${b.title}”${b.capability ? ` (area: ${b.capability})` : ""}${b.prompt ? `. Details: ${b.prompt.slice(0, 1500)}` : ""}. Shape it like any other story: tie it to a capability and a decision, write its acceptance criteria, and suggest its Story map links.\n${itemAsk({ node: `move:${move.id}`, title: b.title, text: b.prompt, stage: b.status === "queued" ? "queued" : b.status, by })}`, `move:${move.id}`);
   return NextResponse.json(move, { status: 201 });
 }

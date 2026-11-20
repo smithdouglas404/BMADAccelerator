@@ -72,7 +72,7 @@ export const TOOLS = {
   }),
   whats_waiting: tool({
     title: "What's waiting on me",
-    description: "Open decisions and checkpoints, cards waiting for human review, Socra's unanswered questions, and builds running, across the use cases this access can see (or one).",
+    description: "Open decisions and checkpoints, cards waiting for human review, Socra's unanswered questions (the latest one, and every question about a backlog item or Board card, under item_questions, with the item_id and question_id to answer it), and builds running, across the use cases this access can see (or one).",
     need: "read",
     input: z.object({ use_case_id: id.optional() }),
   }),
@@ -81,6 +81,12 @@ export const TOOLS = {
     description: "Where a use case stands: what it is, what was decided, what is open, held thoughts, the board, the last build and the latest conversation.",
     need: "read",
     input: z.object({ use_case_id: id }),
+  }),
+  item_trace: tool({
+    title: "An item's Traceability",
+    description: "Everything that happened to one backlog item or Board card: what was said, the specialist sent, the skills loaded and used, Socra's questions, the answers, and every move with who and why. Also its open question, if any.",
+    need: "read",
+    input: z.object({ use_case_id: id, item_id: z.string().describe('The item, as "backlog:<id>" or "move:<id>" (or a bare id).') }),
   }),
   why_changed: tool({
     title: "Why did this change?",
@@ -115,7 +121,7 @@ export const TOOLS = {
   // ---- Change ----
   capture: tool({
     title: "Capture a thought",
-    description: "Hold a thought in the use case's backlog in the person's own words. Socra curates it; nothing becomes a requirement silently.",
+    description: "Hold a thought in the use case's backlog in the person's own words. Socra curates it, has the right specialist look at it and asks what is missing; nothing becomes a requirement silently. Read the questions a minute later with whats_waiting (item_questions) and answer them with answer (item_id, question_id).",
     need: "write",
     input: z.object({ use_case_id: id, text: z.string().trim().min(1).max(4000) }),
   }),
@@ -159,7 +165,14 @@ export const TOOLS = {
     title: "Answer Socra",
     description: "Say something to Socra in the person's name: an answer, a new thought, or a number from Socra's numbered options. Address a specialist with `to`. A bare yes or a number approves what Socra proposed, so it needs confirm.",
     need: "write",
-    input: z.object({ use_case_id: id, text: z.string().trim().min(1).max(20000), to: z.string().max(40).optional().describe("A specialist's key to address directly (ba, architect, engineer, ux, domain)."), confirm }),
+    input: z.object({
+      use_case_id: id,
+      text: z.string().trim().min(1).max(20000),
+      to: z.string().max(40).optional().describe("A specialist's key to address directly (ba, architect, engineer, ux, domain)."),
+      item_id: z.string().max(60).optional().describe('When answering a question about a backlog item or card: its item_id from whats_waiting ("backlog:<id>" or "move:<id>"). The answer goes onto that item.'),
+      question_id: z.string().max(40).optional().describe("The question_id being answered, so a number picks from that question's options."),
+      confirm,
+    }),
   }),
   decide: tool({
     title: "Approve or reject",

@@ -8,8 +8,8 @@ const yes = (t) => /^(yes|yep|ok|\d+)$/i.test(t.trim());
 
 test("the twelve approved tools are there, plus a way to find a use case", () => {
   for (const t of ["whats_waiting", "brief", "why_changed", "capture", "add_evidence", "start_use_case", "answer", "decide", "change_item", "build", "read_spec", "agent_status", "list_use_cases"]) assert.ok(TOOL_NAMES.includes(t), t);
-  for (const t of ["my_access", "open_use_case", "read_card", "update_use_case", "board_card", "review_spec", "restore_spec", "story_map", "people", "agent_control", "preview", "mark_up", "retry_socra", "sync", "archive_use_case", "delete_use_case", "call_log"]) assert.ok(TOOL_NAMES.includes(t), t);
-  assert.equal(TOOL_NAMES.length, 30);
+  for (const t of ["my_access", "open_use_case", "read_card", "update_use_case", "board_card", "review_spec", "restore_spec", "story_map", "people", "agent_control", "preview", "mark_up", "retry_socra", "sync", "archive_use_case", "delete_use_case", "call_log", "item_trace"]) assert.ok(TOOL_NAMES.includes(t), t);
+  assert.equal(TOOL_NAMES.length, 31);
 });
 
 test("read-only access and viewers can only look", () => {

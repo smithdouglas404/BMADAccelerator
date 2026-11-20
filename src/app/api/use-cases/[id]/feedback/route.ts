@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import { SESSION_EDGES, addTrace } from "@/lib/studio/trace";
 import { workspacePath } from "@/lib/workspace";
 import { enqueue, agentsEnabled } from "@/lib/agent/runner";
+import { itemAsk } from "@/lib/studio/itemAsk";
 import { rememberFeedback } from "@/lib/memory";
 import { clip } from "@/lib/studio/core";
 import { sortMark } from "@/lib/jev";
@@ -68,12 +69,13 @@ export async function POST(req: Request, { params }: Ctx) {
   await prisma.message.create({ data: { useCaseId: id, role: "user", agent: "You", content: `Marked up ${d.target ? d.target.replace(/^Circled /, "") : "the product"} (${d.shape === "circle" ? "circled" : d.shape === "full-screen" ? "whole screen" : "pointed at"}): ${d.comment}`, ref: `ann:${fb.id}`, raw: d.voice ? d.comment : "" } });
   rememberFeedback(uc, `A${n}`, `On ${d.target || d.pageUrl} the owner said: "${d.comment}"`);
   await recordChange(id, { node: `ann:${fb.id}`, kind: "added", summary: `${d.shape === "circle" ? "Circled" : d.shape === "full-screen" ? "Captured the whole screen of" : "Pointed at"} ${d.target ? d.target.replace(/^Circled /, "") : "the product"}: “${d.comment}”`, after: d.comment, by: "Owner" });
+  await recordChange(id, { node: `backlog:${item.id}`, kind: "added", summary: `A mark-up on ${d.target ? d.target.replace(/^Circled /, "") : "the product"} became a backlog item, ticked for the next build`, after: d.comment, causes: [`ann:${fb.id}`], by: "Owner" });
   if (agentsEnabled())
     await enqueue(
       id,
       "annotation",
-      `Vibe review: the owner ${d.shape === "circle" ? "circled a region of" : d.shape === "full-screen" ? "captured the whole screen of" : "pointed at"} ${d.target || "the live product"} (page ${d.pageUrl}) and said: "${d.comment}".${imagePath ? ` The picture is studio/annotations/annotation-${n}.png (open it with Read).` : ""} It is in the backlog (item ${item.id}), ticked for the next build. ${sorted ? `Jev sorted it as: ${sorted.label}. ` : ""}Interpret it with mcp__studio__interpret_annotation (annotation ${fb.id}), giving your own kind (new_requirement, change_request or bug_report, or none when it asks for nothing): what they observed, the behaviour they want in plain words, acceptance criteria, the component change, and the PRD and TRD sections it changes, with a question if the meaning is unclear. Then update those sections (set_spec_section with an annotation trace step), and suggest a build when enough has changed.`,
-      `ann:${fb.id}`,
+      `Vibe review: the owner ${d.shape === "circle" ? "circled a region of" : d.shape === "full-screen" ? "captured the whole screen of" : "pointed at"} ${d.target || "the live product"} (page ${d.pageUrl}) and said: "${d.comment}".${imagePath ? ` The picture is studio/annotations/annotation-${n}.png (open it with Read).` : ""} It is in the backlog (item ${item.id}), ticked for the next build. ${sorted ? `Jev sorted it as: ${sorted.label}. ` : ""}Interpret it with mcp__studio__interpret_annotation (annotation ${fb.id}), giving your own kind (new_requirement, change_request or bug_report, or none when it asks for nothing): what they observed, the behaviour they want in plain words, acceptance criteria, the component change, and the PRD and TRD sections it changes, with a question if the meaning is unclear. Then update those sections (set_spec_section with an annotation trace step), and suggest a build when enough has changed.\n${itemAsk({ node: `backlog:${item.id}`, title: item.title, text: d.comment, stage: "marked", by: "the owner" })}`,
+      `ann:${fb.id} backlog:${item.id}`,
     );
   return NextResponse.json({ feedback: fb, item }, { status: 201 });
 }

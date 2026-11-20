@@ -14,6 +14,9 @@ const Body = z.object({
   to: z.string().max(40).optional(),
   // The words as spoken, when the message was cleaned up from voice.
   raw: z.string().max(40000).optional(),
+  // The backlog items / cards answered (from an item's detail view), and the question answered.
+  about: z.array(z.string().max(80)).max(10).optional(),
+  replyTo: z.string().max(40).optional(),
 });
 
 // Someone on the product talks to Socra (or one of its specialists). A plain yes or a numbered pick

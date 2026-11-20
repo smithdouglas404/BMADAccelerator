@@ -1,6 +1,6 @@
 # Connect to the Studio from an assistant
 
-The Studio can be used from Claude, ChatGPT, Meta Muse or a script: everything a person can do on its screens. The same 30 tools are offered in two forms:
+The Studio can be used from Claude, ChatGPT, Meta Muse or a script: everything a person can do on its screens. The same 31 tools are offered in two forms:
 
 | Form | Address | For |
 |---|---|---|

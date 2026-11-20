@@ -5,6 +5,7 @@ import { bumpReadiness, clip, personaVoice, isAffirmative, numberedOptions, pick
 import { SESSION_EDGES, addTrace } from "./trace";
 import { recordChange } from "./truthlog";
 import { judgeYes, jevOutcome, tagJevCall } from "@/lib/jev";
+import { itemAsk } from "./itemAsk";
 
 const NO_AGENTS = "I've kept that. Socra switches on once Claude is signed in on Settings.";
 
@@ -16,7 +17,11 @@ export async function ensureStarted(useCaseId: string) {
 }
 
 export type Speaker = { name?: string; role?: string };
-export type SayOpts = { source?: string; author?: Speaker; to?: string; raw?: string };
+/**
+ * `about`: the backlog items / cards (backlog:<id>, move:<id>) the words answer, when someone replies in an
+ * item's detail view or through an outside assistant. `replyTo`: the message (Socra's question) answered.
+ */
+export type SayOpts = { source?: string; author?: Speaker; to?: string; raw?: string; about?: string[]; replyTo?: string };
 
 /** The person on the product who spoke (created the first time they speak), as "Dana (Business analyst)". */
 async function whoSpoke(useCaseId: string, author?: Speaker) {
@@ -44,10 +49,22 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
   const msg = await prisma.message.create({ data: { useCaseId, role: "user", agent: "You", content, author: who.name, authorRole: who.role, addressed: specialist?.key ?? "", raw: o.raw && o.raw !== content ? o.raw : "" } });
   // What a yes or a number answers: Socra's (or a specialist's) words since anyone last spoke.
   const lastUser = await prisma.message.findFirst({ where: { useCaseId, role: "user", createdAt: { lt: msg.createdAt } }, orderBy: { createdAt: "desc" } });
-  const since = await prisma.message.findMany({
-    where: { useCaseId, createdAt: { lt: msg.createdAt, ...(lastUser ? { gt: lastUser.createdAt } : {}) }, OR: [{ role: "muse" }, { role: "agent", addressed: { not: "" } }] },
-    orderBy: { createdAt: "desc" },
-  });
+  // An answer to one question (from an item's detail view) answers that question, not whatever was said last.
+  const answered = o.replyTo ? await prisma.message.findFirst({ where: { id: o.replyTo, useCaseId, role: { in: ["muse", "agent"] } } }) : null;
+  const since = answered
+    ? [answered]
+    : await prisma.message.findMany({
+        where: { useCaseId, createdAt: { lt: msg.createdAt, ...(lastUser ? { gt: lastUser.createdAt } : {}) }, OR: [{ role: "muse" }, { role: "agent", addressed: { not: "" } }] },
+        orderBy: { createdAt: "desc" },
+      });
+  // What these words are about: the items named, or the items the question they answer was about.
+  const itemNodes = (o.about ?? []).filter((n) => /^(backlog|move):[a-z0-9]+$/i.test(n));
+  // (A new thought typed in the conversation is not an answer to the last question: it only takes the
+  // question's items when it is a pick or a yes to that question, below.)
+  let about = [...new Set([...itemNodes, ...(answered?.about ?? [])])];
+  // Words given about an item (in its detail view, or naming it through the connector) answer it: they go onto
+  // the item's record rather than becoming a new backlog item.
+  const answersItem = itemNodes.length > 0 || (!!answered && answered.about.length > 0);
   const lastMuse = since[0] ?? (await prisma.message.findFirst({ where: { useCaseId, role: "muse", createdAt: { lt: msg.createdAt } }, orderBy: { createdAt: "desc" } }));
   await addTrace(useCaseId, ...SESSION_EDGES.ownerMessage(content));
 
@@ -72,6 +89,9 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
   const unclearYes = yes && !picked.length && !proposed;
   const approved = !specialist && (picked.length > 0 || !!proposed);
 
+  if (approved || unclearYes) about = [...new Set([...about, ...((offered ?? lastMuse)?.about ?? [])])];
+  if (about.length) await prisma.message.update({ where: { id: msg.id }, data: { about } });
+
   if (approved) {
     const proposal = picked.length ? picked.map((x) => `${x.n}. ${x.label}`).join("; ") : proposed;
     const decision = await prisma.decision.create({
@@ -88,6 +108,8 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
         content: `${picked.length ? "Chosen" : "Approved"}: ${proposal}. Socra is carrying it into the product truth${focus ? ` and moving the ${focus.label.toLowerCase()} ceiling forward` : ""}.`,
       },
     });
+    if (about.length) await prisma.message.updateMany({ where: { useCaseId, ref: decision.id, agent: "Decision captured" }, data: { about } });
+    for (const node of about) await recordChange(useCaseId, { node, kind: "answered", summary: `${who.said} ${picked.length ? "chose" : "approved"}: ${proposal}`, after: proposal, causes: [`decision:${decision.id}`, `msg:${msg.id}`], by: who.name || who.role });
     rememberDecision(uc, "muse", `${who.said} approved: ${proposal}`, "studio:yes");
     await tagJevCall(judged.callId, `decision:${decision.id}`);
     await recordChange(useCaseId, { node: `decision:${decision.id}`, kind: "approved", summary: `${who.said} ${picked.length ? "chose" : "approved"}: ${proposal}`, after: proposal, causes: [`msg:${msg.id}`, ...((offered ?? lastMuse) ? [`msg:${(offered ?? lastMuse)!.id}`] : [])], by: who.name || who.role });
@@ -95,8 +117,8 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
       await enqueue(
         useCaseId,
         "user",
-        `${who.said} said: "${content}"\n\nThe Studio recorded it as an approved decision (id ${decision.id}): "${proposal}"${focus ? `, in ${focus.label}` : ""}, and moved its readiness forward. They can undo it. Carry it into the product truth (PRFAQ, the spec sections it touches, the capability's items from [assumed] to [confirmed] where it applies) and ask the next question.\n\n${personaVoice(who.role)}`,
-        `decision:${decision.id}`,
+        `${who.said} said: "${content}"\n\nThe Studio recorded it as an approved decision (id ${decision.id}): "${proposal}"${focus ? `, in ${focus.label}` : ""}, and moved its readiness forward. They can undo it. Carry it into the product truth (PRFAQ, the spec sections it touches, the capability's items from [assumed] to [confirmed] where it applies)${about.length ? `, and into the item it answers (${about.join(", ")}): its details and acceptance criteria; reply and ask the next question with say about ${JSON.stringify(about)}` : " and ask the next question"}.\n\n${personaVoice(who.role)}`,
+        [`decision:${decision.id}`, ...about].join(" "),
       );
   } else if (unclearYes) {
     // A bare yes with nothing single on the table to approve: it answers the last question. Nothing is
@@ -108,9 +130,21 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
         `${who.said} said: "${content}"\n\nNothing approved: your last message had ${offered ? "numbered options without a marked suggestion" : "no single yes/no proposal"}. Read it as their answer to your last question. If it is unclear what they agreed to, ask in one line which one, by number, and say which you suggest.\n\n${personaVoice(who.role)}`,
         `msg:${msg.id}`,
       );
+  } else if (answersItem && !specialist) {
+    for (const node of about) await recordChange(useCaseId, { node, kind: "answered", summary: `${who.said} answered: “${clip(content, 300)}”`, after: content, causes: [`msg:${msg.id}`, ...(answered ? [`msg:${answered.id}`] : [])], by: who.name || who.role });
+    await prisma.message.create({ data: { useCaseId, role: "signal", agent: "Answer kept on the item", accent: "#a9d8ff", about, content: "Your answer is on the item's record. Socra is writing it into the item and the spec." } });
+    if (agentsEnabled()) {
+      const titles = await itemTitles(useCaseId, about);
+      await enqueue(
+        useCaseId,
+        "user",
+        `${who.said} answered about ${titles}${answered ? ` (your question: “${clip(answered.content, 400)}”)` : ""}: "${content}"\n\nWrite the answer into the item (the card's details and acceptance criteria with upsert_move, or the backlog item) and the spec sections it touches. Reply in one line with say about ${JSON.stringify(about)}; if something a builder needs is still missing, ask the next question the same way (numbered options, your suggestion marked).\n\n${personaVoice(who.role)}`,
+        [`msg:${msg.id}`, ...about].join(" "),
+      );
+    }
   } else {
     const item = await prisma.backlogItem.create({
-      data: { useCaseId, title: clip(content, 140), note: content.length > 140 ? content : "Captured from the living conversation", kind: "capture", group: focus?.label ?? "Unsorted signal", source: who.name ? `${source} · ${who.name}` : source, state: "held" },
+      data: { useCaseId, title: clip(content, 140), note: content.length > 140 ? content : "", kind: "capture", group: focus?.label ?? "Unsorted signal", source: who.name ? `${source} · ${who.name}` : source, state: "held" },
     });
     if (focus) await prisma.capability.update({ where: { id: focus.id }, data: { readiness: bumpReadiness(focus.readiness, false) } });
     await recordChange(useCaseId, { node: `backlog:${item.id}`, kind: "added", summary: `${who.said} said it; held in the backlog in their words`, after: content, causes: [`msg:${msg.id}`], by: who.name || who.role });
@@ -125,13 +159,23 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
         "user",
         specialist
           ? `${who.said} asked the ${specialist.name} directly: "${content}"\n\nThe Studio held it in the backlog (item ${item.id}). Send \`${specialist.agent}\` with the Agent tool to answer it; the answer reaches them through mcp__studio__share_finding as the ${specialist.name}${specialist.key === "domain" ? " (named for this product's field)" : ""}. Then carry what it changes into the product truth.\n\n${personaVoice(who.role)}`
-          : `${who.said} said: "${content}"\n\nThe Studio held it in the backlog in their words (item ${item.id}). Curate it, carry its meaning into the product truth, and answer them.\n\n${personaVoice(who.role)}`,
-        `msg:${msg.id}`,
+          : `${who.said} said: "${content}"\n\nThe Studio held it in the backlog in their words (item ${item.id}). Curate it and carry its meaning into the product truth. Then:\n${itemAsk({ node: `backlog:${item.id}`, title: item.title, text: content, stage: "said", by: who.name || who.role })}\n\n${personaVoice(who.role)}`,
+        `msg:${msg.id} backlog:${item.id}`,
       );
   }
   if (!agentsEnabled()) await prisma.message.create({ data: { useCaseId, role: "muse", agent: "Socra · Product physician", content: NO_AGENTS } });
   await prisma.useCase.update({ where: { id: useCaseId }, data: { updatedAt: new Date() } });
   return { approved, picked: picked.map((x) => x.n) };
+}
+
+/** “Title” (backlog:<id>) for each item node, for prompts. */
+async function itemTitles(useCaseId: string, nodes: string[]) {
+  const ids = (k: string) => nodes.filter((n) => n.startsWith(`${k}:`)).map((n) => n.slice(k.length + 1));
+  const [b, m] = await Promise.all([
+    prisma.backlogItem.findMany({ where: { useCaseId, id: { in: ids("backlog") } }, select: { id: true, title: true } }),
+    prisma.move.findMany({ where: { useCaseId, id: { in: ids("move") } }, select: { id: true, title: true } }),
+  ]);
+  return [...b.map((x) => `“${x.title}” (backlog:${x.id})`), ...m.map((x) => `“${x.title}” (move:${x.id})`)].join(" and ") || nodes.join(", ");
 }
 
 /**
@@ -163,11 +207,19 @@ export async function undoApproval(useCaseId: string, decisionId: string, author
 /** A thought caught away from the desk (phone, voice, the sidebar). Held, then curated by Socra. */
 export async function captureThought(useCaseId: string, text: string, source = "Phone / voice") {
   const item = await prisma.backlogItem.create({
-    data: { useCaseId, title: clip(text, 140), note: text.length > 140 ? text : "Ambient capture · ready for a home", kind: "capture", group: "Unsorted signal", source, state: "held" },
+    data: { useCaseId, title: clip(text, 140), note: text.length > 140 ? text : "", kind: "capture", group: "Unsorted signal", source, state: "held" },
   });
   await addTrace(useCaseId, ...SESSION_EDGES.capture(text));
   await recordChange(useCaseId, { node: `backlog:${item.id}`, kind: "added", summary: `A thought was captured (${source})`, after: text, by: source });
-  if (agentsEnabled()) await enqueue(useCaseId, "capture", `A captured thought arrived (${source}, backlog item ${item.id}): "${text}". Curate it with the others waiting; talk about the pattern, not the thought.`, `backlog:${item.id}`);
+  // Captures from anywhere (the phone, the sidebar, Muse or another assistant through the connector) get the
+  // same treatment as anything said in the Studio: the right specialist looks, Socra asks what is missing.
+  if (agentsEnabled())
+    await enqueue(
+      useCaseId,
+      "user",
+      `A thought was captured (${source}, backlog item ${item.id}): "${text}". Curate it with the others waiting (if several belong together, say so in one line). Then, for this item:\n${itemAsk({ node: `backlog:${item.id}`, title: item.title, text, stage: "captured", by: source })}\nIf it came through an outside assistant, the person reads your questions there: keep each one short and self-contained.`,
+      `backlog:${item.id}`,
+    );
   return item;
 }
 
@@ -185,13 +237,10 @@ export async function pullForward(useCaseId: string, itemId: string) {
     await enqueue(
       useCaseId,
       "probe",
-      `The owner pulled a recommendation forward (backlog item ${item.id}): "${item.title}" (${item.recKind || "consider"}). ${item.note}\nIts probing question: ${item.probe || "(write one)"}\nAsk it now, one question, with your suggestion. A yes makes it an approved decision and the item ready for the build (curate with includeInBuild); a no parks it.`,
+      `The owner pulled a recommendation forward (backlog item ${item.id}): "${item.title}" (${item.recKind || "consider"}). ${item.note}\nIts probing question: ${item.probe || "(write one)"}\nAsk it now, one question, with your suggestion, with say about ["backlog:${item.id}"] so it shows on the item too. A yes makes it an approved decision and the item ready for the build (curate with includeInBuild); a no parks it.`,
       `backlog:${item.id}`,
     );
-  else
-    await prisma.message.create({
-      data: { useCaseId, role: "muse", agent: "Socra · Suggested consideration", accent: "#f5c88a", content: `${item.title}. ${item.probe || "What would you like to do with this?"}` },
-    });
+  else await prisma.message.create({ data: { useCaseId, role: "muse", agent: "Socra · Product physician", about: [`backlog:${item.id}`], content: NO_AGENTS } });
   return item;
 }
 
@@ -201,13 +250,8 @@ export async function focusCapability(useCaseId: string, key: string) {
   if (!cap) return null;
   await prisma.useCase.update({ where: { id: useCaseId }, data: { focus: key } });
   await prisma.message.create({
-    data: {
-      useCaseId,
-      role: "muse",
-      agent: "Socra · Product physician",
-      accent: cap.color,
-      content: `Let's work on ${cap.label.toLowerCase()}. ${cap.signal}`.trim(),
-    },
+    // A plain signal, not words put in Socra's mouth: Socra's own question follows from its turn.
+    data: { useCaseId, role: "signal", agent: "Lens moved", accent: cap.color, content: `Now working on ${cap.label.toLowerCase()}.` },
   });
   if (agentsEnabled())
     await enqueue(useCaseId, "focus", `The owner moved the lens to ${cap.label}. Ask the most important open question about it, with your suggested answer, comparing it with what the leading products in this category have there.`);

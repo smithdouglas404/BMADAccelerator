@@ -14,6 +14,21 @@ export function currentCauses(useCaseId: string) {
   return turnCauses.get(useCaseId) ?? [];
 }
 
+/** The AgentTurn now running for each product, so what it says is stamped with it. */
+const turnIds = new Map<string, string>();
+export function setTurnId(useCaseId: string, id: string) {
+  if (id) turnIds.set(useCaseId, id);
+  else turnIds.delete(useCaseId);
+}
+export function currentTurnId(useCaseId: string) {
+  return turnIds.get(useCaseId) ?? "";
+}
+
+/** The backlog items and Board cards a running turn is about (its causes), for messages that name none. */
+export function currentItems(useCaseId: string) {
+  return currentCauses(useCaseId).filter((c) => /^(backlog|move):/.test(c));
+}
+
 const clip = (s: string, n = 600) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 /**

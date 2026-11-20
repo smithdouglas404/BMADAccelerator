@@ -587,3 +587,34 @@ a.studio-home-brand { color: inherit; text-decoration: none; padding-bottom: 12p
 .studio-triage-open { display: flex; align-items: center; gap: 4px; margin: 6px 0 0; font-size: 12px; color: #c62828; }
 .studio-detail-more { display: flex; gap: 14px; flex-wrap: wrap; }
 .backlog-item { cursor: pointer; }
+
+/* An item's questions and Traceability (Doug, Nov 20): shown in every detail view of a backlog item or card. */
+.studio-item-ask { gap: 10px; }
+.studio-item-question { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line-strong, var(--line)); border-radius: var(--radius, 8px); background: var(--panel-strong, var(--panel)); }
+.studio-item-who { margin: 0; font-size: 12px; color: var(--faint); }
+.studio-item-q { margin: 0; font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
+.studio-item-options { display: grid; gap: 6px; }
+.studio-item-options .button { justify-content: flex-start; text-align: left; height: auto; min-height: 36px; white-space: normal; font-size: 14px; gap: 8px; }
+.studio-item-options em { margin-left: auto; font-style: normal; font-size: 12px; opacity: .85; }
+.studio-item-working { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 14px; color: var(--muted); }
+.studio-spin { animation: studio-spin 1s linear infinite; }
+@keyframes studio-spin { to { transform: rotate(360deg); } }
+.studio-item-reply { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
+.studio-item-reply textarea { width: 100%; min-height: 56px; padding: 8px 10px; border: 1px solid var(--line-strong, var(--line)); border-radius: var(--radius, 6px); background: var(--panel); color: inherit; font: inherit; font-size: 14px; resize: vertical; }
+.studio-trace .studio-card-section-head { gap: 10px; flex-wrap: wrap; }
+.studio-trace .studio-card-section-head small { font-size: 12px; }
+.studio-trace-list { list-style: none; margin: 0; padding: 0; display: grid; }
+.studio-trace-list li { display: grid; grid-template-columns: 22px 1fr; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.studio-trace-icon { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--panel-strong, var(--panel)); color: var(--muted); }
+.studio-trace-asked .studio-trace-icon, .studio-trace-specialist .studio-trace-icon { color: var(--acid, #3b82f6); }
+.studio-trace-answer .studio-trace-icon, .studio-trace-said .studio-trace-icon { color: var(--text, inherit); }
+.studio-trace-body { display: grid; gap: 4px; min-width: 0; }
+.studio-trace-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin: 0; font-size: 14px; }
+.studio-trace-head small { margin-left: auto; color: var(--faint); font-size: 12px; }
+.studio-trace-kind { padding: 1px 6px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; color: var(--muted); }
+.studio-trace-text { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+.studio-trace-text .text-button { margin-left: 6px; font-size: 12px; }
+.studio-trace-turn { display: block; margin: 2px 0 0; padding: 6px 8px; border-radius: var(--radius, 6px); background: var(--panel-strong, var(--panel)); }
+.studio-trace-turn p { margin: 0; font-size: 12px; line-height: 1.6; color: var(--muted); overflow-wrap: anywhere; }
+.studio-trace-turn span { display: inline-block; min-width: 116px; color: var(--faint); }
+.studio-trace-delta { display: flex; align-items: center; gap: 4px; margin: 0; font-size: 12px; color: var(--faint); }
