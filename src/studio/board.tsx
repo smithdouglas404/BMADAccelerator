@@ -57,13 +57,17 @@ export function BoardView({ live, me, buildNow, changeView, setToast, children }
   useEffect(() => { setLocal({}) }, [live.updatedAt])
   // New backlog items: what someone said to Socra, a mark-up, or Socra's own suggestion, until a person deals with it.
   const fresh = live.backlog.filter((b) => needsTriage(b) || (b.triage === 'working' && b.state !== 'built' && b.kind !== 'distraction'))
-  const triage = async (itemId: string, to: 'working' | 'accepted' | 'rejected') => {
+  // A new item is decided in its detail view (click it): Accept (asks "work on this now?"), Defer or Reject. Never on the card.
+  const [pick, setPick] = useState('')
+  const [confirm, setConfirm] = useState(false)
+  const triage = async (itemId: string, to: 'working' | 'accepted' | 'rejected' | 'deferred', now = false) => {
     const item = live.backlog.find((b) => b.id === itemId)
     setTriaging(itemId)
     try {
-      await api(`/api/use-cases/${live.id}/backlog/${itemId}`, { method: 'PATCH', json: { triage: to, by } })
+      await api(`/api/use-cases/${live.id}/backlog/${itemId}`, { method: 'PATCH', json: now ? { triage: to, ready: true, by } : { triage: to, by } })
+      setPick(''); setConfirm(false)
       if (to === 'working') { setToast(`${ASSISTANT_NAME} is opening up “${item?.title ?? 'it'}”. Answer its questions here.`); changeView('conversation') }
-      else setToast(to === 'accepted' ? `Accepted. “${item?.title ?? 'It'}” is on the Board in Backlog, and ${ASSISTANT_NAME} will shape it. Move it to Ready to shape when you want to add detail.` : `Rejected. It stays in the history and out of the product.`)
+      else setToast(to === 'accepted' ? (now ? `“${item?.title ?? 'It'}” is in Ready to shape, and ${ASSISTANT_NAME} is shaping it.` : `Accepted. “${item?.title ?? 'It'}” is on the Board in Backlog, and ${ASSISTANT_NAME} will shape it.`) : to === 'deferred' ? `Deferred. “${item?.title ?? 'It'}” is kept for later and off the Board.` : `Rejected. It stays in the history and out of the product.`)
     } catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
     finally { setTriaging('') }
   }
@@ -115,15 +119,12 @@ export function BoardView({ live, me, buildNow, changeView, setToast, children }
           {col.id === 'queued' && fresh.length > 0 && <p className="studio-triage-head"><span className="studio-red-dot" /> {fresh.filter((b) => !b.triage).length} new · needs you</p>}
           {col.id === 'queued' && fresh.map((b) => {
             const from = b.state === 'suggested' || b.state === 'probing' ? `${ASSISTANT_NAME} suggests` : b.annotationId || /mark/i.test(b.source) ? 'From a mark-up' : /Socra|Muse/i.test(b.source) ? `From ${ASSISTANT_NAME}` : 'You said'
-            return <article key={b.id} className={`build-card studio-board-card ${b.triage ? '' : 'studio-triage-card'}`} aria-label={`New: ${b.title}`}>
+            return <article key={b.id} className={`build-card studio-board-card ${b.triage ? '' : 'studio-triage-card'}`} aria-label={`Open ${b.title} to decide`} tabIndex={0} role="button"
+              onClick={() => { setConfirm(false); setPick(b.id) }} onKeyDown={(e) => { if (e.key === 'Enter') { setConfirm(false); setPick(b.id) } }}>
               <div className="build-card-top"><span className="studio-triage-tag">{b.triage === 'working' ? <><MessageCircleQuestion size={11} /> Working on it</> : <><span className="studio-red-dot" /> New · {from}</>}</span><small className="studio-board-kind">{ago(b.createdAt)}</small></div>
               <h3>{b.title}</h3>
               {b.note && <p className="studio-moved-by">{b.note.slice(0, 160)}</p>}
-              <div className="studio-triage-actions">
-                {b.triage !== 'working' && <button className="button button-quiet button-small" type="button" disabled={triaging === b.id} onClick={() => void triage(b.id, 'working')} title={`${ASSISTANT_NAME} asks the questions that make it a clear requirement`}><MessageCircleQuestion size={12} /> Work on it</button>}
-                <button className="button button-primary button-small" type="button" disabled={triaging === b.id} onClick={() => void triage(b.id, 'accepted')} title="Put it on the Board as a card in Backlog"><Check size={12} /> Accept</button>
-                <button className="button button-quiet button-small" type="button" disabled={triaging === b.id} onClick={() => void triage(b.id, 'rejected')} title="Set it aside; it stays in the history"><X size={12} /> Reject</button>
-              </div>
+              <p className="studio-triage-open">Open it to accept, defer or reject <ArrowRight size={12} /></p>
             </article>
           })}
           {col.id === 'queued' && adding && <div className="build-card studio-board-new"><input autoFocus value={newTitle} onChange={(e) => setNewTitle(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void add(); if (e.key === 'Escape') setAdding(false) }} placeholder="What should the product do?" /><div><button className="button button-primary button-small" type="button" onClick={() => void add()} disabled={!newTitle.trim()}><Check size={12} /> Add</button><button className="button button-quiet button-small" type="button" onClick={() => setAdding(false)}>Cancel</button></div></div>}
@@ -149,6 +150,17 @@ export function BoardView({ live, me, buildNow, changeView, setToast, children }
 
     {children}
     <div className="pilot-footer"><div><span className="live-pulse" /> {ASSISTANT_NAME} is watching for a blocker, not micromanaging the work.</div><button className="text-button" type="button" onClick={() => changeView('storymap')}>See how the stories connect <ArrowRight size={14} /></button></div>
+    {(() => { const b = fresh.find((x) => x.id === pick); if (!b) return null; const close = () => { setPick(''); setConfirm(false) }; const busy = triaging === b.id
+      return <div className="studio-card-overlay" onClick={(e) => { if (e.detail < 2) close() }}><aside className="studio-card-panel" onClick={(e) => e.stopPropagation()} aria-label="Backlog item details">
+        <div className="studio-card-head"><p className="eyebrow">New on the Board · needs you</p><button className="icon-button subtle" type="button" onClick={close} aria-label="Close"><X size={16} /></button></div>
+        <h3><span className="studio-red-dot" /> {b.title}</h3>
+        <p>{b.note || 'No more detail yet.'}</p>
+        <div className="backlog-tags"><span>{b.source}</span><span>{ago(b.createdAt)}</span>{b.triage === 'working' && <span>{ASSISTANT_NAME} is asking about it</span>}</div>
+        {b.annotationId && <a className="studio-markup-thumb" href={`/api/feedback/${b.annotationId}/image`} target="_blank" rel="noreferrer"><img src={`/api/feedback/${b.annotationId}/image`} alt="The marked-up screen" loading="lazy" /></a>}
+        {!confirm && <div className="studio-detail-actions"><button type="button" className="button button-primary" disabled={busy} onClick={() => setConfirm(true)}><Check size={14} /> Accept</button><button type="button" className="button button-quiet" disabled={busy} onClick={() => void triage(b.id, 'deferred')}>Defer</button><button type="button" className="button button-quiet" disabled={busy} onClick={() => void triage(b.id, 'rejected')}><X size={14} /> Reject</button></div>}
+        {confirm && <div className="studio-work-ask" role="group" aria-label="Work on this now?"><strong>Work on this now?</strong><small>Yes puts it in Ready to shape and {ASSISTANT_NAME} starts shaping it. No adds it to the Backlog column.</small><span><button type="button" className="button button-primary button-small" disabled={busy} onClick={() => void triage(b.id, 'accepted', true)}>Yes, work on it now</button><button type="button" className="button button-quiet button-small" disabled={busy} onClick={() => void triage(b.id, 'accepted')}>Not yet, add to Backlog</button></span></div>}
+        {b.triage !== 'working' && <button className="text-button" type="button" disabled={busy} onClick={() => void triage(b.id, 'working')}><MessageCircleQuestion size={13} /> Not sure yet? Talk it through with {ASSISTANT_NAME}</button>}
+      </aside></div> })()}
     {open && <CardPanel key={open} live={live} id={open} by={by} guide={guide?.id === open ? guide.status : undefined} onClose={() => { setOpen(''); setGuide(null) }} onMove={(s) => void move(open, s, 'moved from the card')} setToast={setToast} buildNow={buildNow} changeView={changeView} />}
   </div>
 }
