@@ -582,3 +582,8 @@ a.studio-home-brand { color: inherit; text-decoration: none; padding-bottom: 12p
 .nav-copy.studio-needs-label strong { color: #e5484d; }
 .studio-open-detail { margin-top: 6px; padding: 0; border: 0; background: none; color: var(--accent, #3b82f6); font-size: 13px; cursor: pointer; text-decoration: underline; }
 .studio-detail-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+/* Board: a new item is decided inside its detail view, not on the card. */
+.studio-triage-card { cursor: pointer; }
+.studio-triage-open { display: flex; align-items: center; gap: 4px; margin: 6px 0 0; font-size: 12px; color: #c62828; }
+.studio-detail-more { display: flex; gap: 14px; flex-wrap: wrap; }
+.backlog-item { cursor: pointer; }
