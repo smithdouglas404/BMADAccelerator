@@ -1,10 +1,11 @@
+import { teamListensFor } from "@/lib/studio/coverage";
 import { prisma } from "@/lib/db";
 import { enqueue, agentsEnabled, START_PROMPT } from "@/lib/agent/runner";
 import { rememberDecision } from "@/lib/memory";
 import { bumpReadiness, clip, personaVoice, isAffirmative, numberedOptions, pickedNumbers, proposalFrom, specialistByKey, suggestedOption } from "./core";
 import { SESSION_EDGES, addTrace } from "./trace";
 import { recordChange } from "./truthlog";
-import { judgeYes, jevOutcome, tagJevCall } from "@/lib/jev";
+import { judgeGate, judgeYes, jevOutcome, tagJevCall } from "@/lib/jev";
 import { itemAsk } from "./itemAsk";
 
 const NO_AGENTS = "I've kept that. Socra switches on once Claude is signed in on Settings.";
@@ -36,7 +37,8 @@ async function whoSpoke(useCaseId: string, author?: Speaker) {
  * Someone on the product said something. "Every time you talk is requirements. Every time you say yes,
  * it's automatically an approval." A plain yes (typed or spoken) becomes an approved decision of the
  * Socra's last proposal; a number ("2", "2 and 5") picks from Socra's numbered options; anything else is
- * held in the backlog in their words. A message addressed to a specialist goes to that specialist.
+ * held in the backlog in their words. A reply to a specialist's statement goes to that specialist, and every
+ * specialist listens: the ones whose open question areas the words touch join in (Doug, Nov 21).
  * Either way Socra hears it and carries it into the product truth. Every approval can be undone.
  */
 export async function ownerSays(useCaseId: string, content: string, opts: SayOpts | string = {}) {
@@ -76,6 +78,8 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
   let picked = nums ? options.filter((x) => nums.includes(x.n)) : [];
   // A bare yes approves only what was actually proposed: the option Socra marked as its suggestion,
   // or the yes/no proposal it last made. A yes to an open question or to unmarked options is held.
+  // The Jev gate (log-only): would this message need a full turn? Logged beside what the turn really does.
+  judgeGate(useCaseId, msg.id, lastMuse?.content ?? "", content);
   const rulesYes = !specialist && !picked.length && isAffirmative(content);
   // What a yes would approve, if anything is on the table: Socra's marked option or its yes/no proposal.
   // Jev (TypeSafe) judges whether a short reply agrees to it and adds nothing new; when Jev is unsettled,
@@ -118,7 +122,7 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
       await enqueue(
         useCaseId,
         "user",
-        `${who.said} said: "${content}"\n\nThe Studio recorded it as an approved decision (id ${decision.id}): "${proposal}"${focus ? `, in ${focus.label}` : ""}, and moved its readiness forward. They can undo it.${prfaqNote(about, msg.id)} Carry it into the product truth (PRFAQ, the spec sections it touches, the capability's items from [assumed] to [confirmed] where it applies)${about.length ? `, and into the item it answers (${about.join(", ")}): its details and acceptance criteria; reply and ask the next question with say about ${JSON.stringify(about)}` : " and ask the next question"}.\n\n${personaVoice(who.role)}`,
+        `${who.said} said: "${content}"\n\nThe Studio recorded it as an approved decision (id ${decision.id}): "${proposal}"${focus ? `, in ${focus.label}` : ""}, and moved its readiness forward. They can undo it.${prfaqNote(about, msg.id)} Carry it into the product truth (PRFAQ, the spec sections it touches, the capability's items from [assumed] to [confirmed] where it applies)${about.length ? `, and into the item it answers (${about.join(", ")}): its details and acceptance criteria; reply and ask the next question with say about ${JSON.stringify(about)}` : " and ask the next question"}.\n\n${await teamListensFor(useCaseId, { about, msg: `msg:${msg.id}` })}\n\n${personaVoice(who.role)}`,
         [`decision:${decision.id}`, ...about].join(" "),
       );
   } else if (unclearYes) {
@@ -139,7 +143,7 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
       await enqueue(
         useCaseId,
         "user",
-        `${who.said} answered about ${titles}${answered ? ` (your question: “${clip(answered.content, 400)}”)` : ""}: "${content}"\n\n${about.includes("prfaq") ? prfaqNote(about, msg.id).trim() : "Write the answer into the item (the card's details and acceptance criteria with upsert_move, or the backlog item) and the spec sections it touches."} Reply in one line with say about ${JSON.stringify(about)}; if something a builder needs is still missing, ask the next question the same way (numbered options, your suggestion marked).\n\n${personaVoice(who.role)}`,
+        `${who.said} answered about ${titles}${answered ? ` (your question: “${clip(answered.content, 400)}”)` : ""}: "${content}"\n\n${about.includes("prfaq") ? prfaqNote(about, msg.id).trim() : "Write the answer into the item (the card's details and acceptance criteria with upsert_move, or the backlog item) and the spec sections it touches."} Reply in one line with say about ${JSON.stringify(about)}; if something a builder needs is still missing, ask the next question the same way (numbered options, your suggestion marked).\n\n${await teamListensFor(useCaseId, { about, msg: `msg:${msg.id}` })}\n\n${personaVoice(who.role)}`,
         [`msg:${msg.id}`, ...about].join(" "),
       );
     }
@@ -160,9 +164,9 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
         "user",
         specialist
           ? answered
-            ? `${who.said} replied to the ${specialist.name}'s statement (msg:${answered.id}): “${clip(answered.content, 600)}”\n\nTheir reply: "${content}"\n\nThe Studio held it in the backlog (item ${item.id}). Send \`${specialist.agent}\` with the Agent tool, giving it the statement and the reply. As the ${specialist.name}${specialist.key === "domain" ? " (named for this product's field)" : ""}, through mcp__studio__share_finding, it acknowledges in one line what it understood, then asks at most one follow-up question if something is still unclear (numbered options, its suggestion marked "(suggested)"), and nothing more. If the reply decides something (a new product name, a rule, a scope choice), carry it out now rather than only acknowledging it: rename with set_product (owner_asked true) when they gave a name, record_decision for a choice, and the spec sections it touches; then signal what changed in one line ("Renamed ClaimSnap to X"). If it changes what another specialist said, have that specialist revisit only that point. Do not re-run the whole team.\n\n${personaVoice(who.role)}`
+            ? `${who.said} replied to the ${specialist.name}'s statement (msg:${answered.id}): “${clip(answered.content, 600)}”\n\nTheir reply: "${content}"\n\nThe Studio held it in the backlog (item ${item.id}). Send \`${specialist.agent}\` with the Agent tool, giving it the statement and the reply. As the ${specialist.name}${specialist.key === "domain" ? " (named for this product's field)" : ""}, through mcp__studio__share_finding, it opens its own skill (.claude/skills/${specialist.skill}/SKILL.md), records what the reply settled in its areas (record_coverage), acknowledges in one line what it understood, then asks at most one follow-up question from its still-open areas (numbered options, its suggestion marked "(suggested)"), and nothing more. If the reply decides something (a new product name, a rule, a scope choice), carry it out now rather than only acknowledging it: rename with set_product (owner_asked true) when they gave a name, record_decision for a choice, and the spec sections it touches; then signal what changed in one line ("Renamed ClaimSnap to X"). If it changes what another specialist said, have that specialist revisit only that point. Do not re-run the whole team.\n\n${personaVoice(who.role)}`
             : `${who.said} asked the ${specialist.name} directly: "${content}"\n\nThe Studio held it in the backlog (item ${item.id}). Send \`${specialist.agent}\` with the Agent tool to answer it; the answer reaches them through mcp__studio__share_finding as the ${specialist.name}${specialist.key === "domain" ? " (named for this product's field)" : ""}. Then carry what it changes into the product truth.\n\n${personaVoice(who.role)}`
-          : `${who.said} said: "${content}"${answered ? `\n\nIt is a reply to your statement (msg:${answered.id}): “${clip(answered.content, 600)}”. Acknowledge in one line what you understood and act on it: if it decides something (a new product name, a rule, a scope choice), carry it out now (rename with set_product owner_asked true, record_decision, the spec sections it touches) and signal what changed; then ask at most one follow-up if something is still unclear.` : ""}\n\nThe Studio held it in the backlog in their words (item ${item.id}). Curate it and carry its meaning into the product truth. Then:\n${itemAsk({ node: `backlog:${item.id}`, title: item.title, text: content, stage: "said", by: who.name || who.role })}\n\n${personaVoice(who.role)}`,
+          : `${who.said} said: "${content}"${answered ? `\n\nIt is a reply to your statement (msg:${answered.id}): “${clip(answered.content, 600)}”. Acknowledge in one line what you understood and act on it: if it decides something (a new product name, a rule, a scope choice), carry it out now (rename with set_product owner_asked true, record_decision, the spec sections it touches) and signal what changed; then ask at most one follow-up if something is still unclear.` : ""}\n\nThe Studio held it in the backlog in their words (item ${item.id}). Curate it and carry its meaning into the product truth. Then:\n${itemAsk({ node: `backlog:${item.id}`, title: item.title, text: content, stage: "said", by: who.name || who.role })}\n\n${await teamListensFor(useCaseId, { about: [`backlog:${item.id}`], msg: `msg:${msg.id}` })}\n\n${personaVoice(who.role)}`,
         `msg:${msg.id} backlog:${item.id}`,
       );
   }
@@ -227,7 +231,7 @@ export async function captureThought(useCaseId: string, text: string, source = "
     await enqueue(
       useCaseId,
       "user",
-      `A thought was captured (${source}, backlog item ${item.id}): "${text}". Curate it with the others waiting (if several belong together, say so in one line). Then, for this item:\n${itemAsk({ node: `backlog:${item.id}`, title: item.title, text, stage: "captured", by: source })}\nIf it came through an outside assistant, the person reads your questions there: keep each one short and self-contained.`,
+      `A thought was captured (${source}, backlog item ${item.id}): "${text}". Curate it with the others waiting (if several belong together, say so in one line). Then, for this item:\n${itemAsk({ node: `backlog:${item.id}`, title: item.title, text, stage: "captured", by: source })}\n\n${await teamListensFor(useCaseId, { about: [`backlog:${item.id}`] })}\nIf it came through an outside assistant, the person reads your questions there: keep each one short and self-contained.`,
       `backlog:${item.id}`,
     );
   return item;

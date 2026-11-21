@@ -147,3 +147,24 @@ export function candidatePairs(stories: Story[], links: { from: string; to: stri
   for (let i = 0; i < s.length; i++) for (let j = i + 1; j < s.length; j++) if (!seen.has(`${s[i].id}|${s[j].id}`)) out.push([s[i], s[j]]);
   return out;
 }
+
+// ---- 4. The gate on messages to Socra (log-only, Doug Nov 21) --------------------------------------
+// The questions, thresholds and what counts as a "light" turn are data (studio-skills/typesafe-ai/gate.json).
+
+export type GateConfig = { enabled: boolean; maxChars: number; yes: number; no: number; lightTools: string[]; questions: Record<string, Question> };
+export type GateVerdict = "light" | "full" | "unsettled";
+
+/** A message needs a full turn when it gives work or asks something; neither, clearly, means a light reply would do. */
+export function gateVerdict(a: Answers, cfg: Pick<GateConfig, "yes" | "no">): GateVerdict {
+  const work = a.gives_work?.noul;
+  const ask = a.asks_question?.noul;
+  if (work === undefined || ask === undefined) return "unsettled";
+  if (work >= cfg.yes || ask >= cfg.yes) return "full";
+  if (work <= cfg.no && ask <= cfg.no) return "light";
+  return "unsettled";
+}
+
+/** What a turn really was: light when it used no specialist and only the light tools (talking, reading). */
+export function turnWeight(tools: string[], agents: string[], lightTools: string[]): "light" | "full" {
+  return agents.length === 0 && tools.every((t) => lightTools.includes(t)) ? "light" : "full";
+}

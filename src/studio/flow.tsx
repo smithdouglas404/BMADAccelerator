@@ -179,31 +179,46 @@ const SPECIALIST_ROUTE: Record<string, string> = { 'business-analyst': 'Business
 export const specialistIcon = (key?: string) => SPECIALIST_ICON[key ?? ''] ?? <UserRound size={13} />
 
 /** Socra and its specialists, what each is doing, and who you are talking to. */
-export function TeamPanel({ live, to, setTo }: { live: Live; to: string; setTo: (k: string) => void }) {
+/**
+ * Socra's team, for information only (Doug, Nov 21: "here's what those agents do. And that's all I would
+ * actually show"). Nobody picks who a message goes to: every specialist listens to every conversation and
+ * joins in when the words touch its open question areas. Hover (or focus) shows what it does, its skill and
+ * what it still needs answered, all from the records.
+ */
+export function TeamPanel({ live }: { live: Live }) {
   const domainName = useMemo(() => [...live.messages].reverse().find((m) => m.role === 'agent' && m.addressed === 'domain')?.agent.replace(/ · Specialist$/, ''), [live.messages])
   const state = (key: string) => live.routes.find((r) => r.agent === SPECIALIST_ROUTE[key])
   return (
     <div className="aside-block studio-team">
       <div className="aside-block-header"><span className="eyebrow">Socra’s team</span><Users size={15} /></div>
-      <div className="lens-list">
-        <button type="button" className={to === '' ? 'is-active' : ''} onClick={() => setTo('')}><span className="message-avatar muse"><Waves size={12} /></span><span><strong>Socra</strong><small>leads the conversation</small></span>{to === '' ? <Check size={13} /> : <ArrowRight size={13} />}</button>
+      <p className="studio-team-help">Everyone listens to the whole conversation. Each joins in with its own questions when what you say touches its part. Hover to see what each one does.</p>
+      <ul className="studio-team-list">
+        <li className="studio-team-member" tabIndex={0}><span className="message-avatar muse"><Waves size={12} /></span><span><strong>Socra</strong><small>leads the conversation</small></span>
+          <div className="studio-team-tip" role="tooltip"><strong>Socra</strong><p>Leads the conversation, keeps the product truth and brings in the team when what you say touches their part.</p></div>
+        </li>
         {SPECIALISTS.map((s) => {
           const r = state(s.key)
-          return <button type="button" key={s.key} className={to === s.key ? 'is-active' : ''} onClick={() => setTo(s.key)} title={`Ask the ${s.name.toLowerCase()}: ${s.focus}`}><span className="message-avatar signal">{SPECIALIST_ICON[s.key]}</span><span><strong>{s.key === 'domain' && domainName ? domainName : s.name}</strong><small>{r?.state === 'active' ? r.detail || 'working now' : r?.state === 'complete' ? 'shared findings' : s.focus}</small></span>{to === s.key ? <Check size={13} /> : <ArrowRight size={13} />}</button>
+          const c = live.coverage?.find((x) => x.key === s.key)
+          const name = s.key === 'domain' && domainName ? domainName : s.name
+          const status = r?.state === 'active' ? r.detail || 'working now' : c && c.total ? (c.complete ? 'all its questions answered' : `${c.done} of ${c.total} areas answered`) : s.focus
+          const open = c ? c.areas.filter((a) => a.status !== 'covered' && a.status !== 'assumed') : []
+          return (
+            <li key={s.key} className="studio-team-member" tabIndex={0}>
+              <span className="message-avatar signal">{SPECIALIST_ICON[s.key]}</span><span><strong>{name}</strong><small>{status}</small></span>
+              <div className="studio-team-tip" role="tooltip">
+                <strong>{name}</strong>
+                <p>Asks about {s.focus}, for any kind of product{s.key === 'domain' ? ', with the questions a professional in this field would ask' : ''}.</p>
+                <p className="studio-team-skill">Skill: {s.skill}</p>
+                {c && c.total > 0
+                  ? <><p>{c.done} of {c.total} areas answered{c.complete ? '. It asks again only if something changes them.' : '.'}</p>{open.length > 0 && <p className="studio-team-open">Still open: {open.map((a) => a.status === 'partly' ? `${a.label} (partly)` : a.label).join(', ')}</p>}</>
+                  : <p>{s.key === 'domain' ? 'Works out this field’s areas the first time it joins in.' : 'Nothing answered yet.'}</p>}
+              </div>
+            </li>
+          )
         })}
-      </div>
+      </ul>
     </div>
   )
-}
-
-export const talkingTo = (key: string, live: Live) => {
-  if (!key) return 'Socra'
-  const s = SPECIALISTS.find((x) => x.key === key)
-  if (key === 'domain') {
-    const n = [...live.messages].reverse().find((m) => m.role === 'agent' && m.addressed === 'domain')?.agent.replace(/ · Specialist$/, '')
-    if (n) return `the ${n.toLowerCase()}`
-  }
-  return `the ${s?.name.toLowerCase() ?? 'Socra'}`
 }
 
 /** The numbered choices in the latest Socra or specialist message, as chips that answer with their number. */

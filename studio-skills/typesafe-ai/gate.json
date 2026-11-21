@@ -1,0 +1,26 @@
+{
+  "about": "The Jev gate (Doug, Nov 21): before Socra runs a full turn on a message, Jev judges whether the message needs one. LOG-ONLY: nothing is skipped; Settings > Jev compares Jev's call with what Socra's turn actually did. Questions, thresholds and what counts as a light turn live here, not in code. Edit and restart; no rebuild.",
+  "enabled": true,
+  "maxChars": 600,
+  "yes": 0.7,
+  "no": 0.3,
+  "lightTools": ["say", "signal", "get_state", "search_memory"],
+  "questions": {
+    "gives_work": {
+      "type": "noul",
+      "instructions": "Does `owner_message` give the product team something to work on or record?",
+      "criteria": {
+        "true": "It states a requirement, decision, fact, correction, name, rule or a request to do something, or answers a question with real content.",
+        "false": "It only acknowledges, thanks, agrees without adding anything, or chats, such as ok, thanks, got it, sounds good, one moment."
+      }
+    },
+    "asks_question": {
+      "type": "noul",
+      "instructions": "Does `owner_message` ask the assistant or its team a question that needs an answer?",
+      "criteria": {
+        "true": "It asks something, even without a question mark, such as how, why, what, can you, show me.",
+        "false": "It is a statement, an answer, or an acknowledgement."
+      }
+    }
+  }
+}

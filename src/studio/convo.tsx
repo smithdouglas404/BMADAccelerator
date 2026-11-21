@@ -30,7 +30,7 @@ export function ConvoFilterBar<T extends ConvoMsg>({ list, who, setWho, layout, 
   return <div className="studio-convo-filter" role="group" aria-label="Filter the conversation">
     <div className="studio-convo-chips">
       <button type="button" className={`studio-convo-chip ${who.length === 0 ? 'is-on' : ''}`} onClick={() => setWho([])} aria-pressed={who.length === 0}>Everyone <small>{list.length}</small></button>
-      {people.map((p) => <button key={p.key} type="button" className={`studio-convo-chip ${p.kind} ${who.includes(p.key) ? 'is-on' : ''}`} onClick={() => toggle(p.key)} aria-pressed={who.includes(p.key)} title={`Show what ${p.name} said, and what answered or was said to ${p.kind === 'person' ? 'them' : 'it'}. Pick more than one to see an exchange.`}>{p.name} <small>{p.count}</small></button>)}
+      {people.map((p) => <button key={p.key} type="button" className={`studio-convo-chip ${p.kind} ${who.includes(p.key) ? 'is-on' : ''}`} onClick={() => toggle(p.key)} aria-pressed={who.includes(p.key)} title={`Every conversation ${p.name === 'You' ? 'you' : p.name} took part in (${p.count}), read whole: who else spoke, what was said to ${p.kind === 'person' ? 'them' : 'it'}, and the replies. Pick more than one to combine.`}>{p.name} <small>{p.count}</small></button>)}
     </div>
     <div className="studio-convo-tools">
       {who.length > 0 && <span className="studio-muted">{shown} of {list.length} <button type="button" className="text-button" onClick={() => setWho([])}><X size={12} /> Clear</button></span>}

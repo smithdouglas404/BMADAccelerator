@@ -209,16 +209,17 @@ export const PERSONA_VOICE: Record<Persona, string> = {
 export const personaVoice = (role: string) => `How to talk to them: ${PERSONA_VOICE[personaOf(role)]}`;
 
 /**
- * Socra's specialists. Socra leads; it brings these in visibly, and anyone on the product can
- * address one directly. `agent` is the team member that does the work (src/lib/agent/team.ts).
+ * Socra's specialists. Socra leads; every specialist listens to every conversation and joins in when what is
+ * said touches its open question areas; anyone can answer one with Reply. `agent` is the team member that
+ * does the work (src/lib/agent/team.ts); `skill` is its own skill of questions (studio-skills/).
  * The domain expert is named for the product's field ("Claims expert") by Socra.
  */
 export const SPECIALISTS = [
-  { key: "business-analyst", name: "Business analyst", agent: "business-analyst", focus: "requirements, flows, rules and acceptance" },
-  { key: "architect", name: "Solution architect", agent: "solution-architect", focus: "system shape, data, integrations, security and scale" },
-  { key: "engineer", name: "Product engineer", agent: "product-engineer", focus: "the pilot boundary, build moves, workflows and human checkpoints" },
-  { key: "ux", name: "UX/UI designer", agent: "ux-component-mapper", focus: "screens, components, layout and the feel" },
-  { key: "domain", name: "Domain expert", agent: "domain-expert", focus: "the industry's rules, practice and risks" },
+  { key: "business-analyst", name: "Business analyst", agent: "business-analyst", skill: "studio-business-analyst", focus: "requirements, flows, rules and acceptance" },
+  { key: "architect", name: "Solution architect", agent: "solution-architect", skill: "studio-solution-architect", focus: "system shape, data, integrations, security and scale" },
+  { key: "engineer", name: "Product engineer", agent: "product-engineer", skill: "studio-product-engineer", focus: "the pilot boundary, build moves, workflows and human checkpoints" },
+  { key: "ux", name: "UX/UI designer", agent: "ux-component-mapper", skill: "studio-ux-designer", focus: "screens, components, layout and the feel" },
+  { key: "domain", name: "Domain expert", agent: "domain-expert", skill: "studio-domain-expert", focus: "the industry's rules, practice and risks" },
 ] as const;
 export type SpecialistKey = (typeof SPECIALISTS)[number]["key"];
 export const specialistByKey = (k: string) => SPECIALISTS.find((s) => s.key === k);

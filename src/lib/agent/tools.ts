@@ -16,6 +16,8 @@ import { SPEC_BASIS, SPEC_STATUSES, TRACE_TYPES, cleanTrace } from "@/lib/studio
 import { SPEC_DEFS } from "@/lib/studio/specDefs";
 import { ensureSpec } from "@/lib/studio/state";
 import { currentCauses, currentItems, currentTurnId, nodesForIds, recordChange } from "@/lib/studio/truthlog";
+import { teamCoverage } from "@/lib/studio/coverage";
+import { COVERAGE_STATUSES } from "@/lib/studio/coverageCore";
 import { VALIDATION_SIGNALS, colorFor, numberItems, overallReadiness, slugify, specialistByKey, validationScore, workingName, type Validation } from "@/lib/studio/core";
 
 const ROLE_KEYS = ROLES.map((r) => r.key) as [string, ...string[]];
@@ -112,6 +114,8 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
             people: s.members.map((p) => `${p.name} (${p.role})`),
             spec: s.spec.map((x) => ({ key: x.key, ref: x.ref, tab: x.tab, title: x.title, basis: x.basis, status: x.status, completeness: x.completeness, review: x.review, reviewNote: x.reviewNote, content: x.content.slice(0, 600) })),
             build: { versions: s.generateCount, packageIterations: s.packageCount, building: s.generateBusy },
+            // Each specialist's question areas (from its skill) and what the people have answered so far.
+            coverage: (await teamCoverage(useCaseId)).map((c) => ({ specialist: c.key, skill: c.skill, answered: `${c.done} of ${c.total}`, areas: c.areas.map((a) => ({ area: a.key, label: a.label, status: a.status, enough: a.enough, note: a.note })) })),
           };
           return ok(JSON.stringify(out, null, 1));
         },
@@ -137,7 +141,7 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
       ),
       tool(
         "share_finding",
-        "A specialist speaks in the conversation, visibly, in their own name: what they found or recommend, in two to four plain sentences, and at most one question (with a suggested answer) for the people on the product. Use it when a specialist finishes (Socra may share for a research specialist), or to answer someone who addressed a specialist directly. Numbered options are fine when there are real choices. specialist: business-analyst, architect, engineer, ux or domain; for domain give the field's name in 'title' (for example \"Claims expert\").",
+        "A specialist speaks in the conversation, visibly, in their own name: what they found or recommend, in two to four plain sentences, then one or two questions from its own skill's open areas, each with numbered options and one marked \"(suggested)\". Use it when a specialist finishes (Socra may share for a research specialist), or to answer someone who replied to a specialist. specialist: business-analyst, architect, engineer, ux or domain; for domain give the field's name in 'title' (for example \"Claims expert\").",
         {
           specialist: z.enum(["business-analyst", "architect", "engineer", "ux", "domain"]),
           title: z.string().max(60).default(""),
@@ -150,6 +154,30 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
           const name = specialist === "domain" && title.trim() ? title.trim() : s.name;
           await prisma.message.create({ data: { useCaseId, role: "agent", agent: `${name} · Specialist`, addressed: specialist, content: text, accent: await capKey(capability), about: await aboutNodes(about), turnId: currentTurnId(useCaseId), replyTo: await replyThread() } });
           return ok();
+        },
+      ),
+      tool(
+        "record_coverage",
+        `A specialist records how far one of its question areas is answered, from what the people on the product actually said (never from a guess). Areas are the ones under "Question areas" in the specialist's own skill; the domain expert records its own field's areas here first (status open, with what "enough" means and the source in the note). status: ${COVERAGE_STATUSES.join(", ")} (assumed = they said enough or don't know, and the note holds the suggested default). note: what settled it, quoting their words. When every area of a specialist is covered or assumed, it stops asking.`,
+        {
+          specialist: z.enum(["business-analyst", "architect", "engineer", "ux", "domain"]),
+          area: z.string().min(1).max(40).regex(/^[a-z0-9-]+$/),
+          label: z.string().max(80).default(""),
+          status: z.enum(COVERAGE_STATUSES as [string, ...string[]]),
+          note: z.string().max(1200).default(""),
+        },
+        async ({ specialist, area, label, status, note }) => {
+          const before = await prisma.coverage.findUnique({ where: { useCaseId_specialist_area: { useCaseId, specialist, area } } });
+          const evidence = [...new Set([...(before?.evidence ?? []), ...currentCauses(useCaseId).filter((c) => /^(msg|decision|backlog|move):/.test(c))])].slice(-20);
+          await prisma.coverage.upsert({
+            where: { useCaseId_specialist_area: { useCaseId, specialist, area } },
+            update: { status, note: note || before?.note || "", ...(label ? { label } : {}), evidence },
+            create: { useCaseId, specialist, area, label, status, note, evidence },
+          });
+          const s = specialistByKey(specialist)!;
+          if (before?.status !== status) await recordChange(useCaseId, { node: `coverage:${specialist}:${area}`, kind: before ? "changed" : "added", summary: `${s.name}: ${label || before?.label || area} is ${status}${note ? ` (${note.slice(0, 200)})` : ""}`, before: before?.status ?? "", after: status, by: s.name, fromTurn: true });
+          const left = (await teamCoverage(useCaseId)).find((c) => c.key === specialist);
+          return ok(left ? `${left.done} of ${left.total} of the ${s.name.toLowerCase()}'s areas answered${left.complete ? ": all answered, stop asking unless something changes them." : "."}` : "ok");
         },
       ),
       tool(
