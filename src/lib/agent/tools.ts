@@ -297,7 +297,7 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
       ),
       tool(
         "record_decision",
-        "Record a decision in the human-in-the-loop register. status 'approved' when the owner agreed (a yes is an approval: never ask 'do you want to approve this?'), 'assumed' when you assumed it for them (they can correct it), 'open' when only the owner can decide it (options: two to four choices, the first being your suggestion). Keep their original words in 'words'. An approved decision goes into the next build. When it changes an earlier decision or assumption (a new answer, a correction), name the earlier ones' ids in 'replaces': they are closed as replaced, so nothing left contradicts it.",
+        "Record a decision in the human-in-the-loop register. status 'approved' when the owner agreed (a yes is an approval: never ask 'do you want to approve this?'), 'assumed' when you assumed it for them (they can correct it), 'open' when only the owner can decide it (options: two to four choices, the first being your suggestion; write its text as the question they answer, ending in '?', and don't also ask the same thing in words). Keep their original words in 'words'. An approved decision goes into the next build. When it changes an earlier decision or assumption (a new answer, a correction), name the earlier ones' ids in 'replaces': they are closed as replaced, so nothing left contradicts it.",
         {
           text: z.string().min(3),
           status: z.enum(["approved", "assumed", "open"]),

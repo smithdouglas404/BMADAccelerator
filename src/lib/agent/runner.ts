@@ -45,8 +45,15 @@ export async function resume(useCaseId: string) {
  * them off), so an item that came in never waits for someone to open its product before Socra asks about it.
  * Work older than three days is left alone. One product at a time, so a restart doesn't start ten turns at once.
  */
+/** When this Studio process started: turns marked running from before it were cut off. */
+const BOOT = new Date();
+
 export async function resumeAll() {
   if (!agentsEnabled()) return;
+  // Nothing runs before this: every turn still marked running was cut off by the restart, in any use case.
+  await prisma.agentTurn
+    .updateMany({ where: { status: "running", startedAt: { lt: BOOT } }, data: { status: "failed", error: "Cut off by a restart of the Studio; taken up again", endedAt: new Date() } })
+    .catch(() => undefined);
   const since = new Date(Date.now() - 3 * 86_400_000);
   const rows = await prisma.agentEvent.findMany({ where: { status: { in: ["queued", "running"] }, createdAt: { gt: since } }, select: { useCaseId: true }, distinct: ["useCaseId"] });
   for (const r of rows) await kick(r.useCaseId).catch((e) => console.error("resume turns", r.useCaseId, e));
@@ -333,7 +340,7 @@ async function runTurn(useCaseId: string, prompt: string, onTool?: (name: string
     await fakeAgentTurn(fresh, prompt, tally, onTool);
   } else {
     const connectorNote = await mcpSummary(useCaseId).catch(() => "");
-    const { texts } = await runSdkTurn({
+    const { texts, stalled } = await runSdkTurn({
       useCaseId,
       slug: fresh.slug,
       prompt,
@@ -342,6 +349,8 @@ async function runTurn(useCaseId: string, prompt: string, onTool?: (name: string
       appendSystem: `${await museInstructions()}${connectorNote ? `\n\n${connectorNote}` : ""}`,
       tally,
       onTool,
+      // A turn that goes silent this long is stopped and tried again, so no item waits on it forever.
+      idleMs: 8 * 60_000,
       onSession: async (id) => {
         if (id !== fresh.claudeSessionId) {
           await prisma.useCase.update({ where: { id: useCaseId }, data: { claudeSessionId: id } });
@@ -351,6 +360,8 @@ async function runTurn(useCaseId: string, prompt: string, onTool?: (name: string
         await prisma.useCase.update({ where: { id: useCaseId }, data: { agentStatus: s } });
       },
     });
+    // A stopped turn counts as failed, so the queue tries it again (up to three times within the hour).
+    if (stalled && !tally.spoke) throw new Error("Socra's turn went quiet for 8 minutes and was stopped; trying again");
     // Safety net: if Socra wrote to the owner without using `say`, show its last words.
     if (!tally.spoke && texts.length) {
       const items = currentItems(useCaseId);
