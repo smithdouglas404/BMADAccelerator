@@ -1,9 +1,17 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { librarySkills, setEccScope } from "@/lib/skillLibrary";
+import { librarySkills, readLibrarySkill, setEccScope, studioSkillsHome } from "@/lib/skillLibrary";
 
 // The one skill library: ECC, the Studio's own skills and uploaded ones, with where each is switched on.
-export async function GET() {
+// ?read=studio:<name> or ecc:<name> returns that skill's SKILL.md; ?home=1 says where the Studio's own live.
+export async function GET(req: Request) {
+  const q = new URL(req.url).searchParams;
+  if (q.get("home")) return NextResponse.json(await studioSkillsHome());
+  const read = q.get("read");
+  if (read) {
+    const r = await readLibrarySkill(read);
+    return r ? NextResponse.json(r) : NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
   return NextResponse.json(await librarySkills());
 }
 

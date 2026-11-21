@@ -752,3 +752,9 @@ a.studio-home-brand { color: inherit; text-decoration: none; padding-bottom: 12p
 .studio-progress-track { display: block; height: 3px; margin-top: 5px; border-radius: 2px; background: rgba(var(--hi-rgb),.08); overflow: hidden; }
 .studio-progress-track > span { display: block; height: 100%; }
 .studio-progress .lens-list button > span:nth-child(2) { flex: 1; }
+
+/* Skill library: our own skills first, each readable in full (Doug, Nov 21). */
+.studio-library-ours { margin: 10px 0 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius, 7px); font-size: 14px; }
+.studio-library-ours code { font: 12px 'DM Mono', monospace; }
+.studio-library-used { color: var(--ink); }
+.studio-library-row > .studio-library-read { grid-column: 1 / -1; max-height: 420px; overflow: auto; white-space: pre-wrap; margin: 8px 0 0; }
