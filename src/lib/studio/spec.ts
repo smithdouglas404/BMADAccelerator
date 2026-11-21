@@ -18,55 +18,51 @@ export type TraceStep = { label: string; detail: string; type: TraceType };
 
 type Def = { key: string; title: string; kicker: string };
 
-/** The PRD's sections, in reading order. */
-export const PRD_SECTIONS: Def[] = [
-  { key: "prd-problem", title: "Problem and customer context", kicker: "Why now" },
-  { key: "prd-use-case", title: "Validated use case", kicker: "Product truth" },
-  { key: "prd-actors", title: "Target users and actors", kicker: "Who is in the room" },
-  { key: "prd-journey", title: "Customer journey", kicker: "Before, during, after" },
-  { key: "prd-jobs", title: "Jobs to be done", kicker: "What they hire it for" },
-  { key: "prd-promise", title: "Product promise", kicker: "What we say out loud" },
-  { key: "prd-scope", title: "Scope and non-goals", kicker: "Boundaries" },
-  { key: "prd-capabilities", title: "Capabilities", kicker: "The floor" },
-  { key: "prd-flows", title: "Primary customer flow", kicker: "Experience shape" },
-  { key: "prd-functional", title: "Functional requirements", kicker: "What it must do" },
-  { key: "prd-acceptance", title: "Acceptance criteria", kicker: "Proof of value" },
-  { key: "prd-edge-cases", title: "Edge cases", kicker: "When it gets messy" },
-  { key: "prd-open-questions", title: "Open questions", kicker: "Only the owner can say" },
-  { key: "prd-metrics", title: "Success metrics", kicker: "How we'll know" },
-  { key: "prd-rollout", title: "Rollout assumptions", kicker: "Pilot to beta" },
-  { key: "prd-risks", title: "Risks and dependencies", kicker: "What could stop it" },
-];
+export type SpecDef = Def & { tab: SpecTab; ref: string; position: number };
 
-/** The TRD's sections, generated progressively from product decisions. */
-export const TRD_SECTIONS: Def[] = [
-  { key: "trd-context", title: "System context", kicker: "Technical boundary" },
-  { key: "trd-architecture", title: "Architecture overview", kicker: "The shape of the system" },
-  { key: "trd-capability-map", title: "Capability-to-service mapping", kicker: "Where each capability lives" },
-  { key: "trd-agents", title: "Agent roles and orchestration", kicker: "AgentKit" },
-  { key: "trd-hitl", title: "Human-in-the-loop boundaries", kicker: "People decide" },
-  { key: "trd-data", title: "Data model", kicker: "Durable model" },
-  { key: "trd-states", title: "Data and state transitions", kicker: "How things move" },
-  { key: "trd-apis", title: "API and integration contracts", kicker: "Edges" },
-  { key: "trd-auth", title: "Authentication and authorization", kicker: "Who can do what" },
-  { key: "trd-storage", title: "Storage and retention", kicker: "What we keep" },
-  { key: "trd-events", title: "Event and workflow model", kicker: "What happens when" },
-  { key: "trd-ui", title: "UI/component architecture", kicker: "shadcn/ui" },
-  { key: "trd-errors", title: "Error handling", kicker: "When it fails" },
-  { key: "trd-observability", title: "Observability", kicker: "Seeing it run" },
-  { key: "trd-security", title: "Security and privacy", kicker: "Trust" },
-  { key: "trd-performance", title: "Performance expectations", kicker: "How fast" },
-  { key: "trd-testing", title: "Testing strategy", kicker: "How we check" },
-  { key: "trd-deploy", title: "Deployment and environments", kicker: "Where it runs" },
-  { key: "trd-dependencies", title: "External dependencies", kicker: "What we lean on" },
-  { key: "trd-risks", title: "Technical risks", kicker: "What could break" },
-  { key: "trd-hardening", title: "Production hardening checklist", kicker: "Before real customers" },
-];
+/** A Markdown table under "## <title>" in a skill, as rows of trimmed cells (header row dropped). */
+export function skillTable(skillMd: string, title: string): string[][] {
+  const lines = skillMd.split("\n");
+  const at = lines.findIndex((l) => l.trim() === `## ${title}`);
+  if (at < 0) return [];
+  const end = lines.findIndex((l, i) => i > at && /^## /.test(l));
+  return lines
+    .slice(at + 1, end < 0 ? undefined : end)
+    .filter((l) => /^\s*\|/.test(l) && !/^[\s|:-]+$/.test(l))
+    .slice(1)
+    .map((l) => l.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim()))
+    .filter((c) => /^[a-z0-9-]+$/.test(c[0] ?? ""));
+}
 
-export const SPEC_DEFS: (Def & { tab: SpecTab; ref: string; position: number })[] = [
-  ...PRD_SECTIONS.map((d, i) => ({ ...d, tab: "prd" as const, ref: `PR-${String(i + 1).padStart(3, "0")}`, position: i })),
-  ...TRD_SECTIONS.map((d, i) => ({ ...d, tab: "trd" as const, ref: `TR-${String(i + 1).padStart(3, "0")}`, position: i })),
-];
+/**
+ * The sections of the PRD or TRD, in reading order, from the "## Sections" table of its skill (studio-prd,
+ * studio-trd). No section list lives in code (Doug, Nov 20: no hard code). Refs are plain: "PRD 1", "TRD 4".
+ */
+export function specSectionsFrom(skillMd: string, tab: SpecTab): SpecDef[] {
+  return skillTable(skillMd, "Sections")
+    .filter((c) => c.length >= 3)
+    .map(([key, title, kicker], i) => ({ key, title, kicker, tab, ref: `${tab.toUpperCase()} ${i + 1}`, position: i }));
+}
+
+export const specDefsFrom = (prdSkill: string, trdSkill: string): SpecDef[] => [...specSectionsFrom(prdSkill, "prd"), ...specSectionsFrom(trdSkill, "trd")];
+
+export type SpecWalkStep = { key: string; asker: string; ask: string; bar: string; informs: string[] };
+
+/** The guided walkthrough's questions: who asks, the question, its bar, and the sections the answer also informs. */
+export function specWalkFrom(skillMd: string): SpecWalkStep[] {
+  return skillTable(skillMd, "Walkthrough")
+    .filter((c) => c.length >= 4)
+    .map(([key, asker, ask, bar, informs = ""]) => ({ key, asker, ask, bar, informs: informs.split(/[,\s]+/).filter((k) => /^[a-z0-9-]+$/.test(k)) }));
+}
+
+/** A "## <title>" section of a skill, as Markdown. */
+export function skillPart(skillMd: string, title: string) {
+  const lines = skillMd.split("\n");
+  const at = lines.findIndex((l) => l.trim() === `## ${title}`);
+  if (at < 0) return "";
+  const end = lines.findIndex((l, i) => i > at && /^## /.test(l));
+  return lines.slice(at + 1, end < 0 ? undefined : end).join("\n").trim();
+}
 
 export const SPEC_BASIS: { key: SpecBasis; label: string }[] = [
   { key: "confirmed", label: "Confirmed" },
@@ -109,14 +105,14 @@ export function cleanTrace(steps: unknown): TraceStep[] {
     .slice(-24);
 }
 
-type SectionLike = { tab: string; key: string; ref?: string; title: string; content: string; completeness: number; basis: string; status: string; review?: string; confidence?: string };
+type SectionLike = { tab: string; key: string; ref?: string; position?: number; title: string; content: string; completeness: number; basis: string; status: string; review?: string; confidence?: string };
 
 /** Completeness of one tab. A removed section still counts (as zero): the owner can see the gap. */
 export function tabCompleteness(sections: SectionLike[], tab: SpecTab): number {
-  const defs = tab === "prd" ? PRD_SECTIONS : TRD_SECTIONS;
-  const by = new Map(sections.filter((s) => s.tab === tab).map((s) => [s.key, s]));
-  const total = defs.reduce((sum, d) => sum + Math.max(0, Math.min(100, by.get(d.key)?.completeness ?? 0)), 0);
-  return Math.round(total / defs.length);
+  const mine = sections.filter((s) => s.tab === tab);
+  if (!mine.length) return 0;
+  const total = mine.reduce((sum, s) => sum + Math.max(0, Math.min(100, s.completeness ?? 0)), 0);
+  return Math.round(total / mine.length);
 }
 
 const APPROVED: SpecStatus[] = ["owner-approved", "engineer-reviewed", "ready-prototype", "ready-pilot", "production-ready"];
@@ -152,8 +148,8 @@ export function explainReadiness(input: {
   const prototype = input.movesTotal ? Math.round((input.movesDone / input.movesTotal) * 100) : 0;
   const factors: ReadinessFactor[] = [
     { key: "capabilities", label: "Capability floor", value: capability, detail: "How much of what the leading products have is shaped and confirmed." },
-    { key: "prd", label: "PRD completeness", value: prd, detail: `${sections.filter((s) => s.tab === "prd" && s.completeness >= 60).length} of ${PRD_SECTIONS.length} product sections are well formed.` },
-    { key: "trd", label: "TRD completeness", value: trd, detail: `${sections.filter((s) => s.tab === "trd" && s.completeness >= 60).length} of ${TRD_SECTIONS.length} technical sections are well formed.` },
+    { key: "prd", label: "PRD completeness", value: prd, detail: `${sections.filter((s) => s.tab === "prd" && s.completeness >= 60).length} of ${sections.filter((s) => s.tab === "prd").length} product sections are well formed.` },
+    { key: "trd", label: "TRD completeness", value: trd, detail: `${sections.filter((s) => s.tab === "trd" && s.completeness >= 60).length} of ${sections.filter((s) => s.tab === "trd").length} technical sections are well formed.` },
     { key: "evidence", label: "Evidence coverage", value: evidenceCoverage, detail: `${input.evidenceCount} sources; ${evidenced} sections are backed by evidence or an approval.` },
     { key: "validation", label: "Use case validation", value: input.validation, detail: "Problem, customer, evidence, proof point and thin slice." },
     { key: "decisions", label: "Decisions made", value: decisionsScore, detail: open ? `${open} decision${open === 1 ? "" : "s"} only you can make ${open === 1 ? "is" : "are"} still open.` : "No open decisions." },
@@ -196,8 +192,8 @@ function label(list: { key: string; label: string }[], k: string) {
 
 /** The PRD or TRD as markdown, for the package (the design team's shape: a section per heading, then its metadata). */
 export function specMarkdown(sections: SectionLike[], tab: SpecTab, productName: string): string {
-  const defs = tab === "prd" ? PRD_SECTIONS : TRD_SECTIONS;
-  const by = new Map(sections.filter((s) => s.tab === tab).map((s) => [s.key, s]));
+  const defs = sections.filter((s) => s.tab === tab).sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  const by = new Map(defs.map((s) => [s.key, s]));
   const head = `# ${tab === "prd" ? "Product requirements" : "Technical requirements"}\n\n${productName}: living ${tab.toUpperCase()}, ${tabCompleteness(sections, tab)}% complete. Each section says whether it is Confirmed, Recommended, Inferred, an Open decision, or Not yet researched.\n`;
   const body = defs.map((d) => {
     const s = by.get(d.key);
