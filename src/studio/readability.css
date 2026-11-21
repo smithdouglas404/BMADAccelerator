@@ -10,3 +10,19 @@ input, textarea, select { font-size: 14px; }
 /* At the foot of the side menu: part of the menu, never on top of it. */
 .view-controls.is-docked { position: static; display: inline-flex; margin: 14px 0 0; box-shadow: none; align-self: flex-start; }
 .studio-page-top .view-controls.is-docked { margin: 0; align-self: center; }
+
+/* Top bar and avatar polish (Doug, Nov 21): every avatar is a true circle (fixed equal width and height, never
+   squeezed by flex or stretched by the 36px button minimum), initials centred, and the top bar's status, bell and
+   avatar share one 36px row in the theme's own font. */
+.topbar-actions { gap: 12px; }
+.save-state { align-items: center; gap: 8px; white-space: nowrap; font-family: inherit; font-size: 12px; font-weight: 500; line-height: 1; letter-spacing: 0; }
+.save-state span { flex: none; }
+.icon-button { flex: none; width: 36px; height: 36px; padding: 0; line-height: 1; }
+.top-avatar, .avatar, .owner-avatar, .preview-avatar, .message-avatar.user { flex: none; aspect-ratio: 1 / 1; padding: 0; line-height: 1; text-align: center; font-family: inherit; letter-spacing: 0; }
+.top-avatar { width: 36px; height: 36px; min-width: 36px; min-height: 36px; font-size: 12px; }
+.avatar { width: 32px; height: 32px; min-width: 32px; }
+.studio-people-list .avatar { width: 28px; height: 28px; min-width: 28px; }
+.owner-avatar { width: 24px; height: 24px; min-width: 24px; font-size: 12px; }
+.preview-avatar { width: 24px; height: 24px; min-width: 24px; }
+.message-avatar.user { width: 28px; height: 28px; min-width: 28px; border-radius: 50%; }
+.studio-avatar-button { padding: 0; }
