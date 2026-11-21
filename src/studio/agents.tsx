@@ -3,7 +3,7 @@
 // a person. Read from the Studio's records and the shared agent service. Built from the team's classes;
 // the few new ones are in studio-extras.css.
 import { useCallback, useEffect, useState } from 'react'
-import { Bot, Check, ExternalLink, History, ShieldCheck, Sparkles, UserRound, X } from 'lucide-react'
+import { Bot, Brain, Check, ExternalLink, History, ShieldCheck, Sparkles, UserRound, X } from 'lucide-react'
 import { api, type Live } from './live'
 import type { Me } from './flow'
 
@@ -84,6 +84,7 @@ export function AgentsView({ live, me, setToast }: { live: Live; me: Me; setToas
             {a.status === 'off' && <button className="text-button" type="button" onClick={() => void patch(a, { on: true })}>Switch it on</button>}
             {a.persona ? <button className="text-button" type="button" onClick={() => { if (window.confirm(`Switch off ${a.name}'s persona? It will stop keeping its own identity and its memory of each person.`)) void patch(a, { persona: false }) }}>Switch the persona off</button> : <button className="text-button" type="button" onClick={() => void patch(a, { persona: true })}>Give it a persona</button>}
             <button className="text-button" type="button" onClick={() => setOpen(open === a.key ? '' : a.key)}><History size={13} /> {runs.length} run{runs.length === 1 ? '' : 's'}</button>
+            <a className="text-button" href={`/settings?tab=memory&useCase=${encodeURIComponent(live.id)}&agent=${encodeURIComponent(`app:${live.id}:${a.key}`)}`}><Brain size={13} /> See its memory</a>
           </div>
           {open === a.key && <div className="studio-agent-runs">{runs.length ? runs.slice(0, 20).map((r) => <div className="studio-agent-run" key={r.id}>
             <div className="studio-agent-top"><span className={`studio-agent-status is-${r.status}`}>{r.status}</span>{r.demo && <span className="studio-agent-tag">demo</span>}<small>{when(r.created_at)}{r.person ? ` · ${r.person}` : ''}</small></div>

@@ -7,6 +7,7 @@ import { api } from './live'
 import { StudioTop } from './pages'
 import { ConnectTab } from './connect'
 import { JevValue } from './jev'
+import { AgentMemory } from './memory'
 
 type KeyStatus = { env: string; name: string; source: 'saved' | 'env' | 'missing'; last4: string }
 type Status = { providers: (KeyStatus & { id: string; models: string[] })[]; other: KeyStatus[]; claudePlan: boolean; roles: { env: string; label: string; note: string; providers: string[]; current: string; saved: boolean }[] }
@@ -30,12 +31,12 @@ export function SettingsPage() {
       <StudioTop active="settings" />
       <div className="page-wrap">
         <div className="page-intro"><div><p className="eyebrow">Settings</p><h1>The plumbing,<br /><em>out of the way.</em></h1><p>Three places to know: AI models and keys (what runs Socra), Tools the Studio uses (outside systems Socra can call), and Connect your assistant (how Muse or Claude reaches the Studio).</p></div></div>
-        <div className="studio-tabs">{([['models', 'AI models and keys'], ['connectors', 'Tools the Studio uses'], ['connect', 'Connect your assistant (Muse, Claude)'], ['skills', 'Skills'], ['memory', 'Memory'], ['jev', 'Jev']] as const).map(([k, l]) => <button key={k} type="button" className={tab === k ? 'is-active' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
+        <div className="studio-tabs">{([['models', 'AI models and keys'], ['connectors', 'Tools the Studio uses'], ['connect', 'Connect your assistant (Muse, Claude)'], ['skills', 'Skills'], ['memory', 'Agent memory'], ['jev', 'Jev']] as const).map(([k, l]) => <button key={k} type="button" className={tab === k ? 'is-active' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
         {tab === 'models' && <Models setToast={setToast} />}
         {tab === 'connectors' && <Connectors setToast={setToast} />}
         {tab === 'connect' && <ConnectTab setToast={setToast} />}
         {tab === 'skills' && <Skills setToast={setToast} />}
-        {tab === 'memory' && <Memory />}
+        {tab === 'memory' && <AgentMemory />}
         {tab === 'jev' && <JevValue />}
       </div>
       {toast && <div className="toast" role="status"><span className="toast-check"><Check size={14} /></span>{toast}</div>}
@@ -203,23 +204,6 @@ function Skills({ setToast }: { setToast: (s: string) => void }) {
         ))}</div>
         {list.length === 0 && <p className="studio-muted">No skill matches that.</p>}
         {list.length > shown && <button type="button" className="button button-quiet" style={{ marginTop: 12 }} onClick={() => setShown(shown + PAGE * 2)}>Show more ({list.length - shown} left)</button>}
-      </section>
-    </div>
-  )
-}
-
-function Memory() {
-  const [m, setM] = useState<{ mem0: { configured: boolean; up: boolean }; letta: { up: boolean; note?: string }; roles: { key: string; name: string; lessons: string }[] } | null>(null)
-  useEffect(() => { void api<typeof m>('/api/memory', { cache: 'no-store' }).then(setM).catch(() => setM(null)) }, [])
-  return (
-    <div className="studio-settings-grid">
-      <section className="studio-card">
-        <div className="stack-header"><div><p className="eyebrow">Memory</p><h3>Self-hosted Mem0 and Letta</h3></div><Wrench size={16} /></div>
-        {!m ? <p className="studio-muted">Reading memory status…</p> : <div className="studio-list">
-          <div className="studio-list-row"><div className="studio-row-main"><strong>Mem0 (long-term)</strong><small>{m.mem0.up ? 'running' : m.mem0.configured ? 'configured, not answering' : 'not configured'}</small></div><span className={m.mem0.up ? 'studio-ok' : 'studio-warn'}>{m.mem0.up ? 'up' : 'down'}</span></div>
-          <div className="studio-list-row"><div className="studio-row-main"><strong>Letta (agents’ working memory)</strong><small>{m.letta.up ? 'running' : m.letta.note || 'not answering'}</small></div><span className={m.letta.up ? 'studio-ok' : 'studio-warn'}>{m.letta.up ? 'up' : 'down'}</span></div>
-          {m.roles?.filter((r) => r.lessons).map((r) => <div key={r.key} className="studio-list-row"><div className="studio-row-main"><strong>{r.name}</strong><small>{r.lessons.slice(0, 280)}</small></div></div>)}
-        </div>}
       </section>
     </div>
   )

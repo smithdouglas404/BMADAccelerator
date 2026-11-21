@@ -651,3 +651,28 @@ model JevCall {
   @@index([feature, createdAt])
   @@index([ref])
 }
+
+// Settings > Agent memory (Doug, Nov 21): the plain-language reading of one agent's Letta and Mem0 memory,
+// written by the document model from exactly the records listed in `records` (each sentence cites them).
+model MemoryNarrative {
+  id          String   @id @default(cuid())
+  // studio:<role> or app:<useCaseId>:<key>
+  agentRef    String
+  // The filter it was written for ("" = everything this agent holds; else the use case or customer).
+  scope       String   @default("")
+  headline    String   @default("")
+  // [{ text, cites: ["B1", "F3"] }]
+  sentences   Json     @default("[]")
+  gaps        Json     @default("[]")
+  // [{ cite, kind, id, title, when }]: what the model read, so every citation opens a real record.
+  records     Json     @default("[]")
+  fingerprint String   @default("")
+  model       String   @default("")
+  auth        String   @default("")
+  dropped     Int      @default(0)
+  by          String   @default("")
+  ms          Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([agentRef, scope, createdAt])
+}

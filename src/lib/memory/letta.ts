@@ -26,6 +26,7 @@ import {
   type PortfolioRow,
   type Role,
 } from "./lettaCore";
+import type { Block as MindBlock, Passage as MindPassage } from "./inspectCore";
 
 const base = () => (process.env.LETTA_BASE_URL ?? "").replace(/\/+$/, "");
 const key = () => process.env.LETTA_API_KEY ?? "";
@@ -261,4 +262,30 @@ export async function lettaStatus(): Promise<{ up: boolean; agents: { role: stri
   const agents = [];
   for (const role of ROLES) agents.push({ role: role.key, name: role.name, id: ok ? await agentId(role) : null });
   return { up: true, agents, note: ok ? undefined : "role agents not set up yet (see server log)" };
+}
+
+/** Letta's raw answer for the memory page: an agent's blocks and archival passages, read without a model call. */
+async function mindOf(id: string): Promise<{ blocks: MindBlock[]; passages: MindPassage[] }> {
+  const blocks = rows<MindBlock>(await letta("GET", `/v1/agents/${id}/core-memory/blocks`));
+  const passages = rows<MindPassage>(await letta("GET", `/v1/agents/${id}/archival-memory?limit=50`).catch(() => []));
+  return { blocks, passages };
+}
+
+/** A Studio role's Letta mind (persona, status, top lessons, the shared portfolio), for Settings > Agent memory. */
+export async function roleMind(roleKey: string) {
+  const role = roleFor(roleKey);
+  if (!role || !lettaConfigured()) return null;
+  const a = await findAgent(role);
+  if (!a) return null;
+  return { id: a.id, name: a.name, ...(await mindOf(a.id)) };
+}
+
+/** The Letta agents the shared agent service keeps for one app agent: one per person it has helped. */
+export async function serviceMinds(useCaseId: string, key: string) {
+  if (!lettaConfigured()) return [];
+  const list = rows<Agent>(await letta("GET", `/v1/agents/?tags=${encodeURIComponent(`uc:${useCaseId}`)}&tags=${encodeURIComponent(`agent:${key}`)}&match_all_tags=true&limit=50`));
+  const prefix = `svc-${useCaseId}-${key}-`;
+  const out = [];
+  for (const a of list.filter((x) => x.name.startsWith(prefix))) out.push({ id: a.id, name: a.name, ...(await mindOf(a.id)) });
+  return out;
 }
