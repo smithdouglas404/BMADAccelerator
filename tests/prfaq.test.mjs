@@ -87,3 +87,14 @@ test("update keeps everything already there and adds new lines only from the new
   assert.match(r.markdown, /Technicians hate typing on tablets in the rain\. \[\^s2\]/);
   assert.match(r.markdown, /^# Reports before you leave \[\^s1\]/);
 });
+
+test("the explainer and the walkthrough come from the skill: every section has a question and a bar", async () => {
+  const { prfaqWalkSteps, skillSection } = await import("../src/lib/studio/prfaqDraft.ts");
+  assert.match(skillSection(skill, "What a PRFAQ is"), /as if the product is already out/);
+  const steps = prfaqWalkSteps(skill);
+  for (const f of format.filter((x) => x.key !== "other")) {
+    const s = steps.find((x) => x.key === f.key);
+    assert.ok(s && s.ask.endsWith("?") || s.ask.includes("?"), `${f.key} has a question`);
+    assert.ok(s.bar.length > 20, `${f.key} has a bar`);
+  }
+});

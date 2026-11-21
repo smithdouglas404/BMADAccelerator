@@ -27,6 +27,12 @@ export type PrfaqInfo = {
   last: { at: string; how: string; kept: number; dropped: number; missing: number; from: string[] } | null
   versions: { at: string; how: string; by: string }[]
   answers: Record<string, { text: string; who: string; at: string }>
+  explainer: string
+  walkIntro: string
+  walk: { on: boolean; step: string; status: Record<string, 'ready' | 'needs work' | 'skipped'>; rounds: Record<string, number> }
+  steps: { key: string; title: string; holds: string; ask: string; bar: string }[]
+  exchange: Record<string, { id: string; who: string; mine: boolean; text: string; at: string }[]>
+  writing: boolean
 }
 
 const NODE = 'prfaq'
@@ -36,24 +42,29 @@ export function usePrfaqInfo(live: Live) {
   const [info, setInfo] = useState<PrfaqInfo | null>(null)
   const load = useCallback(async () => { try { setInfo(await api<PrfaqInfo>(`/api/use-cases/${live.id}/prfaq`, { cache: 'no-store' })) } catch { /* shown as not loaded */ } }, [live.id])
   useEffect(() => { void load() }, [load, live.prfaqUpdatedAt, live.documents.length])
+  // While finished walkthrough sections are being written into the PRFAQ, look again every few seconds.
+  useEffect(() => {
+    if (!info?.writing) return
+    const t = window.setInterval(() => void load(), 3000)
+    return () => window.clearInterval(t)
+  }, [info?.writing, load])
   return { info, reload: load }
 }
 
-const byOf = (me: Me) => (me.name ? `${me.name} (${me.role})` : me.role)
+export const byOf = (me: Me) => (me.name ? `${me.name} (${me.role})` : me.role)
 
 /** The talk-it-through panel: voice or typing, documents, and Generate PRFAQ (Reformat or Generate new). */
-export function PrfaqTalk({ live, me, info, reload, setToast }: { live: Live; me: Me; info: PrfaqInfo | null; reload: () => Promise<void>; setToast: (v: string) => void }) {
+export function PrfaqTalk({ live, me, info, reload, setToast, onWalk }: { live: Live; me: Me; info: PrfaqInfo | null; reload: () => Promise<void>; setToast: (v: string) => void; onWalk?: () => void }) {
   const [text, setText] = useState('')
   const [raw, setRaw] = useState('')
   const [loaded, setLoaded] = useState(false)
-  const [busy, setBusy] = useState<'' | 'generate' | 'update' | 'reformat' | 'restore' | 'upload'>('')
+  const [busy, setBusy] = useState<'' | 'generate' | 'update' | 'reformat' | 'restore'>('')
   const [choosing, setChoosing] = useState(false)
   const [open, setOpen] = useState(!live.prfaq.trim())
-  const [picked, setPicked] = useState<string[]>([])
   const save = useRef<number | null>(null)
   useEffect(() => {
     if (!info || loaded) return
-    setText(info.draft.transcript); setRaw(info.draft.raw); setPicked(info.docs); setLoaded(true)
+    setText(info.draft.transcript); setRaw(info.draft.raw); setLoaded(true)
     if (info.draft.transcript.trim()) setOpen(true)
   }, [info, loaded])
   // The talk is kept as it grows, so nothing said is lost if the page closes before Generate.
@@ -64,30 +75,6 @@ export function PrfaqTalk({ live, me, info, reload, setToast }: { live: Live; me
   const voice = useVoice(live.connections.voice, (said, spoken) => {
     setText((t) => { const next = `${t}${t.trim() ? '\n\n' : ''}${said}`; setRaw((r) => { const nr = `${r}${r ? '\n\n' : ''}${spoken ?? said}`; keep(next, nr); return nr }); return next })
   }, setToast, { clean: true })
-  const pick = (id: string, on: boolean) => {
-    const next = on ? [...new Set([...picked, id])] : picked.filter((x) => x !== id)
-    setPicked(next)
-    void api(`/api/use-cases/${live.id}/prfaq`, { method: 'PUT', json: { docs: next } }).then(() => reload()).catch(() => undefined)
-  }
-  const upload = async (e: ChangeEvent<HTMLInputElement>) => {
-    const files = [...(e.target.files ?? [])]
-    e.target.value = ''
-    if (!files.length) return
-    setBusy('upload')
-    try {
-      const form = new FormData()
-      files.forEach((f) => form.append('files', f))
-      const res = await fetch(`/api/use-cases/${live.id}/documents`, { method: 'POST', body: form })
-      const made = (await res.json().catch(() => [])) as { id: string }[]
-      if (!res.ok) throw new Error('The upload failed')
-      const next = [...new Set([...picked, ...made.map((d) => d.id)])]
-      setPicked(next)
-      await api(`/api/use-cases/${live.id}/prfaq`, { method: 'PUT', json: { docs: next } })
-      await reload()
-      setToast(`${files.length === 1 ? files[0].name : `${files.length} documents`} added. ${files.length === 1 ? 'It is' : 'They are'} read as text and used the next time you generate.`)
-    } catch (err) { setToast(err instanceof Error ? err.message : String(err)) }
-    finally { setBusy('') }
-  }
   const run = async (action: 'generate' | 'update' | 'reformat' | 'restore') => {
     if (voice.listening) { setToast('Stop the mic first, so everything you said is in.'); return }
     setBusy(action); setChoosing(false)
@@ -100,7 +87,7 @@ export function PrfaqTalk({ live, me, info, reload, setToast }: { live: Live; me
     finally { setBusy('') }
   }
   const has = !!live.prfaq.trim()
-  const docs = live.documents.filter((d) => d.status !== 'declined')
+  const picked = info?.docs ?? []
   const words = text.trim() ? text.trim().split(/\s+/).length : 0
   // What has come in since the PRFAQ was last written (this talk, new documents, new things said).
   const fresh = info?.fresh
@@ -111,6 +98,7 @@ export function PrfaqTalk({ live, me, info, reload, setToast }: { live: Live; me
     <div className="studio-prfaq-talk-head">
       <span className="capture-orb"><Mic size={15} /></span>
       <div><strong>Talk it through, then generate</strong><small>Say everything about the product for as long as you like, add documents, then press Generate PRFAQ. It only writes what you said; anything missing is marked.</small></div>
+      {onWalk && <button type="button" className="text-button" onClick={onWalk}>Walk me through it instead <ArrowRight size={13} /></button>}
       {has && <button type="button" className="text-button" onClick={() => setOpen(!open)}>{open ? 'Hide' : 'Open'} <ArrowRight size={13} /></button>}
     </div>
     {has && !open && freshParts.length > 0 && <div className="studio-prfaq-fresh"><Sparkles size={14} /><span>New since the PRFAQ was written: {freshParts.join(', ')}.</span><button type="button" className="button button-primary button-small" disabled={!!busy} onClick={() => void run('update')}>{busy === 'update' ? 'Adding what’s new…' : 'Update the PRFAQ with it'}</button></div>}
@@ -120,12 +108,7 @@ export function PrfaqTalk({ live, me, info, reload, setToast }: { live: Live; me
         <span className="studio-muted">{voice.working ? 'Turning what you said into clean text…' : voice.listening ? 'Listening. Press Stop when you are done.' : words ? `${words} words so far${info?.draft.updatedAt ? ` · kept ${ago(info.draft.updatedAt)}` : ''}` : 'Or type below.'}</span>
       </div>
       <textarea className="spec-editor studio-prfaq-talk-text" rows={6} value={text} onChange={(e) => { setText(e.target.value); keep(e.target.value, raw) }} placeholder="Who is it for, what problem do they have today, what changes for them, why you, how they start…" aria-label="What you said" />
-      <div className="studio-prfaq-docs">
-        <span className="eyebrow">Documents for the PRFAQ</span>
-        {docs.length === 0 && <small className="studio-muted">None yet. Word, PowerPoint, PDF and others are read as text.</small>}
-        {docs.map((d) => <label key={d.id} className="studio-prfaq-doc"><input type="checkbox" checked={picked.includes(d.id)} onChange={(e) => pick(d.id, e.target.checked)} /><FileText size={13} /><span>{d.fileName}</span></label>)}
-        <label className="button button-quiet button-small file-button"><Upload size={13} /> {busy === 'upload' ? 'Adding…' : 'Add a document'}<input type="file" multiple accept=".docx,.doc,.pptx,.ppt,.pdf,.txt,.md,.xlsx,.csv" onChange={upload} disabled={!!busy} /></label>
-      </div>
+      <PrfaqDocs live={live} info={info} reload={reload} setToast={setToast} />
       {choosing ? <div className="studio-prfaq-choice" role="group" aria-label="Generate again">
         <p><strong>You already have a PRFAQ. What should Generate do?</strong></p>
         <button type="button" className="studio-prfaq-option is-suggested" disabled={!freshParts.length} onClick={() => void run('update')}><Sparkles size={15} /><span><strong>Update it with what&apos;s new <em>suggested</em></strong><small>{freshParts.length ? `Keeps everything in your PRFAQ and adds ${freshParts.join(', ')}, each new line linked to where it came from. Gaps the new material answers are filled.` : 'Nothing new since it was last written. Talk, type or add a document first.'}</small></span></button>
@@ -147,14 +130,22 @@ export function PrfaqTalk({ live, me, info, reload, setToast }: { live: Live; me
 export function PrfaqDoc({ live, info, ask }: { live: Live; info: PrfaqInfo | null; ask: (gap?: string) => void }) {
   const order = useMemo(() => prfaqMarkers(live.prfaq), [live.prfaq])
   const [shown, setShown] = useState('')
+  // The source opens beside its marker, kept inside the window (fixed, so the card never clips it).
+  const [at, setAt] = useState<{ left: number; top: number }>({ left: 0, top: 0 })
+  useEffect(() => {
+    if (!shown) return
+    const close = () => setShown('')
+    window.addEventListener('scroll', close, { passive: true, capture: true })
+    return () => window.removeEventListener('scroll', close, { capture: true })
+  }, [shown])
   const cite = (key: string) => {
     const n = order.indexOf(key) + 1
     const s = key.startsWith('m:') ? null : info?.sources[key]
     const a = key.startsWith('m:') ? info?.answers[key.slice(2)] : null
     const label = s ? `From ${s.name}` : a ? `Answer from ${a.who}` : 'Source'
     return <span className="studio-cite-wrap">
-      <button type="button" className={`studio-cite${shown === key ? ' is-open' : ''}`} onClick={() => setShown(shown === key ? '' : key)} title={`${label}: where this line came from`} aria-label={`${label}, source ${n}`}>{n}</button>
-      {shown === key && <span className="studio-cite-pop" role="dialog">
+      <button type="button" className={`studio-cite${shown === key ? ' is-open' : ''}`} onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setAt({ left: Math.max(8, Math.min(r.left, window.innerWidth - 376)), top: r.bottom + 6 }); setShown(shown === key ? '' : key) }} title={`${label}: where this line came from`} aria-label={`${label}, source ${n}`}>{n}</button>
+      {shown === key && <span className="studio-cite-pop" role="dialog" style={{ left: at.left, top: at.top }}>
         <span className="eyebrow">{label}</span>
         <span className="studio-cite-quote">“{s ? s.quote : a ? a.text : 'This line’s source is no longer on record.'}”</span>
         {a && <small className="studio-muted">{ago(a.at)}</small>}
@@ -184,4 +175,34 @@ export function useAskPrfaq(live: Live, me: Me, setToast: (v: string) => void) {
       setToast(`${ASSISTANT_NAME} asked the ${r.specialist.toLowerCase()} to look. The questions appear under the PRFAQ and in the conversation.`)
     } catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
   }, [live.id, me, setToast])
+}
+
+/** The documents that feed the PRFAQ: tick any the product already has, or add new ones (read as text). */
+export function PrfaqDocs({ live, info, reload, setToast }: { live: Live; info: PrfaqInfo | null; reload: () => Promise<void>; setToast: (v: string) => void }) {
+  const [adding, setAdding] = useState(false)
+  const picked = info?.docs ?? []
+  const docs = live.documents.filter((d) => d.status !== 'declined')
+  const save = async (next: string[]) => { await api(`/api/use-cases/${live.id}/prfaq`, { method: 'PUT', json: { docs: next } }); await reload() }
+  const upload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const files = [...(e.target.files ?? [])]
+    e.target.value = ''
+    if (!files.length) return
+    setAdding(true)
+    try {
+      const form = new FormData()
+      files.forEach((f) => form.append('files', f))
+      const res = await fetch(`/api/use-cases/${live.id}/documents`, { method: 'POST', body: form })
+      const made = (await res.json().catch(() => [])) as { id: string }[]
+      if (!res.ok) throw new Error('The upload failed')
+      await save([...new Set([...picked, ...made.map((d) => d.id)])])
+      setToast(`${files.length === 1 ? files[0].name : `${files.length} documents`} added. ${files.length === 1 ? 'It is' : 'They are'} read as text and used the next time the PRFAQ is written.`)
+    } catch (err) { setToast(err instanceof Error ? err.message : String(err)) }
+    finally { setAdding(false) }
+  }
+  return <div className="studio-prfaq-docs">
+    <span className="eyebrow">Documents for the PRFAQ</span>
+    {docs.length === 0 && <small className="studio-muted">None yet. Word, PowerPoint, PDF and others are read as text.</small>}
+    {docs.map((d) => <label key={d.id} className="studio-prfaq-doc"><input type="checkbox" checked={picked.includes(d.id)} onChange={(e) => void save(e.target.checked ? [...new Set([...picked, d.id])] : picked.filter((x) => x !== d.id)).catch(() => undefined)} /><FileText size={13} /><span>{d.fileName}</span></label>)}
+    <label className="button button-quiet button-small file-button"><Upload size={13} /> {adding ? 'Adding…' : 'Add a document'}<input type="file" multiple accept=".docx,.doc,.pptx,.ppt,.pdf,.txt,.md,.xlsx,.csv" onChange={upload} disabled={adding} /></label>
+  </div>
 }

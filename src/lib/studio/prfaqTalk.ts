@@ -26,11 +26,11 @@ const MAX_TOTAL_CHARS = 160_000;
 const MAX_VERSIONS = 12;
 
 export type PrfaqVersion = { at: string; how: string; by: string; markdown: string; sources: Record<string, Source> };
-export type PrfaqMeta = { sources: Record<string, Source>; docs: string[]; usedDocs?: string[]; versions: PrfaqVersion[]; last?: { at: string; how: string; kept: number; dropped: number; missing: number; from: string[] } };
+export type PrfaqMeta = { sources: Record<string, Source>; docs: string[]; usedDocs?: string[]; walk?: unknown; versions: PrfaqVersion[]; last?: { at: string; how: string; kept: number; dropped: number; missing: number; from: string[] } };
 
 export function prfaqMeta(json: unknown): PrfaqMeta {
   const o = (json && typeof json === "object" ? json : {}) as Partial<PrfaqMeta>;
-  return { sources: o.sources ?? {}, docs: Array.isArray(o.docs) ? o.docs : [], usedDocs: Array.isArray(o.usedDocs) ? o.usedDocs : [], versions: Array.isArray(o.versions) ? o.versions : [], ...(o.last ? { last: o.last } : {}) };
+  return { sources: o.sources ?? {}, docs: Array.isArray(o.docs) ? o.docs : [], usedDocs: Array.isArray(o.usedDocs) ? o.usedDocs : [], versions: Array.isArray(o.versions) ? o.versions : [], ...(o.last ? { last: o.last } : {}), ...(o.walk ? { walk: o.walk } : {}) };
 }
 
 export async function prfaqSkill() {
@@ -60,7 +60,9 @@ export async function prfaqSourceTexts(useCaseId: string, docs: string[], curren
   for (const m of said) {
     // The talks are also in the conversation; read them once, as talks.
     if (talkWords.has(m.content.trim()) || m.content.trim().split(/\s+/).length < 4) continue;
-    out.push({ id: `msg:${m.id}`, name: `${m.author || m.authorRole || "You"} in the conversation, ${day(m.createdAt)}`, text: m.content.slice(0, MAX_SOURCE_CHARS) });
+    // A walkthrough answer says which section it answers, so the writer puts it there.
+    const section = m.ref.startsWith("walk:") ? m.ref.slice(5) : "";
+    out.push({ id: `msg:${m.id}`, name: section ? `${m.author || "You"} answering the "${section}" section in the walkthrough` : `${m.author || m.authorRole || "You"} in the conversation, ${day(m.createdAt)}`, text: m.content.slice(0, MAX_SOURCE_CHARS) });
   }
   for (const d of documents) {
     const text = d.textPath ? await fs.readFile(d.textPath, "utf8").catch(() => "") : "";
@@ -193,6 +195,7 @@ export async function writePrfaq(useCaseId: string, o: { mode: "generate" | "ref
   const versions = uc.prfaq.trim() ? [{ at: new Date().toISOString(), how: `Before: ${how.toLowerCase()}`, by: o.by, markdown: uc.prfaq, sources: meta.sources }, ...meta.versions].slice(0, MAX_VERSIONS) : meta.versions;
   const used = [...new Set(Object.values(r.sources).map((s) => s.from))];
   const next: PrfaqMeta = {
+    ...(meta.walk ? { walk: meta.walk } : {}),
     sources: o.mode === "reformat" ? meta.sources : o.mode === "update" ? { ...meta.sources, ...r.sources } : r.sources,
     docs,
     usedDocs: o.mode === "reformat" ? meta.usedDocs : [...new Set([...(o.mode === "update" ? meta.usedDocs ?? [] : []), ...docs])],

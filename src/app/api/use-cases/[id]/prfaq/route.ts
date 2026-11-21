@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { prfaqMarkers } from "@/lib/studio/prfaqDraft";
-import { PrfaqError, askAboutPrfaq, prfaqFresh, prfaqMeta, restorePrfaq, saveTalkDraft, talkDraft, writePrfaq } from "@/lib/studio/prfaqTalk";
+import { prfaqMarkers, prfaqWalkIntro, skillSection } from "@/lib/studio/prfaqDraft";
+import { walkAnswer, walkExchange, walkMove, walkOf, walkSteps, walkWriting } from "@/lib/studio/prfaqWalk";
+import { PrfaqError, askAboutPrfaq, prfaqFresh, prfaqMeta, prfaqSkill, restorePrfaq, saveTalkDraft, talkDraft, writePrfaq } from "@/lib/studio/prfaqTalk";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -19,6 +20,7 @@ export async function GET(_req: Request, { params }: Ctx) {
   const msgIds = prfaqMarkers(uc.prfaq).filter((k) => k.startsWith("m:")).map((k) => k.slice(2));
   const answers = msgIds.length ? await prisma.message.findMany({ where: { useCaseId: id, id: { in: msgIds } }, select: { id: true, content: true, author: true, authorRole: true, createdAt: true } }) : [];
   const talks = await prisma.recording.count({ where: { useCaseId: id, purpose: "prfaq", status: "submitted" } });
+  const skill = await prfaqSkill();
   return NextResponse.json({
     draft: { transcript: draft.transcript, raw: draft.raw, updatedAt: draft.updatedAt },
     talks,
@@ -27,6 +29,13 @@ export async function GET(_req: Request, { params }: Ctx) {
     sources: meta.sources,
     last: meta.last ?? null,
     versions: meta.versions.map((v) => ({ at: v.at, how: v.how, by: v.by })),
+    // What a PRFAQ is, and the walkthrough's steps, questions and bars: all from the studio-prfaq skill.
+    explainer: skillSection(skill, "What a PRFAQ is"),
+    walkIntro: prfaqWalkIntro(skill),
+    walk: walkOf(uc.prfaqSources),
+    steps: (await walkSteps()).steps,
+    exchange: await walkExchange(id),
+    writing: walkWriting(id),
     answers: Object.fromEntries(answers.map((a) => [a.id, { text: a.content, who: a.author || a.authorRole || "A person", at: a.createdAt }])),
   });
 }
@@ -48,7 +57,9 @@ export async function PUT(req: Request, { params }: Ctx) {
 }
 
 const Post = z.object({
-  action: z.enum(["generate", "update", "reformat", "restore", "ask"]),
+  action: z.enum(["generate", "update", "reformat", "restore", "ask", "walk-start", "walk-go", "walk-skip", "walk-stop", "walk-answer"]),
+  step: z.string().max(40).optional(),
+  text: z.string().max(20000).optional(),
   by: z.string().max(120).default("The owner"),
   transcript: z.string().max(200000).optional(),
   raw: z.string().max(400000).optional(),
@@ -63,9 +74,11 @@ export async function POST(req: Request, { params }: Ctx) {
   if (!(await prisma.useCase.findUnique({ where: { id }, select: { id: true } }))) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const p = parsed.data;
   try {
+    if (p.action === "walk-answer") return NextResponse.json(await walkAnswer(id, { key: p.step ?? "", text: p.text ?? "", raw: p.raw, by: p.by }));
+    if (p.action.startsWith("walk-")) return NextResponse.json(await walkMove(id, { action: p.action.slice(5) as "start" | "go" | "skip" | "stop", step: p.step, by: p.by }));
     if (p.action === "restore") return NextResponse.json(await restorePrfaq(id, p.by));
     if (p.action === "ask") return NextResponse.json(await askAboutPrfaq(id, { by: p.by, gap: p.gap }));
-    return NextResponse.json(await writePrfaq(id, { mode: p.action, by: p.by, transcript: p.transcript, raw: p.raw, docs: p.docs }));
+    return NextResponse.json(await writePrfaq(id, { mode: p.action as "generate" | "update" | "reformat", by: p.by, transcript: p.transcript, raw: p.raw, docs: p.docs }));
   } catch (e) {
     if (e instanceof PrfaqError) return NextResponse.json({ error: e.message }, { status: 422 });
     throw e;

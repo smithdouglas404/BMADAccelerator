@@ -172,3 +172,28 @@ export function prfaqWithFootnotes(markdown: string, sources: Record<string, Sou
     .filter(Boolean);
   return notes.length ? `${markdown.trimEnd()}\n\n---\n\n${notes.join("\n")}\n` : markdown;
 }
+
+/** One "## <title>" section of a skill, without its heading (up to the next "## "). */
+export function skillSection(skillMd: string, title: string) {
+  const lines = skillMd.split("\n");
+  const at = lines.findIndex((l) => l.trim() === `## ${title}`);
+  if (at < 0) return "";
+  const end = lines.findIndex((l, i) => i > at && /^## /.test(l));
+  return lines.slice(at + 1, end < 0 ? undefined : end).join("\n").trim();
+}
+
+export type WalkStep = { key: string; ask: string; bar: string };
+
+/** The walkthrough's question and "good enough" bar per section, from the skill's "## Walkthrough" table. */
+export function prfaqWalkSteps(skillMd: string): WalkStep[] {
+  return skillSection(skillMd, "Walkthrough")
+    .split("\n")
+    .filter((l) => /^\s*\|/.test(l) && !/^[\s|:-]+$/.test(l))
+    .slice(1)
+    .map((l) => l.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim()))
+    .filter((c) => c.length >= 3 && /^[a-z0-9-]+$/.test(c[0]))
+    .map(([key, ask, bar]) => ({ key, ask, bar }));
+}
+
+/** The walkthrough's text before its table: how the walk goes (the materials step is in it). */
+export const prfaqWalkIntro = (skillMd: string) => skillSection(skillMd, "Walkthrough").split("\n|")[0].trim();
