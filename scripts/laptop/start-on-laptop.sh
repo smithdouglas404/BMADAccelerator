@@ -150,8 +150,13 @@ done
 perl -0pi -e 's{RUN uv python install[^\n]*\\\n[^\n]*\n}{RUN apt-get update && apt-get install -y --no-install-recommends python3-venv && rm -rf /var/lib/apt/lists/* \\\n    && python3 -m venv /opt/uv-tools/markitdown && /opt/uv-tools/markitdown/bin/pip install --no-cache-dir "markitdown[pptx,docx,xlsx,xls,pdf]" \\\n    && ln -sf /opt/uv-tools/markitdown/bin/markitdown /usr/local/bin/markitdown && mkdir -p /opt/uv-python && chmod -R a+rX /opt/uv-tools /opt/uv-python\n}' "$APP/Dockerfile"
 grep -q "uv python install" "$APP/Dockerfile" && fail "I couldn't adjust the build for this network. Details are in $LOG."
 # Letta is used as published, so it gets the certificates at run time.
+# Generated apps (previews) get a stripped-down environment that keeps only npm_config_* settings, so npm gets
+# the certificates through npm_config_cafile; without it every preview's npm install is refused on this network.
 cat > "$APP/docker-compose.override.yml" <<'YML'
 services:
+  app:
+    environment:
+      npm_config_cafile: /etc/ssl/corp-ca.pem
   letta:
     volumes:
       - ./corp-ca.pem:/etc/ssl/corp-ca.pem:ro
@@ -297,6 +302,10 @@ fi
 # ---------- 6. start ----------
 say "Step 6 of 6: starting the Studio"
 podman compose up -d >>"$LOG" 2>&1 || fail "The Studio didn't start. Details are in $LOG."
+# npm's download cache and the agents' session folder are volumes Podman creates as root; the Studio runs as
+# "node", so generated apps couldn't install. Hand them to node (safe to repeat).
+podman compose exec -T -u root app sh -c 'chown -R node:node /home/node/.npm /home/node/.claude /data/workspaces' >>"$LOG" 2>&1
+podman compose restart app >>"$LOG" 2>&1   # restart so the generated apps start again with the fixes
 for i in $(seq 1 90); do curl -fs -o /dev/null http://localhost:3000 2>/dev/null && break; sleep 2; done
 curl -fs -o /dev/null http://localhost:3000 2>/dev/null || fail "The Studio is starting slowly. Wait a minute and open http://localhost:3000. Details are in $LOG."
 [ "$MODE" = "update" ] && [ -n "${NEW_SHA:-}" ] && printf '%s\n' "${NEW_SHA#refs/heads/}" > "$HOME_DIR/.version"
