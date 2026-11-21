@@ -65,8 +65,8 @@ const day = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 16).re
 
 async function waiting(useCaseIds: string[]) {
   const [open, review] = await Promise.all([
-    prisma.decision.findMany({ where: { useCaseId: { in: useCaseIds }, status: "open" }, orderBy: { createdAt: "asc" } }),
-    prisma.move.findMany({ where: { useCaseId: { in: useCaseIds }, status: "review" }, orderBy: { position: "asc" } }),
+    prisma.decision.findMany({ where: { useCaseId: { in: useCaseIds }, status: "open" }, orderBy: { createdAt: "desc" } }),
+    prisma.move.findMany({ where: { useCaseId: { in: useCaseIds }, status: "review" }, orderBy: { position: "desc" } }),
   ]);
   return { open, review };
 }
@@ -224,6 +224,24 @@ export async function socraReply(useCaseId: string, since: Date, nodes: string[]
   }
 }
 
+/** An item's waiting questions and decisions, from its own record, ready to put to the person. */
+async function cardAsks(useCaseId: string, node: string) {
+  const t = await itemTrace(useCaseId, node);
+  const open_question = t.question ? { question_id: t.question.messageId, from: t.question.who, ...questionOf(brand(t.question.text)) } : null;
+  const decisions_for_the_person = t.decisions.map((d) => ({ decision_id: d.id, from: d.who, decide: d.text, options: d.options.map((o) => o.label) }));
+  const n = (open_question ? 1 : 0) + decisions_for_the_person.length;
+  return {
+    open_question,
+    decisions_for_the_person,
+    working_on_it: t.working,
+    tell_the_person: n
+      ? `${ASSISTANT_NAME} has ${n === 1 ? "something to ask" : `${n} things to ask`} about this. Put ${n === 1 ? "it" : "them"} to the person now, word for word with the numbered options. Answer a question with answer (item_id, question_id); a decision with decide (decision_id, approve, the chosen option as comment).`
+      : t.working
+        ? `${ASSISTANT_NAME} is still working on it. Check item_trace or whats_waiting in a minute for its questions.`
+        : `Nothing is waiting on the person for this.`,
+  };
+}
+
 /** Socra's latest question in each conversation that nobody has answered yet. */
 async function socraAsks(ids: string[], names: Map<string, string>) {
   const out: { use_case_id: string; use_case?: string; question: string; options: string[]; asked: string }[] = [];
@@ -309,7 +327,7 @@ async function run(tool: ToolName, input: Record<string, unknown>, uc: Awaited<R
         business_area: uc!.businessArea,
         what_it_is: uc!.validatedUseCase || uc!.statement || uc!.summary || uc!.description.slice(0, 600),
         decided: decisions.filter((d) => d.status === "approved").slice(-10).map((d) => brand(d.text)),
-        waiting_on_people: decisions.filter((d) => d.status === "open").map((d) => ({ decision_id: d.id, question: brand(d.text), options: d.options })),
+        waiting_on_people: decisions.filter((d) => d.status === "open").reverse().map((d) => ({ decision_id: d.id, question: brand(d.text), options: d.options })),
         held_thoughts: backlog.filter((b) => b.state === "held").slice(-8).map((b) => ({ id: b.id, title: b.title })),
         board,
         build: { versions_built: uc!.generateCount, last_built: day(uc!.lastGeneratedAt), running: uc!.generateBusy, status: uc!.generateStatus },
@@ -342,7 +360,7 @@ async function run(tool: ToolName, input: Record<string, unknown>, uc: Awaited<R
         return t;
       }
       if (part === "decisions") {
-        const rows = await prisma.decision.findMany({ where: { useCaseId: id }, orderBy: { createdAt: "asc" } });
+        const rows = await prisma.decision.findMany({ where: { useCaseId: id }, orderBy: { createdAt: "desc" } });
         return rows.map((d) => ({ id: d.id, text: brand(d.text), status: d.status, capability: d.capability, from: brand(d.agent), options: d.options, answer: d.answer, in_next_build: d.includeInBuild && !d.builtInVersion, built_in_version: d.builtInVersion || undefined, since: day(d.createdAt) }));
       }
       if (part === "members") return (await prisma.member.findMany({ where: { useCaseId: id }, orderBy: { createdAt: "asc" } })).map((m) => ({ id: m.id, name: m.name, role: m.role }));
@@ -367,10 +385,10 @@ async function run(tool: ToolName, input: Record<string, unknown>, uc: Awaited<R
         return rows.map((r) => ({ ref: r.ref, key: r.key, title: r.title, status: r.status, basis: r.basis, content: brand(r.content) }));
       }
       if (part === "backlog") {
-        const rows = await prisma.backlogItem.findMany({ where: { useCaseId: id }, orderBy: { createdAt: "asc" } });
+        const rows = await prisma.backlogItem.findMany({ where: { useCaseId: id }, orderBy: { createdAt: "desc" } });
         return rows.map((b) => ({ id: b.id, title: b.title, note: b.note, state: b.state, group: b.group, withdrawn: b.kind === "distraction", in_next_build: b.includeInBuild && !b.builtInVersion }));
       }
-      const rows = await prisma.move.findMany({ where: { useCaseId: id }, orderBy: { position: "asc" } });
+      const rows = await prisma.move.findMany({ where: { useCaseId: id }, orderBy: { position: "desc" } });
       return rows.map((m) => ({ id: m.id, title: m.title, column: BOARD_LABEL[m.status as BoardStatus] ?? m.status, moved_by: brand(m.movedBy), why: m.moveReason }));
     }
     case "agent_status": {
@@ -488,9 +506,9 @@ async function run(tool: ToolName, input: Record<string, unknown>, uc: Awaited<R
       const id = uc!.id;
       const [members, decisions, backlog, moves, documents, versions] = await Promise.all([
         prisma.member.findMany({ where: { useCaseId: id }, orderBy: { createdAt: "asc" } }),
-        prisma.decision.findMany({ where: { useCaseId: id }, orderBy: { createdAt: "asc" } }),
-        prisma.backlogItem.findMany({ where: { useCaseId: id, kind: { not: "distraction" } }, orderBy: { createdAt: "asc" } }),
-        prisma.move.findMany({ where: { useCaseId: id }, orderBy: { position: "asc" } }),
+        prisma.decision.findMany({ where: { useCaseId: id }, orderBy: { createdAt: "desc" } }),
+        prisma.backlogItem.findMany({ where: { useCaseId: id, kind: { not: "distraction" } }, orderBy: { createdAt: "desc" } }),
+        prisma.move.findMany({ where: { useCaseId: id }, orderBy: { position: "desc" } }),
         prisma.document.findMany({ where: { useCaseId: id }, orderBy: { createdAt: "desc" }, take: 50 }),
         prisma.specRevision.count({ where: { useCaseId: id } }),
       ]);
@@ -538,6 +556,8 @@ async function run(tool: ToolName, input: Record<string, unknown>, uc: Awaited<R
         why: m.moveReason,
         history: (r.history as { summary: string; by: string; createdAt: string }[]).map((h) => ({ what: brand(h.summary), by: brand(h.by), when: day(new Date(h.createdAt)) })),
         files: r.files,
+        // The card's own questions travel with it (Doug, Nov 21): whoever reads the card can put them to the person.
+        ...(await cardAsks(uc!.id, `move:${m.id}`)),
       };
     }
     case "update_use_case": {

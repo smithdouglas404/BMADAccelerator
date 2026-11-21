@@ -179,7 +179,7 @@ export function DecisionRegister({ live, act }: { live: Live; act: Act }) {
   const [answer, setAnswer] = useState<Record<string, string>>({})
   const [impactOf, setImpactOf] = useState('')
   const patch = (id: string, body: Record<string, unknown>, ok: string) => void act(() => api(`/api/use-cases/${live.id}/decisions/${id}`, { method: 'PATCH', json: body }), ok)
-  const list = [...live.decisions].sort((a, b) => (a.status === 'approved' ? 1 : 0) - (b.status === 'approved' ? 1 : 0))
+  const list = [...live.decisions].sort((a, b) => (a.status === 'approved' ? 1 : 0) - (b.status === 'approved' ? 1 : 0) || b.createdAt.localeCompare(a.createdAt))
   return (
     <div className="studio-list studio-register">
       {list.length === 0 && <p className="studio-muted">No decisions yet.</p>}

@@ -24,7 +24,10 @@ export function questionOf(text: string): { question: string; options: string[] 
   const lines = text.split(/\n/).map((l) => l.trim()).filter(Boolean);
   const options = numberedOptions(text).map((o) => `${o.n}. ${o.label}`);
   const asked = [...lines].reverse().find((l) => /\?\s*(\*\*)?$/.test(l) && !/^\d{1,2}[.)]/.test(l));
-  const question = (asked ?? lines.find((l) => !/^\d{1,2}[.)]/.test(l)) ?? text).replace(/[*_`]/g, "").slice(0, 400);
+  // No "?": the line that leads into the options ("…the first thing to settle is how far it goes:"), not the opening recap.
+  const firstOption = lines.findIndex((l) => /^(\*\*)?\d{1,2}[.)]/.test(l));
+  const leadIn = firstOption > 0 ? lines[firstOption - 1] : undefined;
+  const question = (asked ?? leadIn ?? lines.find((l) => !/^\d{1,2}[.)]/.test(l)) ?? text).replace(/[*_`]/g, "").slice(0, 400);
   return { question, options };
 }
 

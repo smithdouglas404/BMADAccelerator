@@ -220,7 +220,7 @@ export function optionsFrom(messages: StudioMessage[]) {
 
 /** Open checkpoints: what only the people on the product can decide, with Approve, Reject and a comment. */
 export function Checkpoints({ live, me, act }: { live: Live; me: Me; act: Act }) {
-  const open = live.decisions.filter((d) => d.status === 'open')
+  const open = live.decisions.filter((d) => d.status === 'open').reverse() // newest first (Doug, Nov 21)
   const [notes, setNotes] = useState<Record<string, string>>({})
   if (!open.length) return null
   const by = me.name ? `${me.name} (${me.role})` : `The ${me.role.toLowerCase()}`

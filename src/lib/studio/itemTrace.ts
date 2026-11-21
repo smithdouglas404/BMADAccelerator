@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { brand } from "@/lib/brand";
 import { numberedOptions, suggestedOption } from "./core";
+import { asksSomething } from "@/lib/notifyFormat";
 import { BOARD_LABEL, type BoardStatus } from "./board";
 
 // One item's Traceability (Doug, Nov 20): everything that really happened to a backlog item and the Board
@@ -69,7 +70,7 @@ export async function itemTrace(useCaseId: string, node: string): Promise<ItemTr
     shown.add(m.id);
     const who = m.role === "user" ? (m.author ? `${m.author}${m.authorRole ? ` (${m.authorRole})` : ""}` : m.authorRole || "A person") : brand(m.agent);
     const kind: TraceKind =
-      m.role === "user" ? (m.about.length && !originMsgs.includes(m.id) ? "answer" : "said") : m.role === "agent" ? "specialist" : m.role === "signal" ? "signal" : /\?/.test(m.content) ? "asked" : "signal";
+      m.role === "user" ? (m.about.length && !originMsgs.includes(m.id) ? "answer" : "said") : m.role === "agent" ? "specialist" : m.role === "signal" ? "signal" : asksSomething(m.content) ? "asked" : "signal";
     entries.push({ id: `msg:${m.id}`, at: m.createdAt.toISOString(), kind, who, text: m.content });
   }
   for (const c of own) {
@@ -85,7 +86,7 @@ export async function itemTrace(useCaseId: string, node: string): Promise<ItemTr
       at: t.startedAt.toISOString(),
       kind: "turn",
       who: "Socra",
-      text: t.status === "running" ? "Working on it" : t.status === "failed" ? "Its turn failed" : "Took a turn on it",
+      text: t.status === "running" ? (pending ? "Working on it" : "Its turn was cut off before it finished") : t.status === "failed" ? "Its turn failed" : "Took a turn on it",
       detail: { loaded: t.loaded, skills: t.skills, agents: t.agents.map(specialistName), tools: t.tools, status: t.status, error: t.error },
     });
   entries.sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
@@ -94,30 +95,35 @@ export async function itemTrace(useCaseId: string, node: string): Promise<ItemTr
   const lastAnswer = [...messages].reverse().find((m) => m.role === "user" && !originMsgs.includes(m.id));
   const lastAnswerRecord = [...own].reverse().find((c) => c.kind === "answered");
   const answeredAt = Math.max(lastAnswer?.createdAt.getTime() ?? 0, lastAnswerRecord?.createdAt.getTime() ?? 0);
-  const q = [...messages].reverse().find((m) => (m.role === "muse" || m.role === "agent") && /\?/.test(m.content) && m.createdAt.getTime() > answeredAt);
+  const q = [...messages].reverse().find((m) => (m.role === "muse" || m.role === "agent") && asksSomething(m.content) && m.createdAt.getTime() > answeredAt);
   const marked = q ? suggestedOption(q.content) : null;
   const question = q
     ? { messageId: q.id, who: brand(q.agent), text: q.content, at: q.createdAt.toISOString(), options: numberedOptions(q.content).map((o) => ({ ...o, suggested: o.n === marked })) }
     : null;
-  // Checkpoints Socra raised while working on this item (their record names the item as a cause): still open,
-  // they are this item's questions too.
+  // Checkpoints Socra raised while working on this item (their record names the item as a cause): the open
+  // ones are this item's questions too.
   const decisionIds = [...new Set(caused.filter((c) => c.node.startsWith("decision:")).map((c) => c.node.slice(9)))];
-  const open = decisionIds.length ? await prisma.decision.findMany({ where: { id: { in: decisionIds }, status: "open" }, orderBy: { createdAt: "asc" } }) : [];
-  const decisions = open.map((d) => ({
+  const raised = decisionIds.length ? await prisma.decision.findMany({ where: { id: { in: decisionIds } }, orderBy: { createdAt: "asc" } }) : [];
+  const toChoice = (d: (typeof raised)[number]) => ({
     id: d.id,
     text: brand(d.text),
     who: brand(d.agent),
     at: d.createdAt.toISOString(),
     options: (Array.isArray(d.options) ? (d.options as { label?: string; value?: string }[]) : []).filter((o) => o && o.label).map((o) => ({ label: brand(String(o.label)), value: String(o.value ?? o.label) })),
-  }));
+  });
+  const decisions = raised.filter((d) => d.status === "open").map(toChoice);
+  // Socra often asks the same thing twice: in words with numbered options, and as a checkpoint. Show it once,
+  // as the checkpoint (deciding it closes the record), when both offer the same number of choices close together.
+  const same = (d: ReturnType<typeof toChoice>) =>
+    !!question && question.options.length > 0 && question.options.length === d.options.length && Math.abs(new Date(question.at).getTime() - new Date(d.at).getTime()) < 5 * 60_000;
   return {
     nodes,
     entries,
-    question,
+    question: question && raised.map(toChoice).some(same) ? null : question,
     decisions,
     working: pending > 0,
     counts: {
-      questions: entries.filter((e) => e.kind === "asked" || (e.kind === "specialist" && /\?/.test(e.text))).length,
+      questions: entries.filter((e) => e.kind === "asked" || (e.kind === "specialist" && asksSomething(e.text))).length,
       answers: entries.filter((e) => e.kind === "answer").length,
       turns: turns.length,
       moves: own.filter((c) => c.kind === "moved" || c.kind === "moved back").length,

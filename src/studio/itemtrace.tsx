@@ -27,7 +27,17 @@ const KIND_LABEL: Record<Entry['kind'], string> = { said: 'Said', asked: 'Asked'
 const icon = (k: Entry['kind']) => (k === 'said' || k === 'answer' ? <UserRound size={13} /> : k === 'asked' ? <MessageCircleQuestion size={13} /> : k === 'specialist' ? <Bot size={13} /> : k === 'turn' ? <Sparkles size={13} /> : k === 'move' ? <GitCommitHorizontal size={13} /> : k === 'change' ? <Wrench size={13} /> : <MessageSquare size={13} />)
 
 /** The question part of a message: its text without the numbered option lines (those become buttons). */
-const questionText = (text: string) => text.split('\n').filter((l) => !/^\s*(?:\*\*)?\d{1,2}[.)]/.test(l)).join('\n').trim()
+// A question reads as: the ask in its own paragraph, with what led up to it folded away; option lines become
+// buttons, and lines that only explain how to answer ("A number is enough.") are dropped because the buttons say it.
+const howToAnswer = /^(a number is enough|reply with (a|the) number|pick (a|one) number|just (reply|answer) with (a|the) number)[.!]?$/i
+export function askParts(text: string): { ask: string; context: string[] } {
+  const paras = text.replace(/\*\*/g, '').split(/\n\s*\n/).map((p) => p.split('\n').filter((l) => !/^\s*\d{1,2}[.)]\s/.test(l) && !howToAnswer.test(l.trim())).join('\n').trim()).filter(Boolean)
+  if (!paras.length) return { ask: '', context: [] }
+  const at = (() => { for (let i = paras.length - 1; i >= 0; i--) if (/\?|:\s*$/.test(paras[i])) return i; return paras.length - 1 })()
+  return { ask: paras[at], context: paras.filter((_, i) => i !== at) }
+}
+const suggestedMark = /\s*\((suggested|recommended)\)\s*$/i
+const cleanLabel = (l: string) => l.replace(suggestedMark, '')
 
 export function useItemTrace(live: Live, node: string) {
   const [trace, setTrace] = useState<Trace | null>(null)
@@ -81,15 +91,22 @@ export function ItemQuestions({ live, me, node, trace, reload, setToast }: { liv
       <p className="studio-item-who">{d.who} · needs your decision · {ago(d.at)}</p>
       <p className="studio-item-q">{d.text}</p>
       <div className="studio-item-options">
-        {d.options.map((o, i) => <button key={o.value + i} type="button" className="button button-small button-quiet" disabled={sending} onClick={() => void decide(d.id, 'approved', o.label)}><b>{i + 1}</b> {o.label}</button>)}
+        {d.options.map((o, i) => {
+          // Socra lists its suggestion first (record_decision); a "(suggested)" mark in the label says the same.
+          const marked = d.options.some((x) => suggestedMark.test(x.label)) ? suggestedMark.test(o.label) : i === 0
+          return <button key={o.value + i} type="button" className={`button button-small ${marked ? 'button-primary' : 'button-quiet'}`} disabled={sending} onClick={() => void decide(d.id, 'approved', cleanLabel(o.label))}><b>{i + 1}</b> {cleanLabel(o.label)}{marked && <em> suggested</em>}</button>
+        })}
         {d.options.length === 0 && <button type="button" className="button button-small button-primary" disabled={sending} onClick={() => void decide(d.id, 'approved')}>Approve</button>}
         <button type="button" className="button button-small button-quiet" disabled={sending} onClick={() => void decide(d.id, 'rejected')}>Reject</button>
       </div>
     </div>)}
     {q ? <div className="studio-item-question">
       <p className="studio-item-who">{q.who} · {ago(q.at)}</p>
-      <p className="studio-item-q">{questionText(q.text)}</p>
-      {q.options.length > 0 && <div className="studio-item-options">{q.options.map((o) => <button key={o.n} type="button" className={`button button-small ${o.suggested ? 'button-primary' : 'button-quiet'}`} disabled={sending} onClick={() => void send(String(o.n))}><b>{o.n}</b> {o.label.replace(/\s*\((suggested|recommended)\)\s*$/i, '')}{o.suggested && <em> suggested</em>}</button>)}</div>}
+      {(() => { const parts = askParts(q.text); return <>
+        <p className="studio-item-q">{parts.ask}</p>
+        {parts.context.length > 0 && <details className="studio-item-context"><summary>What led to this question</summary>{parts.context.map((c, i) => <p key={i}>{c}</p>)}</details>}
+      </> })()}
+      {q.options.length > 0 && <div className="studio-item-options">{q.options.map((o) => <button key={o.n} type="button" className={`button button-small ${o.suggested ? 'button-primary' : 'button-quiet'}`} disabled={sending} onClick={() => void send(String(o.n))}><b>{o.n}</b> {cleanLabel(o.label)}{o.suggested && <em> suggested</em>}</button>)}</div>}
     </div> : trace.working || live.agentBusy ? <p className="studio-item-working"><Loader2 size={13} className="studio-spin" /> {ASSISTANT_NAME} and the specialist are looking at it. Their questions appear here and in the conversation.</p>
       : ds.length ? null : <p className="studio-muted">{trace.counts.questions ? `No question is waiting: ${trace.counts.answers} ${trace.counts.answers === 1 ? 'answer' : 'answers'} given so far.` : `${ASSISTANT_NAME} hasn't asked anything about this item yet.`}</p>}
     <div className="studio-item-reply">

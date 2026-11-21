@@ -224,6 +224,8 @@ model Move {
   // Who or what last moved the card, and why (the Muse, a build, a person's answer). People never have to.
   movedBy    String   @default("")
   moveReason String   @default("")
+  // When the card was made: the Board lists newest first (Doug, Nov 21).
+  createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   useCase    UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
 }
