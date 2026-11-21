@@ -14,6 +14,8 @@ my $LOG  = "$DIR/update.log";
 my $PIDF = "$DIR/.update.pid";
 my $RES  = "$DIR/.update.result";
 my $VER  = "$DIR/.version";
+my $SREV = "$DIR/.script-rev";
+my $STARTED = (stat($0))[9] // 0;   # when this file last changed; a newer file means "restart me"
 my $SCRIPT_URL = "https://raw.githubusercontent.com/smithdouglas404/BMADAccelerator/claude/project-thread-i43blx/scripts/laptop/start-on-laptop.sh";
 my @ORIGINS = ("http://localhost:3000", "http://127.0.0.1:3000");
 $ENV{PATH} = "/opt/podman/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
@@ -22,7 +24,7 @@ my $srv = IO::Socket::INET->new(LocalAddr => '127.0.0.1', LocalPort => 3099, Pro
   or die "updater: cannot listen on 127.0.0.1:3099: $!\n";
 $SIG{CHLD} = sub { 1 while waitpid(-1, WNOHANG) > 0 };
 
-my ($latest, $latest_at) = ('', 0);
+my ($latest, $latest_at, $slatest, $slatest_at) = ('', 0, '', 0);
 sub slurp { my $f = shift; open(my $h, '<', $f) or return ''; local $/; my $s = <$h>; close $h; $s // '' }
 sub jstr { my $s = shift // ''; $s =~ s/\\/\\\\/g; $s =~ s/"/\\"/g; $s =~ s/\r//g; $s =~ s/\n/\\n/g; $s =~ s/\t/  /g; $s =~ s/[\x00-\x1f]//g; "\"$s\"" }
 sub running { my $p = slurp($PIDF); $p =~ s/\D//g; return ($p && kill(0, $p)) ? $p : 0 }
@@ -33,13 +35,22 @@ sub latest_sha {
   }
   $latest
 }
+sub latest_script_rev {
+  if (time - $slatest_at > 60) {
+    my $t = `curl -fsS --max-time 10 '$SCRIPT_URL' 2>/dev/null`;
+    if ($t =~ /^SCRIPT_REV="?(\d+)"?/m) { $slatest = $1; $slatest_at = time }
+  }
+  $slatest
+}
 sub status_json {
   my $state = running() ? 'running' : (slurp($RES) =~ /^(done|failed)/ ? $1 : 'idle');
   my $log = slurp($LOG); $log =~ s/\e\[[0-9;]*m//g;
   my @steps = ($log =~ /^(Step \d of \d:[^\n]*)/mg);
   my @lines = grep { /\S/ } split /\n/, $log; my $tail = join("\n", @lines > 12 ? @lines[-12..-1] : @lines);
   my $inst = slurp($VER); $inst =~ s/\s//g;
+  my $sinst = slurp($SREV); $sinst =~ s/\s//g;
   return '{"state":' . jstr($state) . ',"installed":' . jstr($inst) . ',"latest":' . jstr(latest_sha()) .
+         ',"scriptInstalled":' . jstr($sinst) . ',"scriptLatest":' . jstr(latest_script_rev()) .
          ',"step":' . jstr(@steps ? $steps[-1] : '') . ',"log":' . jstr($tail) . '}';
 }
 sub start_update {
@@ -86,4 +97,6 @@ while (1) {
   my %txt = (200 => 'OK', 202 => 'Accepted', 204 => 'No Content', 403 => 'Forbidden', 404 => 'Not Found', 409 => 'Conflict');
   print $c "HTTP/1.1 $code $txt{$code}\r\nContent-Type: application/json\r\nCache-Control: no-store\r\n${cors}Content-Length: " . length($body) . "\r\nConnection: close\r\n\r\n$body";
   close $c;
+  # A finished update may have replaced this file with a newer one: start it, same port, no waiting for the next login.
+  exec($^X, $0) if !running() && ((stat($0))[9] // 0) != $STARTED;
 }

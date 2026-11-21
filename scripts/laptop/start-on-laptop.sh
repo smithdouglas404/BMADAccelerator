@@ -18,6 +18,8 @@ set -uo pipefail
 # version the Mac Studio runs), rebuild and restart. Your use cases, documents, memory and keys stay as they are.
 MODE="${1:-}"
 CODE_BRANCH="${SOCRA_BRANCH:-mac-studio}"
+# Release of THIS script (the laptop fixes). Settings > Update compares it with the newest one on GitHub.
+SCRIPT_REV="8"
 
 HOME_DIR="$HOME/SocraStudio"
 APP="$HOME_DIR/BMADAccelerator"
@@ -49,9 +51,40 @@ set_env() { # name value: writes into .env without printing it
 }
 has_env() { grep -q "^$1=\"..*\"" "$APP/.env" 2>/dev/null; }
 
+diagnose() {
+  local OUT="$HOME_DIR/diagnose.txt"
+  {
+    echo "== Socra diagnose, $(date) =="
+    echo "laptop fixes release: $(cat "$HOME_DIR/.script-rev" 2>/dev/null || echo older); Studio version: $(cat "$HOME_DIR/.version" 2>/dev/null || echo not recorded)"
+    echo; echo "== containers =="
+    podman ps -a --format '{{.Names}}  {{.Status}}' 2>&1 | sort
+    echo; echo "== memory =="
+    podman machine inspect --format 'Podman machine memory (MB): {{.Resources.Memory}}' 2>&1 | head -1
+    podman exec bmadaccelerator-app-1 sh -c 'free -m | head -2' 2>&1
+    echo; echo "== the Studio app's settings =="
+    podman exec bmadaccelerator-app-1 sh -c 'echo "npm certificate file: ${npm_config_cafile:-NOT SET}"; echo "start every app at boot: ${BACC_NO_RESUME_PREVIEWS:-yes}"; ls -ld /home/node/.npm /data/workspaces; id' 2>&1
+    echo; echo "== products (name | port | build running | builds) =="
+    podman exec bmadaccelerator-db-1 psql -U bacc -d bacc -At -F ' | ' -c 'SELECT slug, "previewPort", "generateBusy", "generateCount" FROM "UseCase" ORDER BY "updatedAt" DESC' 2>&1 | head -30
+    echo; echo "== each app's start log (last lines) =="
+    podman exec bmadaccelerator-app-1 sh -c 'n=0; for f in /data/workspaces/*/studio/preview.log; do [ -f "$f" ] || continue; n=1; echo "--- $f"; tail -n 15 "$f"; done; [ $n = 0 ] && echo "no app has tried to start yet"' 2>&1 | head -160
+    echo; echo "== Studio log (last lines) =="
+    podman logs --tail 40 bmadaccelerator-app-1 2>&1
+  } > "$OUT" 2>&1
+  cat "$OUT"
+  echo; echo "This was also saved in $OUT"
+}
+if [ "$MODE" = "logs" ]; then
+  for p in /opt/podman/bin /opt/homebrew/bin /usr/local/bin; do [ -x "$p/podman" ] && export PATH="$p:$PATH"; done
+  command -v podman >/dev/null 2>&1 || { echo "I can't find Podman."; exit 1; }
+  diagnose
+  exit 0
+fi
+
 # ---------- 1. the data package ----------
 say "Step 1 of 6: finding your data package"
-if [ ! -f "$DATA/studio-code.tar.gz" ]; then
+if [ -f "$HOME_DIR/.data-loaded" ] && [ -f "$APP/docker-compose.yml" ]; then
+  echo "Already set up on this laptop."
+elif [ ! -f "$DATA/studio-code.tar.gz" ]; then
   PKG=""
   for c in "$HOME/Downloads"/socra-laptop-data*.zip; do [ -f "$c" ] && PKG="$c"; done
   for c in "$HOME/Downloads"/socra-laptop-data*/; do [ -f "$c/studio-code.tar.gz" ] && PKG="$c"; done
@@ -60,10 +93,12 @@ if [ ! -f "$DATA/studio-code.tar.gz" ]; then
   if [ -d "$PKG" ]; then cp "$PKG"/* "$DATA"/
   else unzip -o -j -q "$PKG" -d "$DATA" || fail "The data package didn't unzip. Download it again, then run this again."; fi
 fi
-for f in studio-code.tar.gz databases.sql.gz workspaces.tar.gz; do
-  [ -f "$DATA/$f" ] || fail "The data package is missing $f. Download it again, then run this again."
-done
-echo "Found it."
+if [ ! -f "$HOME_DIR/.data-loaded" ] || [ ! -f "$APP/docker-compose.yml" ]; then
+  for f in studio-code.tar.gz databases.sql.gz workspaces.tar.gz; do
+    [ -f "$DATA/$f" ] || fail "The data package is missing $f. Download it again, then run this again."
+  done
+  echo "Found it."
+fi
 
 # ---------- 2. Podman ----------
 say "Step 2 of 6: getting Podman ready"
@@ -118,11 +153,14 @@ if [ "$MODE" = "update" ]; then
   [ -f "$APP/.env" ] && cp "$APP/.env" "$APP.new/.env"
   rm -rf "$APP.previous"; [ -d "$APP" ] && mv "$APP" "$APP.previous"   # the last version, kept in case you need to go back
   mv "$APP.new" "$APP"
+elif [ -f "$APP/docker-compose.yml" ]; then
+  echo "The Studio's code is already here, so I keep it (it may be newer than the first copy)."
 else
   mkdir -p "$APP"
   [ -f "$APP/.env" ] && cp "$APP/.env" "$HOME_DIR/.env.keep"
   tar -xzf "$DATA/studio-code.tar.gz" -C "$APP" 2>>"$LOG" || fail "The code didn't unpack. Details are in $LOG."
   [ -f "$HOME_DIR/.env.keep" ] && mv "$HOME_DIR/.env.keep" "$APP/.env"
+  printf '%s\n' "bc82c0ab3806417ab3310366bca1842f031e5b22" > "$HOME_DIR/.version"   # the first copy came from this Mac Studio version
 fi
 cd "$APP" || exit 1
 sh scripts/memory-secrets.sh >/dev/null
@@ -157,6 +195,9 @@ services:
   app:
     environment:
       npm_config_cafile: /etc/ssl/corp-ca.pem
+      # By default the Studio restarts every product's app at once on each boot (npm install + build for all of
+      # them, four at a time). On a laptop that buries the one you opened. Here an app starts when you open it.
+      BACC_NO_RESUME_PREVIEWS: "1"
   letta:
     volumes:
       - ./corp-ca.pem:/etc/ssl/corp-ca.pem:ro
@@ -178,20 +219,21 @@ cat > "$APP/src/studio/updatepanel.tsx" <<'TSX'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 
-type S = { state: 'idle' | 'running' | 'done' | 'failed'; installed: string; latest: string; step: string; log: string }
+type S = { state: 'idle' | 'running' | 'done' | 'failed'; installed: string; latest: string; scriptInstalled: string; scriptLatest: string; step: string; log: string }
 const U = 'http://localhost:3099'
 
 export function UpdatePanel() {
   const [s, setS] = useState<S | null>(null)
-  const [down, setDown] = useState(false)
+  const [fails, setFails] = useState(0)
+  const down = fails >= 5
   const [busy, setBusy] = useState(false)
   const timer = useRef<number | null>(null)
 
   const read = useCallback(async () => {
     try {
       const r = await fetch(`${U}/status`, { cache: 'no-store' })
-      setS((await r.json()) as S); setDown(false)
-    } catch { setDown(true) }
+      setS((await r.json()) as S); setFails(0)
+    } catch { setFails((n) => n + 1) }
   }, [])
   useEffect(() => {
     void read()
@@ -201,23 +243,26 @@ export function UpdatePanel() {
 
   const start = async () => {
     setBusy(true)
-    try { await fetch(`${U}/update`, { method: 'POST', headers: { 'X-Socra': '1' } }); await read() } catch { setDown(true) }
+    try { await fetch(`${U}/update`, { method: 'POST', headers: { 'X-Socra': '1' } }); await read() } catch { setFails((n) => n + 1) }
     setBusy(false)
   }
 
-  const short = (x: string) => (x ? x.slice(0, 7) : 'unknown')
-  const current = s && s.installed && s.latest && s.installed === s.latest
+  const short = (x: string) => (x ? x.slice(0, 7) : 'not recorded')
+  const studioCurrent = Boolean(s && s.installed && s.latest && s.installed === s.latest)
+  const setupCurrent = Boolean(s && s.scriptInstalled && s.scriptLatest && s.scriptInstalled === s.scriptLatest)
+  const current = studioCurrent && setupCurrent
   return (
     <div className="studio-settings-grid">
       <section className="studio-card">
         <div className="stack-header"><div><p className="eyebrow">Update</p><h3>Stay on the <em>same version</em> as the Mac Studio</h3></div><RefreshCw size={16} /></div>
+        <p className="studio-muted">Nothing here updates by itself. When a line below says an update is available, press Update now.</p>
         {down && <p className="studio-muted">The updater on this laptop is not answering. If you just restarted the laptop, wait a minute. Otherwise run the setup line in Terminal once more.</p>}
         {!down && !s && <p className="studio-muted">Checking for a new version…</p>}
         {s && <div className="studio-list">
-          <div className="studio-list-row"><div className="studio-row-main"><strong>On this laptop</strong><small>version {short(s.installed)}</small></div></div>
-          <div className="studio-list-row"><div className="studio-row-main"><strong>Newest (Mac Studio, on GitHub)</strong><small>version {short(s.latest)}</small></div><span className={current ? 'studio-ok' : 'studio-warn'}>{current ? 'up to date' : 'update available'}</span></div>
+          <div className="studio-list-row"><div className="studio-row-main"><strong>Studio (what the Mac Studio runs)</strong><small>This laptop: {short(s.installed)}. Newest: {short(s.latest)}.</small></div><span className={studioCurrent ? 'studio-ok' : 'studio-warn'}>{studioCurrent ? 'up to date' : 'update available'}</span></div>
+          <div className="studio-list-row"><div className="studio-row-main"><strong>Laptop fixes (setup, certificates, apps)</strong><small>This laptop: {s.scriptInstalled ? `release ${s.scriptInstalled}` : 'older release'}. Newest: {s.scriptLatest ? `release ${s.scriptLatest}` : 'not known'}.</small></div><span className={setupCurrent ? 'studio-ok' : 'studio-warn'}>{setupCurrent ? 'up to date' : 'update available'}</span></div>
           {s.state === 'running' && <div className="studio-list-row"><div className="studio-row-main"><strong>Updating…</strong><small>{s.step || 'Starting'}. The Studio goes offline for a few minutes while it restarts; this page keeps checking.</small></div></div>}
-          {s.state === 'done' && <div className="studio-list-row"><div className="studio-row-main"><strong>Updated</strong><small>Reload the page to use the new version. Your use cases, memory and keys are unchanged.</small></div><span className="studio-ok">done</span></div>}
+          {s.state === 'done' && <div className="studio-list-row"><div className="studio-row-main"><strong>Updated</strong><small>Reload the page to use the new version. Your use cases, memory and keys are unchanged. Each product&apos;s app needs a few minutes the first time you open it here (it downloads its packages).</small></div><span className="studio-ok">done</span></div>}
           {s.state === 'failed' && <div className="studio-list-row"><div className="studio-row-main"><strong>The update stopped</strong><small>Nothing was lost: your data and keys are untouched, and the previous version is kept. Send this to Claude: {s.step}</small><pre style={{ whiteSpace: 'pre-wrap', fontSize: 12, marginTop: 8 }}>{s.log}</pre></div><span className="studio-warn">failed</span></div>}
         </div>}
         <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
@@ -305,17 +350,16 @@ podman compose up -d >>"$LOG" 2>&1 || fail "The Studio didn't start. Details are
 # npm's download cache and the agents' session folder are volumes Podman creates as root; the Studio runs as
 # "node", so generated apps couldn't install. Hand them to node (safe to repeat).
 podman compose exec -T -u root app sh -c 'chown -R node:node /home/node/.npm /home/node/.claude /data/workspaces' >>"$LOG" 2>&1
-podman compose restart app >>"$LOG" 2>&1   # restart so the generated apps start again with the fixes
 for i in $(seq 1 90); do curl -fs -o /dev/null http://localhost:3000 2>/dev/null && break; sleep 2; done
 curl -fs -o /dev/null http://localhost:3000 2>/dev/null || fail "The Studio is starting slowly. Wait a minute and open http://localhost:3000. Details are in $LOG."
 [ "$MODE" = "update" ] && [ -n "${NEW_SHA:-}" ] && printf '%s\n' "${NEW_SHA#refs/heads/}" > "$HOME_DIR/.version"
 
 # The updater behind Settings > Update: a tiny local service (127.0.0.1:3099 only), started by macOS at login.
-# Not reinstalled while it is the one running this update.
-if [ -z "${SOCRA_UPDATER:-}" ]; then
-  mkdir -p "$HOME_DIR/bin" "$HOME/Library/LaunchAgents"
-  curl -fsSL --max-time 30 "https://raw.githubusercontent.com/smithdouglas404/BMADAccelerator/claude/project-thread-i43blx/scripts/laptop/start-on-laptop.sh" -o "$HOME_DIR/bin/socra.sh.new" \
-    && grep -q "Socra" "$HOME_DIR/bin/socra.sh.new" && mv "$HOME_DIR/bin/socra.sh.new" "$HOME_DIR/bin/socra.sh"
+# Its file is refreshed on every run (a running updater notices and restarts itself); the login service is set up
+# only from a normal run, never while the updater itself is running this update.
+mkdir -p "$HOME_DIR/bin" "$HOME/Library/LaunchAgents"
+curl -fsSL --max-time 30 "https://raw.githubusercontent.com/smithdouglas404/BMADAccelerator/claude/project-thread-i43blx/scripts/laptop/start-on-laptop.sh" -o "$HOME_DIR/bin/socra.sh.new" \
+  && grep -q "^SCRIPT_REV=" "$HOME_DIR/bin/socra.sh.new" && mv "$HOME_DIR/bin/socra.sh.new" "$HOME_DIR/bin/socra.sh"
   cat > "$HOME_DIR/bin/updater.pl" <<'PERL'
 #!/usr/bin/perl
 # Socra Studio updater for the laptop. Runs on the laptop itself (not in Podman), started by launchd.
@@ -333,6 +377,8 @@ my $LOG  = "$DIR/update.log";
 my $PIDF = "$DIR/.update.pid";
 my $RES  = "$DIR/.update.result";
 my $VER  = "$DIR/.version";
+my $SREV = "$DIR/.script-rev";
+my $STARTED = (stat($0))[9] // 0;   # when this file last changed; a newer file means "restart me"
 my $SCRIPT_URL = "https://raw.githubusercontent.com/smithdouglas404/BMADAccelerator/claude/project-thread-i43blx/scripts/laptop/start-on-laptop.sh";
 my @ORIGINS = ("http://localhost:3000", "http://127.0.0.1:3000");
 $ENV{PATH} = "/opt/podman/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
@@ -341,7 +387,7 @@ my $srv = IO::Socket::INET->new(LocalAddr => '127.0.0.1', LocalPort => 3099, Pro
   or die "updater: cannot listen on 127.0.0.1:3099: $!\n";
 $SIG{CHLD} = sub { 1 while waitpid(-1, WNOHANG) > 0 };
 
-my ($latest, $latest_at) = ('', 0);
+my ($latest, $latest_at, $slatest, $slatest_at) = ('', 0, '', 0);
 sub slurp { my $f = shift; open(my $h, '<', $f) or return ''; local $/; my $s = <$h>; close $h; $s // '' }
 sub jstr { my $s = shift // ''; $s =~ s/\\/\\\\/g; $s =~ s/"/\\"/g; $s =~ s/\r//g; $s =~ s/\n/\\n/g; $s =~ s/\t/  /g; $s =~ s/[\x00-\x1f]//g; "\"$s\"" }
 sub running { my $p = slurp($PIDF); $p =~ s/\D//g; return ($p && kill(0, $p)) ? $p : 0 }
@@ -352,13 +398,22 @@ sub latest_sha {
   }
   $latest
 }
+sub latest_script_rev {
+  if (time - $slatest_at > 60) {
+    my $t = `curl -fsS --max-time 10 '$SCRIPT_URL' 2>/dev/null`;
+    if ($t =~ /^SCRIPT_REV="?(\d+)"?/m) { $slatest = $1; $slatest_at = time }
+  }
+  $slatest
+}
 sub status_json {
   my $state = running() ? 'running' : (slurp($RES) =~ /^(done|failed)/ ? $1 : 'idle');
   my $log = slurp($LOG); $log =~ s/\e\[[0-9;]*m//g;
   my @steps = ($log =~ /^(Step \d of \d:[^\n]*)/mg);
   my @lines = grep { /\S/ } split /\n/, $log; my $tail = join("\n", @lines > 12 ? @lines[-12..-1] : @lines);
   my $inst = slurp($VER); $inst =~ s/\s//g;
+  my $sinst = slurp($SREV); $sinst =~ s/\s//g;
   return '{"state":' . jstr($state) . ',"installed":' . jstr($inst) . ',"latest":' . jstr(latest_sha()) .
+         ',"scriptInstalled":' . jstr($sinst) . ',"scriptLatest":' . jstr(latest_script_rev()) .
          ',"step":' . jstr(@steps ? $steps[-1] : '') . ',"log":' . jstr($tail) . '}';
 }
 sub start_update {
@@ -405,8 +460,12 @@ while (1) {
   my %txt = (200 => 'OK', 202 => 'Accepted', 204 => 'No Content', 403 => 'Forbidden', 404 => 'Not Found', 409 => 'Conflict');
   print $c "HTTP/1.1 $code $txt{$code}\r\nContent-Type: application/json\r\nCache-Control: no-store\r\n${cors}Content-Length: " . length($body) . "\r\nConnection: close\r\n\r\n$body";
   close $c;
+  # A finished update may have replaced this file with a newer one: start it, same port, no waiting for the next login.
+  exec($^X, $0) if !running() && ((stat($0))[9] // 0) != $STARTED;
 }
 PERL
+printf '%s\n' "$SCRIPT_REV" > "$HOME_DIR/.script-rev"
+if [ -z "${SOCRA_UPDATER:-}" ]; then
   PL="$HOME/Library/LaunchAgents/com.socra.studio-updater.plist"
   cat > "$PL" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
