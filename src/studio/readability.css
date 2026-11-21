@@ -79,3 +79,19 @@ input, textarea, select { font-size: 14px; }
 .studio-people-menu .studio-persona-switch { display: flex; width: 100%; margin-top: 0; }
 .profile-menu-theme .view-controls.is-docked { margin: 0; }
 @media (max-width: 480px) { .studio-people-menu { position: fixed; left: 12px; right: 12px; top: 64px; width: auto; } }
+
+/* Accordion side menu (Doug, Nov 21): every group folds; a folded header keeps the "needs you" count. */
+.studio-nav-head { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; text-align: left; background: transparent; cursor: pointer; border-radius: var(--radius, 8px); }
+.studio-nav-head:hover { background: rgba(var(--hi-rgb), .05); }
+.studio-nav-head-text { display: grid; flex: 1; min-width: 0; gap: 2px; }
+.studio-nav-head-text small { white-space: normal; overflow-wrap: anywhere; }
+.studio-nav-head .studio-needs-you { flex: none; }
+.studio-nav-chevron { flex: none; color: var(--faint); transition: transform .18s ease; transform: rotate(-90deg); }
+.studio-nav-accordion.is-open > .studio-nav-head .studio-nav-chevron { transform: rotate(0deg); }
+.studio-nav-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .18s ease; }
+.studio-nav-accordion.is-open > .studio-nav-body { grid-template-rows: 1fr; }
+.studio-nav-body > div { min-height: 0; overflow: hidden; display: grid; gap: 4px; }
+.studio-nav-group .nav-copy strong { overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) { .studio-nav-body, .studio-nav-chevron { transition: none; } }
+@media (max-width: 760px) { .studio-nav-head { display: none; } .studio-nav-body { grid-template-rows: 1fr; } .studio-nav-body > div { display: flex; gap: 5px; } .studio-nav-accordion { display: contents; } .studio-nav-body { display: contents; } }
+@media (min-width: 761px) { .studio-nav-accordion:not(.is-open) > .studio-nav-body > div { visibility: hidden; } }

@@ -149,7 +149,6 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
   const [replying, setReplying] = useState<StudioMessage | null>(null)
   const [me, setMe] = useMe()
   const menu = useMemo(() => menuFor(me.role), [me.role])
-  const [moreOpen, setMoreOpen] = useState(false)
   // Who you are decides what the menu shows first, where you start, and how Socra talks to you.
   const pickPersona = (p: (typeof PERSONAS)[number]) => {
     setMe({ ...me, role: p.role })
@@ -390,6 +389,31 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
     pilot: live.backlog.filter((b) => needsTriage(b)).length,
   }
 
+  // Accordion menu (Doug, Nov 21): each group folds. The group holding the current screen is open, others remember what
+  // you chose in this browser; a folded header still shows how many things need you inside it.
+  const [navOpen, setNavOpen] = useState<Record<string, boolean>>({})
+  useEffect(() => { try { setNavOpen(JSON.parse(window.localStorage.getItem('studio-nav-open') || '{}')) } catch { /* default */ } }, [])
+  const toggleGroup = (title: string, now: boolean) => {
+    const next = { ...navOpen, [title]: !now }
+    setNavOpen(next)
+    try { window.localStorage.setItem('studio-nav-open', JSON.stringify(next)) } catch { /* private window */ }
+  }
+  const navGroup = (title: string, about: string, items: NavItem[], extra = '') => {
+    const holdsActive = items.some((i) => i.id === activeView)
+    const isOpen = holdsActive || (navOpen[title] ?? title === 'Your path')
+    const flagged = items.reduce((n, i) => n + (navFlags[i.id] ?? 0), 0)
+    const id = `nav-${title.replace(/\W+/g, '-').toLowerCase()}`
+    return (
+      <div className={`studio-nav-group studio-nav-accordion ${extra} ${isOpen ? 'is-open' : ''}`} key={title}>
+        <button type="button" className="sidebar-section-label studio-stage-label studio-nav-head" aria-expanded={isOpen} aria-controls={id} onClick={() => { if (!holdsActive) toggleGroup(title, isOpen) }} title={holdsActive ? 'This group holds the screen you are on' : `${isOpen ? 'Fold' : 'Open'} ${title}`}>
+          <span className="studio-nav-head-text"><span>{title}</span><small>{about}</small></span>
+          {!isOpen && flagged > 0 && <span className="studio-needs-you" title={`${flagged} ${flagged === 1 ? 'thing needs' : 'things need'} you in here`}>{flagged}</span>}
+          <ChevronDown size={14} className="studio-nav-chevron" aria-hidden />
+        </button>
+        <div className="studio-nav-body" id={id}><div>{items.map(navButton)}</div></div>
+      </div>
+    )
+  }
   const navButton = (item: NavItem) => {
             const flag = navFlags[item.id] ?? 0
             return (
@@ -436,11 +460,8 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
         </ProductSwitcher>
 
         <nav className="primary-nav studio-nav" aria-label="Product workspace">
-          {menu.groups.map((group) => (<div className="studio-nav-group" key={group.title}><div className="sidebar-section-label studio-stage-label">{group.title}<small>{group.about}</small></div>{group.items.map(navButton)}</div>))}
-          {menu.more.length > 0 && <div className="studio-nav-group studio-nav-more">
-            <button type="button" className="sidebar-section-label studio-stage-label studio-more-toggle" onClick={() => setMoreOpen(!moreOpen)} aria-expanded={moreOpen || menu.more.some((i) => i.id === activeView)}> More tools <small>{menu.more.length} more {moreOpen || menu.more.some((i) => i.id === activeView) ? '▴' : '▾'}</small></button>
-            {(moreOpen || menu.more.some((i) => i.id === activeView)) && menu.more.map(navButton)}
-          </div>}
+          {menu.groups.map((group) => navGroup(group.title, group.about, group.items))}
+          {menu.more.length > 0 && navGroup('More tools', `${menu.more.length} more`, menu.more, 'studio-nav-more')}
         </nav>
 
         <div className="sidebar-divider" />

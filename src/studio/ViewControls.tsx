@@ -12,13 +12,14 @@ const isTheme = (t: string | null): t is (typeof THEMES)[number][0] => THEMES.so
 export function ViewControls() {
   const [theme, setTheme] = useState('clean')
   const [host, setHost] = useState<HTMLElement | null>(null)
+  const [inProduct, setInProduct] = useState(false)
   useEffect(() => { try { const t = window.localStorage.getItem('studio-theme'); if (isTheme(t)) setTheme(t) } catch { /* keep clean */ } }, [])
   useEffect(() => {
     document.documentElement.dataset.theme = theme
     try { window.localStorage.setItem('studio-theme', theme) } catch { /* no storage: still works for this visit */ }
   }, [theme])
   useEffect(() => {
-    const find = () => setHost(document.querySelector<HTMLElement>('.profile-menu-theme, .studio-page-top'))
+    const find = () => { setHost(document.querySelector<HTMLElement>('.profile-menu-theme, .studio-page-top')); setInProduct(!!document.querySelector('.app-shell')) }
     find()
     const watch = new MutationObserver(find)
     watch.observe(document.body, { childList: true, subtree: true })
@@ -31,5 +32,7 @@ export function ViewControls() {
       ))}
     </div>
   )
+  // Inside a product the switch lives only in the profile menu; it floats only on pages with no menu of their own.
+  if (!host && inProduct) return null
   return host ? createPortal(control, host) : control
 }
