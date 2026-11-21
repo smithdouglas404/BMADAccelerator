@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { LOCAL_ONLY_MESSAGE, isLocalRequest } from "@/lib/localOnly";
 import { z } from "zod";
 import { writeNarrative } from "@/lib/memory/inspect";
 import { parseRef } from "@/lib/memory/inspectCore";
@@ -9,6 +10,7 @@ const Body = z.object({ ref: z.string(), customer: z.string().default(""), useCa
 
 // A person pressed Explain: the document model reads this agent's records and writes the narrative.
 export async function POST(req: Request) {
+  if (!isLocalRequest(req.headers)) return NextResponse.json({ error: LOCAL_ONLY_MESSAGE, localOnly: true }, { status: 403 });
   const parsed = Body.safeParse(await req.json().catch(() => ({})));
   const ref = parsed.success ? parseRef(parsed.data.ref) : null;
   if (!parsed.success || !ref) return NextResponse.json({ error: "Unknown agent" }, { status: 400 });

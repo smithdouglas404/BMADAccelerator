@@ -59,3 +59,19 @@ test("the fingerprint changes when memory changes", () => {
   assert.equal(recordsFingerprint(a), recordsFingerprint([...a]));
   assert.notEqual(recordsFingerprint(a), recordsFingerprint([{ ...a[0], text: "two" }]));
 });
+
+test("agent memory opens only on the Studio's own computer, never through the tunnel (Doug, Nov 21)", async () => {
+  const { isLocalRequest } = await import("../src/lib/localOnly.ts");
+  const h = (o) => new Headers(o);
+  assert.equal(isLocalRequest(h({ host: "localhost:3000" })), true);
+  assert.equal(isLocalRequest(h({ host: "127.0.0.1:3000" })), true);
+  assert.equal(isLocalRequest(h({ host: "[::1]:3000" })), true);
+  assert.equal(isLocalRequest(h({ host: "studio.innume.com" })), false);
+  assert.equal(isLocalRequest(h({ host: "p4101.innume.com" })), false);
+  // The tunnel may pass Host through as localhost; Cloudflare's own headers still give it away.
+  assert.equal(isLocalRequest(h({ host: "localhost:3000", "cf-connecting-ip": "203.0.113.9" })), false);
+  assert.equal(isLocalRequest(h({ host: "localhost:3000", "cf-ray": "abc-IAD" })), false);
+  assert.equal(isLocalRequest(h({ host: "localhost:3000", "x-forwarded-host": "studio.innume.com" })), false);
+  assert.equal(isLocalRequest(h({ host: "192.168.1.20:3000" })), false);
+  assert.equal(isLocalRequest(h({})), false);
+});

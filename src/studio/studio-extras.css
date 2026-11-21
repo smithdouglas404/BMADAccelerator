@@ -689,3 +689,4 @@ a.studio-home-brand { color: inherit; text-decoration: none; padding-bottom: 12p
   .mem-grid { grid-template-columns: 1fr; }
   .mem-list { position: static; }
 }
+.mem-closed { margin-top: 18px; max-width: 640px; }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { LOCAL_ONLY_MESSAGE, isLocalRequest } from "@/lib/localOnly";
 import { latestNarrative, readAgentMemory } from "@/lib/memory/inspect";
 import { parseRef } from "@/lib/memory/inspectCore";
 
@@ -6,6 +7,7 @@ export const dynamic = "force-dynamic";
 
 // One agent's memory as Letta and Mem0 hold it now, and the latest narrative written from it. Read-only.
 export async function GET(req: Request) {
+  if (!isLocalRequest(req.headers)) return NextResponse.json({ error: LOCAL_ONLY_MESSAGE, localOnly: true }, { status: 403 });
   const u = new URL(req.url);
   const ref = parseRef(u.searchParams.get("ref") ?? "");
   if (!ref) return NextResponse.json({ error: "Unknown agent" }, { status: 400 });

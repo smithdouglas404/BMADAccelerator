@@ -43,6 +43,7 @@ export function AgentMemory() {
   const [person, setPerson] = useState(0)
   const [writing, setWriting] = useState(false)
   const [flash, setFlash] = useState('')
+  const [closed, setClosed] = useState('')
 
   useEffect(() => {
     const p = new URLSearchParams(window.location.search)
@@ -50,7 +51,7 @@ export function AgentMemory() {
     const u = p.get('useCase'); if (u) setUseCase(u)
   }, [])
   const filter = useMemo(() => new URLSearchParams({ ...(customer ? { customer } : {}), ...(useCase ? { useCase } : {}) }).toString(), [customer, useCase])
-  useEffect(() => { void api<List>(`/api/memory/agents?${filter}`, { cache: 'no-store' }).then(setList).catch((e) => setError(String(e))) }, [filter])
+  useEffect(() => { void api<List>(`/api/memory/agents?${filter}`, { cache: 'no-store' }).then(setList).catch((e) => setClosed(e instanceof Error ? e.message : String(e))) }, [filter])
   const load = useCallback(async () => {
     if (!ref) return
     setLoading(true); setError('')
@@ -100,6 +101,7 @@ export function AgentMemory() {
         </div>}
       </div>
 
+      {closed ? <div className="studio-card mem-closed"><p className="eyebrow">Closed here</p><h3>Agent memory isn’t shown on this address</h3><p className="studio-muted">{closed}</p></div> : <>
       <div className="mem-filters">
         <label>Customer<select value={customer} onChange={(e) => { setCustomer(e.target.value); setUseCase('') }}><option value="">All customers</option>{(list?.customers ?? []).map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
         <label>Use case<select value={useCase} onChange={(e) => setUseCase(e.target.value)}><option value="">All use cases</option>{ucs.map((u) => <option key={u.id} value={u.id}>{u.name}{u.customer ? ` · ${u.customer}` : ''}</option>)}</select></label>
@@ -172,6 +174,7 @@ export function AgentMemory() {
           </>}
         </section>
       </div>
+      </>}
     </div>
   )
 }
