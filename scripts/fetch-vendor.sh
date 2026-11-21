@@ -3,10 +3,9 @@
 # vendor/. The Studio copies what each product needs into its workspace.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-ECC_REPO="https://github.com/affaan-m/everything-claude-code"
-# ECC main as of Nov 19 2026 (VERSION 2.2.3, MIT). To update: change the SHA and run this script;
-# scripts/ecc-catalog.mjs then rebuilds the list the Skills screen shows from the pinned copy.
-ECC_SHA="${ECC_SHA:-4adeee6732a12d1540f49a4d50a38ce8c97f9a53}"
+# Where ECC comes from is one setting: scripts/ecc-source.sh (repository and pinned commit).
+# ECC_REPO / ECC_SHA in the environment override it for one run.
+source "scripts/ecc-source.sh"
 # Anthropic's official skills (Apache 2.0): Generate uses frontend-design.
 ANTHROPIC_SKILLS_REPO="https://github.com/anthropics/skills"
 ANTHROPIC_SKILLS_SHA="${ANTHROPIC_SKILLS_SHA:-1780c5e5a552fd4d1c9d6a7b0cab26b0c2bef064}"
