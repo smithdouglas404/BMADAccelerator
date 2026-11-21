@@ -8,6 +8,7 @@ import { ensureWorkspace, workspacePath } from "@/lib/workspace";
 import { describeDocument } from "@/lib/docAgent";
 import { writeIntake } from "@/lib/provision";
 import { enqueue, agentsEnabled } from "@/lib/agent/runner";
+import { cleanTrace } from "@/lib/studio/spec";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -26,6 +27,10 @@ export async function POST(req: Request, { params }: Ctx) {
   if (!files.length) return NextResponse.json({ error: "No files" }, { status: 400 });
   const kind = String(form.get("kind") || "uploaded");
   const opening = form.get("opening") === "1";
+  // Added on the PRD or TRD screen (Doug, Nov 21): for one section (its key) or for the whole document ("prd" | "trd").
+  const forSpec = String(form.get("section") || "");
+  const section = forSpec && forSpec !== "prd" && forSpec !== "trd" ? await prisma.specSection.findUnique({ where: { useCaseId_key: { useCaseId: id, key: forSpec } } }) : null;
+  const forDoc = section ? section.tab : forSpec === "prd" || forSpec === "trd" ? forSpec : "";
   await ensureWorkspace(uc.slug);
   const created: { id: string; storagePath: string }[] = [];
   for (const file of files) {
@@ -41,6 +46,10 @@ export async function POST(req: Request, { params }: Ctx) {
       data: { useCaseId: id, documentId: doc.id, source: safeName, type: ["interview", "research"].includes(kind) ? kind : "uploaded", insight: "New source uploaded — Socra will extract the product signal next.", confidence: "open", trace: "Awaiting synthesis" },
     });
     created.push(doc);
+    if (section) {
+      const trace = cleanTrace([...(Array.isArray(section.trace) ? section.trace : []), { label: "Document added", detail: safeName, type: "evidence" }]).slice(-12);
+      await prisma.specSection.update({ where: { id: section.id }, data: { related: [...new Set([...section.related, doc.id])], trace: trace as object } });
+    }
     await recordChange(id, { node: `doc:${doc.id}`, kind: "added", summary: `${safeName} was added to the evidence library`, by: "Owner" });
   }
   await prisma.useCase.update({ where: { id }, data: { updatedAt: new Date() } });
@@ -50,8 +59,8 @@ export async function POST(req: Request, { params }: Ctx) {
       await enqueue(
         id,
         "evidence",
-        `The owner added ${created.length === 1 ? "a source" : `${created.length} sources`} to the evidence library: ${created.map((d) => `studio/uploads/${path.basename(d.storagePath)}`).join(", ")}. The document agent already filed its signals, contradictions and questions as evidence and its potential requirements as suggestions. Read them, raise the floor or the spec where the evidence supports it (set_spec_section with an evidence trace step), and tell the owner in one line what it changed.`,
-        created[0] ? `doc:${created[0].id}` : "",
+        `The owner added ${created.length === 1 ? "a source" : `${created.length} sources`} to the evidence library${section ? ` for ${section.tab.toUpperCase()} section ${section.ref} ${section.title} (${section.key})` : forDoc ? ` for the ${forDoc.toUpperCase()}` : ""}: ${created.map((d) => `studio/uploads/${path.basename(d.storagePath)}`).join(", ")}. The document agent already filed its signals, contradictions and questions as evidence and its potential requirements as suggestions. Read them, raise the floor or the spec where the evidence supports it (set_spec_section with an evidence trace step${section ? `, starting with ${section.key}; open the ${section.tab === "prd" ? "studio-prd" : "studio-trd"} skill first` : forDoc ? `, ${forDoc.toUpperCase()} sections first; open the ${forDoc === "prd" ? "studio-prd" : "studio-trd"} skill first` : ""}), ask the owner the one question the document leaves open if there is one, and tell them in one line what it changed.`,
+        section ? `spec:${section.key}` : created[0] ? `doc:${created[0].id}` : "",
       );
   });
   return NextResponse.json(created, { status: 201 });
