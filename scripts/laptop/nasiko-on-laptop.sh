@@ -65,13 +65,41 @@ say "Step 3: Nasiko (the first build takes several minutes: it compiles Nasiko's
 cd "$APP" || fail "no $APP"
 CA="$APP/corp-ca.pem"
 [ -f "$CA" ] || echo "(no corp-ca.pem found; if the build fails with a certificate error, that is why)"
-NASIKO_COMPOSE="podman compose" \
-NASIKO_DOCKER_SOCK="$SOCK" \
-NASIKO_EXTRA_HOST="nasiko.local:127.0.0.1" \
-NASIKO_CA_FILE="$CA" \
-NASIKO_URL_FROM_STUDIO="http://host.containers.internal:8480" \
-STUDIO_FOR_NASIKO="http://host.containers.internal:3000" \
-bash scripts/nasiko-up.sh || fail "Nasiko did not come up. See the lines above."
+run_nasiko() {
+  NASIKO_COMPOSE="podman compose" \
+  NASIKO_DOCKER_SOCK="$SOCK" \
+  NASIKO_EXTRA_HOST="nasiko.local:127.0.0.1" \
+  NASIKO_CA_FILE="$CA" \
+  NASIKO_URL_FROM_STUDIO="http://host.containers.internal:8480" \
+  STUDIO_FOR_NASIKO="http://host.containers.internal:3000" \
+  bash scripts/nasiko-up.sh 2>&1 | tee "$HOME_DIR/nasiko-build.txt"
+  return "${PIPESTATUS[0]}"
+}
+diag() {
+  echo "--- Podman's machine: disk and storage"
+  podman machine ssh 'df -h /var /var/lib/containers 2>/dev/null; echo; dmesg 2>/dev/null | grep -iE "i/o error|overlay|ext4|xfs|no space" | tail -n 8' 2>&1 | tail -n 25
+  podman system df 2>&1 | head -n 8
+}
+
+# A failed storage mount ("input/output error" while mounting a build container) is Podman's machine storage, not Nasiko.
+# Try 1. If that error comes back: clear only unused build leftovers and dangling images (nothing the Studio uses) and try again.
+# Try 3: restart Podman's machine, bring the Studio back up, and try again.
+if ! run_nasiko; then
+  if grep -qi "input/output error\|no space left" "$HOME_DIR/nasiko-build.txt"; then
+    say "Podman's storage reported an error. Cleaning unused leftovers and trying again"
+    diag
+    podman image prune -f >/dev/null 2>&1; podman builder prune -f >/dev/null 2>&1 || true
+    if ! run_nasiko; then
+      say "Still failing. Restarting Podman's machine (the Studio comes back up after it), then trying again"
+      podman machine stop >/dev/null 2>&1; sleep 5; podman machine start >/dev/null 2>&1; sleep 15
+      ( cd "$APP" && podman compose up -d >/dev/null 2>&1 ) || echo "(could not restart the Studio; run: bash ~/SocraStudio/bin/socra.sh check)"
+      for _ in $(seq 1 30); do curl -fsS --max-time 5 http://localhost:3000 >/dev/null 2>&1 && break; sleep 5; done
+      run_nasiko || { diag; fail "Nasiko did not come up. The last output is in $HOME_DIR/nasiko-build.txt. Send it to Claude."; }
+    fi
+  else
+    fail "Nasiko did not come up. The last output is in $HOME_DIR/nasiko-build.txt. Send it to Claude."
+  fi
+fi
 
 say "Done"
 if curl -fsS --max-time 5 http://localhost:8480/health >/dev/null 2>&1; then
