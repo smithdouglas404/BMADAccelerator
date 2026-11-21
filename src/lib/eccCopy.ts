@@ -3,8 +3,8 @@
 // Safe for the browser: constants only.
 export const ECC_COPY = {
   owner: "smithdouglas404",
-  repo: "ecc-studio",
-  url: "https://github.com/smithdouglas404/ecc-studio",
-  studioGroupUrl: "https://github.com/smithdouglas404/ecc-studio/tree/main/studio-skills",
+  repo: "eccsmith",
+  url: "https://github.com/smithdouglas404/eccsmith",
+  studioGroupUrl: "https://github.com/smithdouglas404/eccsmith/tree/main/studio-skills",
   upstreamUrl: "https://github.com/affaan-m/everything-claude-code",
 } as const;
