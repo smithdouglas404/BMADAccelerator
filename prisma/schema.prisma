@@ -89,9 +89,30 @@ model UseCase {
   members       Member[]
   truthChanges  TruthChange[]
   appAgents     AppAgent[]
+  coverage      Coverage[]
   // The shared agent service's app token and callback secret for this product (encrypted).
   agentToken    String         @default("")
   agentSecret   String         @default("")
+}
+
+// How much of each specialist's question areas the people on the product have answered (Doug, Nov 21:
+// "an agent plus a skill... enough questions in order to say, hey, this is kind of complete"). The areas of
+// the business analyst, architect, UX/UI designer and product engineer come from their skills; the domain
+// expert derives its own for the field. A row exists only once a specialist recorded something real.
+model Coverage {
+  id         String   @id @default(cuid())
+  useCaseId  String
+  specialist String // business-analyst | architect | engineer | ux | domain
+  area       String // the area's key in the skill (or the domain expert's own)
+  label      String   @default("")
+  status     String   @default("open") // open | partly | covered | assumed
+  note       String   @default("") // what settled it, in their words, or the assumed default
+  evidence   String[] @default([]) // msg:<id>, decision:<id> ...
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  useCase    UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+
+  @@unique([useCaseId, specialist, area])
 }
 
 // The "why did this change?" timeline of the Product Truth Graph: one row per real change to a node,

@@ -659,3 +659,19 @@ a.studio-home-brand { color: inherit; text-decoration: none; padding-bottom: 12p
 .studio-convo-thread { display: grid; gap: 8px; padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px dashed var(--line); }
 .studio-convo-replies { display: grid; gap: 8px; margin-left: 28px; padding-left: 14px; border-left: 2px solid rgba(var(--acid-rgb), .35); }
 .studio-convo-empty { margin: 8px 0; font-size: 14px; }
+
+/* Socra's team: information only (Doug, Nov 21). Hover or focus a member for what it does, its skill and what is still open. */
+.studio-team-help { margin: 10px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.studio-team-list { display: grid; gap: 3px; margin: 12px 0 0; padding: 0; list-style: none; }
+.studio-team-member { position: relative; display: flex; align-items: center; gap: 8px; padding: 8px 7px; color: var(--muted); border-radius: var(--radius, 7px); cursor: default; outline: 0; }
+.studio-team-member:hover, .studio-team-member:focus-visible { color: var(--ink); background: rgba(var(--hi-rgb),.06); }
+.studio-team-member > span:nth-child(2) { display: grid; gap: 2px; }
+.studio-team-member strong { font-size: 12px; font-weight: 500; }
+.studio-team-member small { color: var(--faint); font-size: 12px; }
+.studio-team-tip { position: absolute; z-index: 30; right: calc(100% + 8px); top: 0; display: none; width: 290px; padding: 12px 13px; color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--radius, 8px); background: var(--panel-strong, var(--panel)); box-shadow: var(--shadow); }
+.studio-team-member:hover .studio-team-tip, .studio-team-member:focus-visible .studio-team-tip { display: block; }
+.studio-team-tip strong { display: block; font-size: 13px; font-weight: 600; }
+.studio-team-tip p { margin: 6px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.studio-team-tip .studio-team-skill { font: 12px 'DM Mono', monospace; color: var(--faint); }
+.studio-team-tip .studio-team-open { color: var(--ink); }
+@media (max-width: 900px) { .studio-team-tip { right: auto; left: 0; top: calc(100% + 4px); width: min(290px, 80vw); } }

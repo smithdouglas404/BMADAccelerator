@@ -59,7 +59,17 @@ export type PackageInput = {
   truthGraph: { schema: unknown; nodes: { id: string }[]; edges: { id: string; from: string; to: string }[] };
   /** Each mark on the prototype and how far it has gone round the loop (select, describe, interpret, shape, regenerate). */
   vibeLoop: { annotation: string; target: string; shape: string; stage: string; observation: string; behaviour: string; acceptance: string[]; component: string; changes: string[]; question: string }[];
+  /** What each specialist asked (its skill's areas) and what the people answered or let it assume. */
+  coverage?: { name: string; areas: { label: string; status: string; note: string }[] }[];
 };
+
+/** The team's questions in the PRD: answered areas are requirements in the people's words; assumed ones carry their default. */
+function coverageMarkdown(input: PackageInput) {
+  const team = (input.coverage ?? []).filter((c) => c.areas.some((a) => a.note || a.status !== "open"));
+  if (!team.length) return "";
+  const line = (a: { label: string; status: string; note: string }) => `- **${a.label}** (${a.status === "covered" ? "answered" : a.status === "partly" ? "partly answered" : a.status === "assumed" ? "assumed, default below" : "still open: use what the leading products do"})${a.note ? `: ${a.note}` : ""}`;
+  return `\n## What the team asked, and what was answered or assumed\n\n${team.map((c) => `### ${c.name}\n${c.areas.map(line).join("\n")}`).join("\n\n")}\n`;
+}
 
 const json = (v: unknown) => JSON.stringify(v, null, 2) + "\n";
 
@@ -159,7 +169,7 @@ You are the implementation agent for ${input.productName}. Build the thinnest pr
 
 ## Guardrails
 - Preserve the customer language from PRFAQ.md.
-- Build what PRD.md and TRD.md say. Confirmed and Recommended sections are requirements; Inferred ones are your starting point unless the owner removed them; Open decisions stay visible and reversible in the app; Not-yet-researched sections fall back to what the leading products in this category do. Every requirement traces through SPEC_TRACE.json (PR-/TR- ids) to the conversation and evidence it came from.
+- Build what PRD.md and TRD.md say. Confirmed and Recommended sections are requirements; Inferred ones are your starting point unless the owner removed them; Open decisions stay visible and reversible in the app; Not-yet-researched sections fall back to what the leading products in this category do. Every requirement traces through SPEC_TRACE.json (PR-/TR- ids) to the conversation and evidence it came from. PRD.md ends with what the team asked and what the people answered: build answered areas exactly as answered, in their words, and assumed areas with the stated default, visibly changeable.
 - Use the selected shadcn/ui baseline (COMPONENT_MAP.json) for the interface.
 - Use the Agent Kit route definitions (AGENT_KIT_ROUTING.json) as the prototype orchestration baseline. The approved agents run in the Studio's shared agent service (AGENTS.json: AgentKit, each with a Letta persona and Mem0 memory); the app calls them, it does not host them.
 - Keep human-in-the-loop decisions explicit and reversible.
@@ -188,7 +198,7 @@ Repository: ${input.repositoryUrl || "Connect a repository on the Studio's Conne
     "README.md": readme,
     "PRFAQ.md": prfaq.endsWith("\n") ? prfaq : prfaq + "\n",
     "VALIDATED_USE_CASE.md": useCase,
-    "PRD.md": specMarkdown(input.spec, "prd", input.productName),
+    "PRD.md": specMarkdown(input.spec, "prd", input.productName) + coverageMarkdown(input),
     "TRD.md": specMarkdown(input.spec, "trd", input.productName),
     // Provenance edges in the design team's exact shape: { section, label, detail, type }. Only edges of
     // real events are stored (see lib/studio/trace.ts), so nothing seeded ever reaches an export.

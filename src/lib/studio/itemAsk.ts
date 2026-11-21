@@ -65,10 +65,10 @@ export function itemAsk(o: { node: string; title: string; text: string; stage: S
   return [
     `Item: ${o.node} (“${o.title}”). Specialist for this stage: ${s.agent} (${s.name}: ${s.why}). Skill for this stage: ${k.skill} (${k.why}).`,
     `0. Open the ${k.skill} skill with the Skill tool and apply it to this item (also any switched-on library skill whose description fits it: open those with the Skill tool too, so what was applied is on the record).`,
-    `1. Send \`${s.agent}\` with the Agent tool to look at this item now (tell it the item id and that it asks nothing itself); let it speak once with share_finding, about ${about}.`,
+    `1. Send \`${s.agent}\` with the Agent tool to look at this item now (tell it the item id), together with any other specialist whose open areas the item touches (below); each speaks once with share_finding, about ${about}, and asks its own one or two questions from its skill's open areas.`,
     gaps.length
-      ? `2. Its words don't yet say: ${gaps.join("; ")}. Ask ${o.by} about what is really missing, at most three short questions, most important first, each with numbered options and one marked "(suggested)".`
-      : `2. Check whether anything a builder would need is still missing (who uses it and when, what "done" looks like, the rules and edge cases). If something is, ask ${o.by} about it, at most three short questions with numbered options and one marked "(suggested)".`,
+      ? `2. Its words don't yet say: ${gaps.join("; ")}. Ask ${o.by} about what is really missing that the specialists didn't already ask, at most three short questions in all, most important first, each with numbered options and one marked "(suggested)".`
+      : `2. Check whether anything a builder would need is still missing (who uses it and when, what "done" looks like, the rules and edge cases). If something is and no specialist asked it, ask ${o.by} about it, at most three short questions with numbered options and one marked "(suggested)".`,
     `3. Every message about this item goes out with about ${about} (say, share_finding and signal take it), so it shows in the item's detail view as well as here. If nothing is missing, say so in one line with about ${about} and name what makes it clear. Never pass over an item in silence.`,
     `4. When they answer, write it into the item (the card's details and acceptance criteria, or the backlog item) and the spec sections it touches.`,
   ].join("\n");

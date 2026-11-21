@@ -1,3 +1,4 @@
+import { teamCoverage } from "@/lib/studio/coverage";
 import { agentConfig } from "@/lib/agentService";
 import { brand } from "@/lib/brand";
 import { promises as fs } from "fs";
@@ -80,6 +81,8 @@ export async function studioState(id: string) {
     decisions: uc.decisions.map((d) => ({ ...d, agent: b(d.agent), text: d.agent ? b(d.text) : d.text })),
     backlog: uc.backlog.map((x) => ({ ...x, group: b(x.group), source: b(x.source), ...(x.recKind ? { title: b(x.title), note: b(x.note) } : {}) })),
     routes: uc.routes.map((r) => ({ ...r, agent: b(r.agent), detail: b(r.detail) })),
+    // Each specialist's question areas (from its skill) and what has been answered: the team list's hover.
+    coverage: await teamCoverage(id),
     moves: uc.moves.map((m) => ({ ...m, movedBy: b(m.movedBy), moveReason: b(m.moveReason) })),
     // Each evidence card points at the stored document it came from, wherever that can be found.
     evidence: withDocuments(uc.evidence, uc.documents),
@@ -174,6 +177,7 @@ export async function packageInput(useCaseId: string, opts: { frames?: boolean; 
     specVersion: uc.specRevisions[0]?.version ?? 0,
     specDiff: uc.specRevisions[0]?.diff ?? "",
     truthGraph: { schema: truthGraphSchema, ...(await truthExport(useCaseId)) },
+    coverage: (await teamCoverage(useCaseId)).map((c) => ({ name: c.name, areas: c.areas.map((a) => ({ label: a.label, status: a.status, note: a.note })) })),
     vibeLoop: uc.feedback.map((f) => {
       const it = readInterpretation(f.interpretation);
       const changes = [...(it.prd ?? []), ...(it.trd ?? [])];

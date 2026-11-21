@@ -2,6 +2,7 @@
 // The Studio's live data: the server state for one product, polled, and adapters that turn it into the
 // shapes the design team's screens already use (data.ts and spec.ts types), so their components stay as
 // they are and show real products instead of the sample.
+import type { TeamMemberCoverage } from '@/lib/studio/coverageCore'
 import { ownerBacklogState } from '@/lib/studio/core'
 import { needsTriage } from '@/lib/studio/journey'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -38,7 +39,7 @@ export type Live = {
   lastGeneratedAt: string | null; updatedAt: string; pending: number; agentsEnabled: boolean; connections: { linear: boolean; github: boolean; voice: boolean }
   preview: { hasApp: boolean; port: number | null; running: boolean; starting: boolean }
   packageFiles: string[]
-  capabilities: LiveCapability[]; decisions: LiveDecision[]; backlog: LiveBacklog[]; evidence: LiveEvidence[]; moves: LiveMove[]; routes: LiveRoute[]
+  capabilities: LiveCapability[]; decisions: LiveDecision[]; backlog: LiveBacklog[]; evidence: LiveEvidence[]; moves: LiveMove[]; routes: LiveRoute[]; coverage?: TeamMemberCoverage[]
   messages: LiveMessage[]; members: LiveMember[]; documents: LiveDocument[]; feedback: LiveFeedback[]; spec: LiveSpec[]; specRevisions: LiveRevision[]
 }
 
