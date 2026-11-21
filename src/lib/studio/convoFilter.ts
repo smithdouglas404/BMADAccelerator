@@ -14,35 +14,58 @@ export function speakerOf(m: ConvoMsg): Omit<Speaker, 'count'> {
   return { key: m.specialist || slug(name), name, kind: 'agent' }
 }
 
-/** Everyone who spoke: people first, then agents in the order they first spoke. */
+/** The conversations: what a person said and everything the team said after it, until the person spoke again. */
+function roundsOf<T extends ConvoMsg>(list: T[]): T[][] {
+  const rounds: T[][] = []
+  for (const m of list) {
+    if (m.role === 'user' || !rounds.length) rounds.push([])
+    rounds[rounds.length - 1].push(m)
+  }
+  return rounds
+}
+
+/** Who took part in a conversation: who spoke, who was addressed, and whose statement was replied to. */
+function takingPart<T extends ConvoMsg>(round: T[], by: Map<string, string>): Set<string> {
+  const who = new Set<string>()
+  for (const m of round) {
+    who.add(by.get(m.id)!)
+    if (m.addressed) who.add(m.addressed)
+    if (m.replyTo && by.has(m.replyTo)) who.add(by.get(m.replyTo)!)
+  }
+  return who
+}
+
+/** Everyone who spoke, with how many conversations each took part in: people first, then agents as they first spoke. */
 export function speakers(list: ConvoMsg[]): Speaker[] {
   const seen = new Map<string, Speaker>()
   for (const m of list) {
     const s = speakerOf(m)
-    const had = seen.get(s.key)
-    if (had) had.count++
-    else seen.set(s.key, { ...s, count: 1 })
+    if (!seen.has(s.key)) seen.set(s.key, { ...s, count: 0 })
   }
+  const by = new Map(list.map((m) => [m.id, speakerOf(m).key]))
+  for (const r of roundsOf(list)) for (const k of takingPart(r, by)) { const s = seen.get(k); if (s) s.count++ }
   const rank = { person: 0, agent: 1, signal: 2 }
   return [...seen.values()].sort((a, b) => rank[a.kind] - rank[b.kind])
 }
 
 /**
- * The exchange of the chosen speakers: what they said, what answered them, what they answered, and what a
- * person addressed to a chosen agent. Nothing chosen: everything.
+ * Every conversation the chosen speakers took part in (Doug, Nov 21), read whole: a conversation is what a person
+ * said and everything the team said after it until the person spoke again (Socra and the specialists talking to
+ * each other included). It is kept when a chosen speaker spoke in it, was addressed, or was replied to; the
+ * statement a reply answers comes along too. Nothing chosen: everything.
  */
 export function exchangeOf<T extends ConvoMsg>(list: T[], chosen: string[]): T[] {
   if (!chosen.length) return list
   const pick = new Set(chosen)
   const by = new Map(list.map((m) => [m.id, speakerOf(m).key]))
   const keep = new Set<string>()
-  for (const m of list) {
-    const who = by.get(m.id)!
-    if (pick.has(who) || (m.addressed && pick.has(m.addressed))) keep.add(m.id)
-    else if (m.replyTo && pick.has(by.get(m.replyTo) ?? '')) keep.add(m.id)
+  for (const r of roundsOf(list)) {
+    if (![...takingPart(r, by)].some((k) => pick.has(k))) continue
+    for (const m of r) {
+      keep.add(m.id)
+      if (m.replyTo && by.has(m.replyTo)) keep.add(m.replyTo)
+    }
   }
-  // What a chosen speaker answered.
-  for (const m of list) if (keep.has(m.id) && pick.has(by.get(m.id)!) && m.replyTo) keep.add(m.replyTo)
   return list.filter((m) => keep.has(m.id))
 }
 

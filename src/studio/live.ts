@@ -97,10 +97,14 @@ export function colorOf(d: Live, accent: string): string | undefined {
 export type StudioMessage = ConversationMessage & { specialist?: string; author?: string; authorRole?: string; addressed?: string; raw?: string; ref?: string; replyTo?: string }
 
 export function toMessages(d: Live, me?: { name?: string }): StudioMessage[] {
+  // Who "you" are: the name this browser was given; without one, the only named person in the conversation
+  // (their words reached the Studio with their name, for example through Muse). Two named people stay apart.
+  const named = [...new Set(d.messages.filter((m) => m.role === 'user' && m.author).map((m) => m.author))]
+  const self = me?.name || (named.length === 1 ? named[0] : '')
   return d.messages.map((m) => ({
     id: m.id,
     role: m.role === 'user' ? 'user' : m.role === 'signal' ? 'signal' : 'muse',
-    label: m.role === 'user' ? (m.author && m.author !== me?.name ? `${m.author} · ${m.authorRole || 'Product owner'}` : 'You') : m.agent || (m.role === 'signal' ? 'Signal' : 'Socra · Product physician'),
+    label: m.role === 'user' ? (m.author && m.author !== self ? `${m.author} · ${m.authorRole || 'Product owner'}` : 'You') : m.agent || (m.role === 'signal' ? 'Signal' : 'Socra · Product physician'),
     text: m.content,
     time: ago(m.createdAt),
     accent: colorOf(d, m.accent),
