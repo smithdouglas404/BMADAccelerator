@@ -109,8 +109,10 @@ echo "Podman is ready."
 say "Step 3 of 6: putting the Studio's code in place"
 if [ "$MODE" = "update" ]; then
   echo "Getting the newest version from GitHub ($CODE_BRANCH)..."
+  NEW_SHA=$(curl -fsS --max-time 20 "https://api.github.com/repos/smithdouglas404/BMADAccelerator/branches/$CODE_BRANCH" | perl -0777 -ne 'print $1 if /"commit"\s*:\s*\{\s*"sha"\s*:\s*"([0-9a-f]{40})"/')
+  [ -n "$NEW_SHA" ] || NEW_SHA="refs/heads/$CODE_BRANCH"
   rm -rf "$APP.new"; mkdir -p "$APP.new"
-  curl -fsSL "https://codeload.github.com/smithdouglas404/BMADAccelerator/tar.gz/refs/heads/$CODE_BRANCH" \
+  curl -fsSL "https://codeload.github.com/smithdouglas404/BMADAccelerator/tar.gz/$NEW_SHA" \
     | tar -xzf - -C "$APP.new" --strip-components=1 2>>"$LOG" \
     && [ -f "$APP.new/docker-compose.yml" ] || fail "I couldn't download the newest version. Check the internet connection and run this again."
   [ -f "$APP/.env" ] && cp "$APP/.env" "$APP.new/.env"
@@ -159,6 +161,82 @@ services:
       NODE_EXTRA_CA_CERTS: /etc/ssl/corp-ca.pem
 YML
 
+# ---------- 3c. the Update tab (laptop only) ----------
+# Settings > Update talks to the small updater on this laptop (127.0.0.1:3099). Added to the downloaded code
+# here, until the Mac Studio's version carries it itself.
+if ! grep -q "UpdatePanel" "$APP/src/studio/settings.tsx" 2>/dev/null; then
+cat > "$APP/src/studio/updatepanel.tsx" <<'TSX'
+'use client'
+// Settings > Update (laptop only). Talks to the small updater running on this laptop (127.0.0.1:3099), which pulls
+// the newest Studio from GitHub (branch mac-studio, the version the Mac Studio runs), rebuilds and restarts it.
+// Use cases, documents, memory, keys and the Claude sign-in stay as they are.
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { RefreshCw } from 'lucide-react'
+
+type S = { state: 'idle' | 'running' | 'done' | 'failed'; installed: string; latest: string; step: string; log: string }
+const U = 'http://localhost:3099'
+
+export function UpdatePanel() {
+  const [s, setS] = useState<S | null>(null)
+  const [down, setDown] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const timer = useRef<number | null>(null)
+
+  const read = useCallback(async () => {
+    try {
+      const r = await fetch(`${U}/status`, { cache: 'no-store' })
+      setS((await r.json()) as S); setDown(false)
+    } catch { setDown(true) }
+  }, [])
+  useEffect(() => {
+    void read()
+    timer.current = window.setInterval(() => { void read() }, 3000)
+    return () => { if (timer.current) window.clearInterval(timer.current) }
+  }, [read])
+
+  const start = async () => {
+    setBusy(true)
+    try { await fetch(`${U}/update`, { method: 'POST', headers: { 'X-Socra': '1' } }); await read() } catch { setDown(true) }
+    setBusy(false)
+  }
+
+  const short = (x: string) => (x ? x.slice(0, 7) : 'unknown')
+  const current = s && s.installed && s.latest && s.installed === s.latest
+  return (
+    <div className="studio-settings-grid">
+      <section className="studio-card">
+        <div className="stack-header"><div><p className="eyebrow">Update</p><h3>Stay on the <em>same version</em> as the Mac Studio</h3></div><RefreshCw size={16} /></div>
+        {down && <p className="studio-muted">The updater on this laptop is not answering. If you just restarted the laptop, wait a minute. Otherwise run the setup line in Terminal once more.</p>}
+        {!down && !s && <p className="studio-muted">Checking for a new version…</p>}
+        {s && <div className="studio-list">
+          <div className="studio-list-row"><div className="studio-row-main"><strong>On this laptop</strong><small>version {short(s.installed)}</small></div></div>
+          <div className="studio-list-row"><div className="studio-row-main"><strong>Newest (Mac Studio, on GitHub)</strong><small>version {short(s.latest)}</small></div><span className={current ? 'studio-ok' : 'studio-warn'}>{current ? 'up to date' : 'update available'}</span></div>
+          {s.state === 'running' && <div className="studio-list-row"><div className="studio-row-main"><strong>Updating…</strong><small>{s.step || 'Starting'}. The Studio goes offline for a few minutes while it restarts; this page keeps checking.</small></div></div>}
+          {s.state === 'done' && <div className="studio-list-row"><div className="studio-row-main"><strong>Updated</strong><small>Reload the page to use the new version. Your use cases, memory and keys are unchanged.</small></div><span className="studio-ok">done</span></div>}
+          {s.state === 'failed' && <div className="studio-list-row"><div className="studio-row-main"><strong>The update stopped</strong><small>Nothing was lost: your data and keys are untouched, and the previous version is kept. Send this to Claude: {s.step}</small><pre style={{ whiteSpace: 'pre-wrap', fontSize: 12, marginTop: 8 }}>{s.log}</pre></div><span className="studio-warn">failed</span></div>}
+        </div>}
+        <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
+          <button type="button" className="button" disabled={busy || down || !s || s.state === 'running'} onClick={() => { void start() }}>
+            {s?.state === 'running' ? 'Updating…' : current ? 'Update anyway' : 'Update now'}
+          </button>
+          {s?.state === 'done' && <button type="button" className="button button-quiet" onClick={() => window.location.reload()}>Reload</button>}
+        </div>
+      </section>
+    </div>
+  )
+}
+TSX
+perl -0pi -e '
+  s{(import \{ JevValue \} from \x27\./jev\x27\n)}{$1import { UpdatePanel } from \x27./updatepanel\x27\n};
+  s{\| \x27jev\x27>}{| \x27jev\x27 | \x27update\x27>};
+  s{t === \x27jev\x27\)}{t === \x27jev\x27 || t === \x27update\x27)};
+  s{\[\x27jev\x27, \x27Jev\x27\]\]}{[\x27jev\x27, \x27Jev\x27], [\x27update\x27, \x27Update\x27]]};
+  s{(\{tab === \x27jev\x27 && <JevValue />\})}{$1\n        {tab === \x27update\x27 && <UpdatePanel />}};
+' "$APP/src/studio/settings.tsx"
+grep -q "<UpdatePanel />" "$APP/src/studio/settings.tsx" && grep -q "import { UpdatePanel }" "$APP/src/studio/settings.tsx" \
+  || { echo "(Couldn't add the Update tab to this version; updates still work from Terminal.)"; rm -f "$APP/src/studio/updatepanel.tsx"; }
+fi
+
 # ---------- 4. keys, through pop-ups ----------
 say "Step 4 of 6: keys (pop-up windows)"
 if ! has_env OPENAI_API_KEY; then
@@ -170,7 +248,7 @@ if ! has_env ANTHROPIC_API_KEY; then
   K=$(popup_secret "Anthropic API key (optional: used only when your Claude plan hits its limit). Paste it, or press Skip:")
   [ -n "$K" ] && set_env ANTHROPIC_API_KEY "$K"; unset K
 fi
-if ! has_env CLAUDE_CODE_OAUTH_TOKEN && ask_yes "Sign in with your Claude plan now? A sign-in page opens; approve it there. (This is what runs Socra, the agents and Generate.)"; then
+if ! has_env CLAUDE_CODE_OAUTH_TOKEN && [ -t 0 ] && ask_yes "Sign in with your Claude plan now? A sign-in page opens; approve it there. (This is what runs Socra, the agents and Generate.)"; then
   T=$(mktemp -t claude-plan)
   printf '\e[8;40;260t'; export COLUMNS=260
   echo "A browser page opens. Sign in with your Claude account and approve. If it asks for a code, it shows one to paste back here."
@@ -219,8 +297,126 @@ fi
 # ---------- 6. start ----------
 say "Step 6 of 6: starting the Studio"
 podman compose up -d >>"$LOG" 2>&1 || fail "The Studio didn't start. Details are in $LOG."
-for i in $(seq 1 90); do curl -fsS -o /dev/null http://localhost:3000 && break; sleep 2; done
-curl -fsS -o /dev/null http://localhost:3000 || fail "The Studio is starting slowly. Wait a minute and open http://localhost:3000. Details are in $LOG."
-open http://localhost:3000
+for i in $(seq 1 90); do curl -fs -o /dev/null http://localhost:3000 2>/dev/null && break; sleep 2; done
+curl -fs -o /dev/null http://localhost:3000 2>/dev/null || fail "The Studio is starting slowly. Wait a minute and open http://localhost:3000. Details are in $LOG."
+[ "$MODE" = "update" ] && [ -n "${NEW_SHA:-}" ] && printf '%s\n' "${NEW_SHA#refs/heads/}" > "$HOME_DIR/.version"
+
+# The updater behind Settings > Update: a tiny local service (127.0.0.1:3099 only), started by macOS at login.
+# Not reinstalled while it is the one running this update.
+if [ -z "${SOCRA_UPDATER:-}" ]; then
+  mkdir -p "$HOME_DIR/bin" "$HOME/Library/LaunchAgents"
+  curl -fsSL --max-time 30 "https://raw.githubusercontent.com/smithdouglas404/BMADAccelerator/claude/project-thread-i43blx/scripts/laptop/start-on-laptop.sh" -o "$HOME_DIR/bin/socra.sh.new" \
+    && grep -q "Socra" "$HOME_DIR/bin/socra.sh.new" && mv "$HOME_DIR/bin/socra.sh.new" "$HOME_DIR/bin/socra.sh"
+  cat > "$HOME_DIR/bin/updater.pl" <<'PERL'
+#!/usr/bin/perl
+# Socra Studio updater for the laptop. Runs on the laptop itself (not in Podman), started by launchd.
+# Listens only on 127.0.0.1:3099. The Studio's Settings > Update tab talks to it:
+#   GET  /status  -> {"state":"idle|running|done|failed","installed":"<sha>","latest":"<sha>","step":"...","log":"..."}
+#   POST /update  -> starts the update (header X-Socra: 1 required), answers at once; poll /status.
+# The update itself is ~/SocraStudio/bin/socra.sh update (the same script as the setup line).
+use strict; use warnings;
+use IO::Socket::INET;
+use POSIX ":sys_wait_h";
+
+my $HOME = $ENV{HOME};
+my $DIR  = "$HOME/SocraStudio";
+my $LOG  = "$DIR/update.log";
+my $PIDF = "$DIR/.update.pid";
+my $RES  = "$DIR/.update.result";
+my $VER  = "$DIR/.version";
+my $SCRIPT_URL = "https://raw.githubusercontent.com/smithdouglas404/BMADAccelerator/claude/project-thread-i43blx/scripts/laptop/start-on-laptop.sh";
+my @ORIGINS = ("http://localhost:3000", "http://127.0.0.1:3000");
+$ENV{PATH} = "/opt/podman/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+
+my $srv = IO::Socket::INET->new(LocalAddr => '127.0.0.1', LocalPort => 3099, Proto => 'tcp', Listen => 5, ReuseAddr => 1)
+  or die "updater: cannot listen on 127.0.0.1:3099: $!\n";
+$SIG{CHLD} = sub { 1 while waitpid(-1, WNOHANG) > 0 };
+
+my ($latest, $latest_at) = ('', 0);
+sub slurp { my $f = shift; open(my $h, '<', $f) or return ''; local $/; my $s = <$h>; close $h; $s // '' }
+sub jstr { my $s = shift // ''; $s =~ s/\\/\\\\/g; $s =~ s/"/\\"/g; $s =~ s/\r//g; $s =~ s/\n/\\n/g; $s =~ s/\t/  /g; $s =~ s/[\x00-\x1f]//g; "\"$s\"" }
+sub running { my $p = slurp($PIDF); $p =~ s/\D//g; return ($p && kill(0, $p)) ? $p : 0 }
+sub latest_sha {
+  if (time - $latest_at > 60) {
+    my $j = `curl -fsS --max-time 10 https://api.github.com/repos/smithdouglas404/BMADAccelerator/branches/mac-studio 2>/dev/null`;
+    if ($j =~ /"commit"\s*:\s*\{\s*"sha"\s*:\s*"([0-9a-f]{40})"/) { $latest = $1; $latest_at = time }
+  }
+  $latest
+}
+sub status_json {
+  my $state = running() ? 'running' : (slurp($RES) =~ /^(done|failed)/ ? $1 : 'idle');
+  my $log = slurp($LOG); $log =~ s/\e\[[0-9;]*m//g;
+  my @steps = ($log =~ /^(Step \d of \d:[^\n]*)/mg);
+  my @lines = grep { /\S/ } split /\n/, $log; my $tail = join("\n", @lines > 12 ? @lines[-12..-1] : @lines);
+  my $inst = slurp($VER); $inst =~ s/\s//g;
+  return '{"state":' . jstr($state) . ',"installed":' . jstr($inst) . ',"latest":' . jstr(latest_sha()) .
+         ',"step":' . jstr(@steps ? $steps[-1] : '') . ',"log":' . jstr($tail) . '}';
+}
+sub start_update {
+  return 0 if running();
+  unlink $RES;
+  my $pid = fork();
+  return 0 unless defined $pid;
+  if ($pid == 0) {
+    POSIX::setsid();
+    $ENV{SOCRA_UPDATER} = 1;
+    open(STDIN, '<', '/dev/null'); open(STDOUT, '>', $LOG); open(STDERR, '>&', \*STDOUT);
+    # Fresh copy of the script first, so fixes to the updater reach the laptop too.
+    system("curl -fsSL --max-time 30 '$SCRIPT_URL' -o '$DIR/bin/socra.sh.new' && mv '$DIR/bin/socra.sh.new' '$DIR/bin/socra.sh'");
+    my $rc = system('/bin/bash', "$DIR/bin/socra.sh", 'update');
+    open(my $r, '>', $RES); print $r ($rc == 0 ? "done\n" : "failed\n"); close $r;
+    unlink $PIDF; POSIX::_exit(0);
+  }
+  open(my $p, '>', $PIDF); print $p "$pid\n"; close $p;
+  return 1;
+}
+
+while (1) {
+  my $c = $srv->accept or next;   # a finished update interrupts accept(); just wait again
+  $c->autoflush(1);
+  local $SIG{ALRM} = sub { die "timeout\n" }; alarm 5;
+  my ($req, %h) = ('');
+  eval {
+    $req = <$c> // '';
+    while (my $l = <$c>) { last if $l =~ /^\r?\n$/; $h{lc $1} = $2 if $l =~ /^([^:]+):\s*(.*?)\r?$/ }
+    1;
+  };
+  alarm 0;
+  my ($m, $path) = $req =~ /^(\w+)\s+(\S+)/ ? ($1, $2) : ('', '');
+  my $origin = $h{origin} // '';
+  my $cors = (grep { $_ eq $origin } @ORIGINS)
+    ? "Access-Control-Allow-Origin: $origin\r\nAccess-Control-Allow-Methods: GET, POST\r\nAccess-Control-Allow-Headers: X-Socra\r\nVary: Origin\r\n" : '';
+  my ($code, $body) = (404, '{"error":"not found"}');
+  if ($m eq 'OPTIONS') { ($code, $body) = (204, '') }
+  elsif ($m eq 'GET' && $path eq '/status') { ($code, $body) = (200, status_json()) }
+  elsif ($m eq 'POST' && $path eq '/update') {
+    if (($h{'x-socra'} // '') ne '1' || ($origin && !$cors)) { ($code, $body) = (403, '{"error":"not allowed"}') }
+    else { my $ok = start_update(); ($code, $body) = ($ok ? 202 : 409, $ok ? '{"started":true}' : '{"error":"an update is already running"}') }
+  }
+  my %txt = (200 => 'OK', 202 => 'Accepted', 204 => 'No Content', 403 => 'Forbidden', 404 => 'Not Found', 409 => 'Conflict');
+  print $c "HTTP/1.1 $code $txt{$code}\r\nContent-Type: application/json\r\nCache-Control: no-store\r\n${cors}Content-Length: " . length($body) . "\r\nConnection: close\r\n\r\n$body";
+  close $c;
+}
+PERL
+  PL="$HOME/Library/LaunchAgents/com.socra.studio-updater.plist"
+  cat > "$PL" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.socra.studio-updater</string>
+  <key>ProgramArguments</key><array><string>/usr/bin/perl</string><string>$HOME_DIR/bin/updater.pl</string></array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>AbandonProcessGroup</key><true/>
+  <key>StandardErrorPath</key><string>$HOME_DIR/updater.err</string>
+</dict></plist>
+PLIST
+  launchctl bootout "gui/$(id -u)/com.socra.studio-updater" >/dev/null 2>&1
+  launchctl bootstrap "gui/$(id -u)" "$PL" >>"$LOG" 2>&1
+  sleep 2
+  curl -fs --max-time 5 http://127.0.0.1:3099/status >/dev/null 2>&1 && echo "Update button ready: Settings > Update." \
+    || echo "(The Update button's helper didn't start; updates still work from Terminal.)"
+fi
+[ -t 0 ] && open http://localhost:3000
 say "Done. The Studio is on http://localhost:3000 with your use cases."
 echo "After a restart, if localhost:3000 does not open: start the machine in Podman Desktop, then run this same line again (no pop-ups, your data stays)."
