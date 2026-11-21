@@ -43,7 +43,7 @@ export const effectiveLevel = (access: { scope: string; role: string }): Level =
 
 const id = z.string().trim().min(10).max(40);
 const confirm = z.boolean().optional().describe("Leave out first to see what would happen. Send true only after the person has said yes to that exact action.");
-const BOARD_COLUMNS = ["queued", "ready", "building", "review", "done"] as const;
+const BOARD_COLUMNS = ["ready", "queued", "building", "review", "done"] as const;
 const SPEC_STATUS = ["draft", "exploring", "evidence-backed", "owner-approved", "engineer-reviewed", "ready-prototype", "ready-pilot", "production-ready"] as const;
 const LINK_KINDS = ["depends_on", "split_from", "related"] as const;
 
@@ -199,7 +199,7 @@ export const TOOLS = {
   board_card: tool({
     title: "Add, edit or move a Board card",
     description:
-      "Work the Board. Only when the person asks for a Board card by name: a new requirement or a backlog goes in with capture instead. create: a new card (title, optional details and column). edit: change a card's title, capability, decision, build prompt or owner. move: move it to another column (queued = Backlog, ready = Ready to shape, building = Being made real, review = Human review, done = Done) with a reason; moving to done needs confirm. Create and move wait for Socra's questions about the card and return them: put them to the person right away. attach: attach a small file (text, or base64) as evidence on the card.",
+      "Work the Board. Only when the person asks for a Board card by name: a new requirement or a backlog goes in with capture instead. create: a new card (title, optional details and column). edit: change a card's title, capability, decision, build prompt or owner. move: move it to another column (ready = Ready to shape, the first column; queued = Backlog; building = Being made real, review = Human review, done = Done) with a reason; moving to done needs confirm. Create and move wait for Socra's questions about the card and return them: put them to the person right away. attach: attach a small file (text, or base64) as evidence on the card.",
     need: "write",
     input: z.object({
       use_case_id: id,
