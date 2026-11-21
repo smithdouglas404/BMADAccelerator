@@ -40,6 +40,18 @@ export async function resume(useCaseId: string) {
   if (waiting) void kick(useCaseId);
 }
 
+/**
+ * When the Studio starts, take up every use case's unfinished turns (a restart, a rebuild or an outage cut
+ * them off), so an item that came in never waits for someone to open its product before Socra asks about it.
+ * Work older than three days is left alone. One product at a time, so a restart doesn't start ten turns at once.
+ */
+export async function resumeAll() {
+  if (!agentsEnabled()) return;
+  const since = new Date(Date.now() - 3 * 86_400_000);
+  const rows = await prisma.agentEvent.findMany({ where: { status: { in: ["queued", "running"] }, createdAt: { gt: since } }, select: { useCaseId: true }, distinct: ["useCaseId"] });
+  for (const r of rows) await kick(r.useCaseId).catch((e) => console.error("resume turns", r.useCaseId, e));
+}
+
 export function agentsEnabled() {
   return claudeConfigured() || process.env.BACC_FAKE_AGENT === "1";
 }
@@ -49,8 +61,11 @@ export async function kick(useCaseId: string) {
   startMemoryJobs();
   running.add(useCaseId);
   try {
-    // Events left "running" by a restart go back in the queue.
+    // Events left "running" by a restart go back in the queue, and the turn they were in is recorded as cut off.
     await prisma.agentEvent.updateMany({ where: { useCaseId, status: "running" }, data: { status: "queued" } });
+    await prisma.agentTurn
+      .updateMany({ where: { useCaseId, status: "running" }, data: { status: "failed", error: "Cut off by a restart of the Studio; taken up again", endedAt: new Date() } })
+      .catch(() => undefined);
     // A turn that failed in the last hour is tried again, up to three times in all.
     await prisma.agentEvent.updateMany({
       where: { useCaseId, status: "failed", attempts: { lt: 3 }, createdAt: { gt: new Date(Date.now() - 60 * 60 * 1000) } },

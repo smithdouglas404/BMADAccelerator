@@ -170,6 +170,60 @@ async function preview(tool: ToolName, input: Record<string, unknown>, ucId: str
   return {};
 }
 
+/**
+ * After a write that sends Socra to work (a capture, a card, a move, an answer), wait for its turn and hand
+ * its questions straight back, so an outside assistant such as Muse can put them to the person in the same
+ * conversation instead of having to come back for them (Doug, Nov 21). Stops when Socra's turn is over,
+ * shortly after it has asked, or at the time limit; then says where to read the rest.
+ */
+export async function socraReply(useCaseId: string, since: Date, nodes: string[], waitSeconds: number) {
+  const deadline = since.getTime() + Math.max(0, Math.min(waitSeconds, 110)) * 1000;
+  const about = nodes.length ? { about: { hasSome: nodes } } : {};
+  let lastCount = 0;
+  let quietSince = Date.now();
+  for (;;) {
+    const [pending, msgs, raised] = await Promise.all([
+      prisma.agentEvent.count({ where: { useCaseId, status: { in: ["queued", "running"] }, createdAt: { gte: new Date(since.getTime() - 1000) } } }),
+      prisma.message.findMany({ where: { useCaseId, role: { in: ["muse", "agent"] }, createdAt: { gte: since }, ...about }, orderBy: { createdAt: "asc" } }),
+      // Checkpoints only a person can decide, raised by the turn this write started.
+      prisma.decision.findMany({ where: { useCaseId, status: "open", createdAt: { gte: since } }, orderBy: { createdAt: "asc" } }),
+    ]);
+    if (msgs.length + raised.length !== lastCount) { lastCount = msgs.length + raised.length; quietSince = Date.now(); }
+    const asked = msgs.some((m) => asksSomething(m.content)) || raised.length > 0;
+    const done = !pending && Date.now() - since.getTime() > 1500;
+    const settled = asked && Date.now() - quietSince > 8000;
+    if (done || settled || Date.now() >= deadline || waitSeconds <= 0) {
+      const questions = msgs.filter((m) => asksSomething(m.content)).map((m) => {
+        const q = questionOf(brand(m.content));
+        return { question_id: m.id, item_id: m.about[0], from: brand(m.agent || ASSISTANT_NAME), question: q.question, options: q.options, full_text: brand(m.content).slice(0, 2000) };
+      });
+      const said = msgs.filter((m) => !asksSomething(m.content)).map((m) => ({ from: brand(m.agent || ASSISTANT_NAME), said: brand(m.content).slice(0, 1200) }));
+      const working = !done && !!pending;
+      const decisions = raised.map((d) => ({
+        decision_id: d.id,
+        from: brand(d.agent || ASSISTANT_NAME),
+        decide: brand(d.text),
+        options: (Array.isArray(d.options) ? (d.options as { label?: string }[]) : []).map((o) => brand(String(o?.label ?? ""))).filter(Boolean),
+      }));
+      const n = questions.length + decisions.length;
+      return {
+        questions,
+        decisions_for_the_person: decisions,
+        said,
+        still_working: working,
+        tell_the_person: n
+          ? `${ASSISTANT_NAME} has ${n === 1 ? "something to ask" : `${n} things to ask`}. Put ${n === 1 ? "it" : "them"} to the person now, word for word with the options. Send an answer to a question with answer (item_id, question_id); a decision with decide (decision_id, approve or reject, the option they chose as comment).`
+          : working
+            ? `${ASSISTANT_NAME} and its specialist are still looking at it. Call whats_waiting (item_questions) or item_trace in a minute and put the questions to the person.`
+            : said.length
+              ? `${ASSISTANT_NAME} replied; tell the person what it said.`
+              : `${ASSISTANT_NAME} had nothing to ask.`,
+      };
+    }
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+}
+
 /** Socra's latest question in each conversation that nobody has answered yet. */
 async function socraAsks(ids: string[], names: Map<string, string>) {
   const out: { use_case_id: string; use_case?: string; question: string; options: string[]; asked: string }[] = [];
@@ -206,6 +260,9 @@ async function lastSocra(ucId: string) {
   const m = await prisma.message.findFirst({ where: { useCaseId: ucId, role: { in: ["muse", "agent"] } }, orderBy: { createdAt: "desc" } });
   return m ? brand(m.content).slice(0, 1500) : "";
 }
+
+/** How long a write waits for Socra's questions (seconds); 0 returns at once. */
+const waitOf = (input: Record<string, unknown>) => (typeof input.wait_seconds === "number" ? input.wait_seconds : 50);
 
 async function run(tool: ToolName, input: Record<string, unknown>, uc: Awaited<ReturnType<typeof scopedUseCase>> | null, access: Access, client: string): Promise<unknown> {
   const s = (k: string) => (input[k] === undefined ? undefined : String(input[k]));
@@ -326,8 +383,10 @@ async function run(tool: ToolName, input: Record<string, unknown>, uc: Awaited<R
       };
     }
     case "capture": {
+      const since = new Date();
       const item = (await call(captureRoute, { id: uc!.id }, "POST", { text: s("text"), source: by(access, client) })) as { id?: string };
-      return { held: true, item_id: item.id ? `backlog:${item.id}` : undefined, next: `${ASSISTANT_NAME} is having the right specialist look at it and will ask what is missing. Read the questions in a minute with whats_waiting (item_questions) and answer with answer (item_id, question_id).` };
+      const node = item.id ? `backlog:${item.id}` : undefined;
+      return { held: true, item_id: node, ...(await socraReply(uc!.id, since, node ? [node] : [], waitOf(input))) };
     }
     case "add_evidence":
       return call(observationRoute, { id: uc!.id }, "POST", { kind: s("kind") ?? "observation", text: s("text") });
@@ -350,6 +409,7 @@ async function run(tool: ToolName, input: Record<string, unknown>, uc: Awaited<R
       return {
         item_id: node,
         open_question: t.question ? { question_id: t.question.messageId, from: t.question.who, ...questionOf(brand(t.question.text)) } : null,
+        decisions_for_the_person: t.decisions.map((d) => ({ decision_id: d.id, from: d.who, decide: d.text, options: d.options.map((o) => o.label) })),
         working_on_it: t.working,
         counts: t.counts,
         timeline: t.entries.map((e) => ({ at: e.at, what: e.kind, who: e.who, text: brand(e.text).slice(0, 1500), ...(e.detail?.loaded ? { skills_loaded: e.detail.loaded, skills_used: e.detail.skills, specialists_sent: e.detail.agents, studio_actions: e.detail.tools, status: e.detail.status } : {}) })),
@@ -358,8 +418,9 @@ async function run(tool: ToolName, input: Record<string, unknown>, uc: Awaited<R
     case "answer": {
       const item = s("item_id");
       const about = item ? (/^(backlog|move):/.test(item) ? [item] : await nodesForIds(uc!.id, [item])) : [];
+      const since = new Date();
       await call(messageRoute, { id: uc!.id }, "POST", { content: s("text"), source: client.slice(0, 80), ...(input.to ? { to: s("to") } : {}), ...(about.length ? { about } : {}), ...(input.question_id ? { replyTo: s("question_id") } : {}), author: { name: access.person || "", role: access.role } });
-      return { said: s("text"), next: `${ASSISTANT_NAME} is answering. Ask for the brief to read the reply.` };
+      return { you_said: s("text"), ...(await socraReply(uc!.id, since, [], waitOf(input))) };
     }
     case "decide": {
       const r = await call(decisionRoute, { id: uc!.id, did: s("decision_id")! }, "PATCH", { status: input.decision === "approve" ? "approved" : "rejected", ...(input.comment ? { answer: s("comment") } : {}), by: by(access, client) });
@@ -492,8 +553,10 @@ async function run(tool: ToolName, input: Record<string, unknown>, uc: Awaited<R
       const cardId = s("card_id");
       if (input.action === "create") {
         if (!input.title) throw new ToolError("Give the card a title.");
-        const r = await call(newCardRoute, { id: uc!.id }, "POST", { title: s("title"), capability: s("capability") ?? "", prompt: s("prompt") ?? "", status: s("column") ?? "queued", by: who });
-        return { card_id: (r.id as string) ?? (r.move as { id?: string } | undefined)?.id, created: s("title") };
+        const since = new Date();
+        const r = await call(newCardRoute, { id: uc!.id }, "POST", { title: s("title"), capability: s("capability") ?? "", prompt: s("prompt") ?? "", status: s("column") ?? "ready", by: who });
+        const id = (r.id as string) ?? (r.move as { id?: string } | undefined)?.id;
+        return { card_id: id, item_id: id ? `move:${id}` : undefined, created: s("title"), ...(await socraReply(uc!.id, since, id ? [`move:${id}`] : [], waitOf(input))) };
       }
       if (!cardId) throw new ToolError("Give the card_id (see open_use_case or read_spec part board).");
       if (input.action === "edit") {
@@ -504,8 +567,9 @@ async function run(tool: ToolName, input: Record<string, unknown>, uc: Awaited<R
       }
       if (input.action === "move") {
         if (!input.column) throw new ToolError("Say which column: queued, ready, building, review or done.");
+        const since = new Date();
         await call(moveRoute, { id: uc!.id, mid: cardId }, "PATCH", { status: s("column"), by: who, why: s("why") || "Moved through the connector" });
-        return { card_id: cardId, column: BOARD_LABEL[s("column") as BoardStatus] };
+        return { card_id: cardId, item_id: `move:${cardId}`, column: BOARD_LABEL[s("column") as BoardStatus], ...(await socraReply(uc!.id, since, [`move:${cardId}`], waitOf(input))) };
       }
       const name = s("file_name");
       if (!name || (input.file_text === undefined && input.file_base64 === undefined)) throw new ToolError("Give file_name and file_text (or file_base64).");

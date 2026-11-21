@@ -339,6 +339,8 @@ model Message {
   about      String[] @default([])
   // The Socra turn that wrote it (AgentTurn id), so its skills and specialists can be shown beside it.
   turnId     String   @default("")
+  // The statement this message replies to (Reply on a message in the conversation; Doug, Nov 21).
+  replyTo    String   @default("")
   createdAt  DateTime @default(now())
   useCase    UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
 }

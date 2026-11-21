@@ -1,0 +1,1 @@
+ALTER TABLE "Message" ADD COLUMN "replyTo" TEXT NOT NULL DEFAULT '';
