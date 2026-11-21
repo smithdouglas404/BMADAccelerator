@@ -17,6 +17,7 @@ import { AgentMemory, VERBATIM_KINDS, type MemoryHit, type MemoryKind, type Memo
 import { Mem0RestClient } from "./mem0Rest";
 import { MEM0_APP_ID, MEM0_USER_ID, ROLES, generatedMessage, gateMessage, memAgentId, roleFor } from "./lettaCore";
 import * as letta from "./letta";
+import { prisma } from "@/lib/db";
 
 const client = process.env.MEM0_BASE_URL ? new Mem0RestClient(process.env.MEM0_BASE_URL, process.env.MEM0_API_KEY ?? "") : null;
 export const memory = new AgentMemory({ client, log: (m) => console.warn(m) });
@@ -25,6 +26,24 @@ export const memoryConfigured = () => memory.configured;
 export const mem0Client = () => client;
 
 type UseCaseRef = { id: string; name: string; customer?: string };
+
+export type MemoryEventKind = "recall" | "write" | "lesson" | "reflect" | "ask";
+
+/** Records one real read or write of an agent's memory (MemoryEvent), so the memory page can say whether it is used. Never throws. */
+export function logMemoryEvent(e: { role: string; kind: MemoryEventKind; store: "mem0" | "letta"; useCaseId?: string; count?: number; source?: string; detail?: string }) {
+  void prisma.memoryEvent
+    .create({ data: { role: e.role, kind: e.kind, store: e.store, useCaseId: e.useCaseId ?? "", count: e.count ?? 1, source: e.source ?? "", detail: (e.detail ?? "").slice(0, 300) } })
+    .catch(() => undefined);
+}
+
+let domainCache: { at: number; keys: string[] } = { at: 0, keys: [] };
+/** The field experts' memory role keys (cached a minute). */
+async function domainKeys(): Promise<string[]> {
+  if (Date.now() - domainCache.at < 60_000) return domainCache.keys;
+  const keys = (await letta.domainRoles().catch(() => [])).map((r) => r.key);
+  domainCache = { at: Date.now(), keys };
+  return keys;
+}
 
 /** Customers are kept apart: memory from one customer's use cases is never recalled for another's. */
 const customerKey = (c?: string) => (c ?? "").trim().toLowerCase();
@@ -50,7 +69,10 @@ function save(agent: string, uc: UseCaseRef, kind: MemoryKind, text: string, sou
       metadata: { kind, role: ownerKey(agent), agent_role: ownerKey(agent), source, use_case: uc.id, use_case_title: uc.name, customer: customerKey(uc.customer), ...extra },
     })
     .then(async (r) => {
-      if (r.ok) return;
+      if (r.ok) {
+        logMemoryEvent({ role: ownerKey(agent), kind: kind === "lesson" ? "lesson" : "write", store: "mem0", useCaseId: uc.id, source, detail: kind });
+        return;
+      }
       // Fact extraction (infer) needs Mem0's model; if that call failed, keep the text verbatim rather than lose it.
       if (r.skipped === "error" && client && !VERBATIM_KINDS.has(kind)) {
         const s = scope(agent, uc);
@@ -60,10 +82,24 @@ function save(agent: string, uc: UseCaseRef, kind: MemoryKind, text: string, sou
             metadata: { kind, agent_role: ownerKey(agent), source, use_case: uc.id, use_case_title: uc.name, customer: customerKey(uc.customer), ...extra, infer_failed: true },
           })
           .then(() => true, () => false);
-        if (retry) return;
+        if (retry) {
+          logMemoryEvent({ role: ownerKey(agent), kind: kind === "lesson" ? "lesson" : "write", store: "mem0", useCaseId: uc.id, source, detail: `${kind} (kept as written)` });
+          return;
+        }
       }
       console.warn(`memory not saved (${kind}): ${r.skipped}${"reason" in r && r.reason ? ` ${r.reason}` : ""}`);
     });
+}
+
+/** A specialist spoke in the conversation (share_finding): its own memory keeps what it said, so it can build on it later. */
+export function rememberFinding(uc: UseCaseRef, roleKey: string, who: string, text: string) {
+  void letta.ensureRole(roleKey).catch(() => false);
+  save(roleKey, uc, "discussion", `[${who} said | use case "${uc.name}"]\n${clip(text)}`, "studio:finding");
+}
+
+/** A specialist's area was settled by what the people said (record_coverage). */
+export function rememberCoverage(uc: UseCaseRef, roleKey: string, who: string, area: string, status: string, note: string) {
+  save(roleKey, uc, "decision", `[Area ${status} | ${who} | use case "${uc.name}"]\n${area}: ${clip(note, 1200)}`, "studio:coverage");
 }
 
 /** A question an agent asked and the client's answer. */
@@ -104,14 +140,14 @@ function label(h: MemoryHit) {
 /** Searches every use case's memory; hits from `excludeUseCase` are left out (its own files hold them). */
 export async function searchMemory(query: string, opts: { role?: string; kinds?: MemoryKind[]; excludeUseCase?: string; onlyUseCase?: string; customer?: string; limit?: number; runId?: string } = {}) {
   if (!memory.configured || !query.trim()) return [] as MemoryHit[];
-  const agents = opts.role && roleFor(opts.role) ? [memAgentId(opts.role)] : [...ROLES.map((r) => r.memAgentId)];
+  const agents = opts.role && roleFor(opts.role) ? [memAgentId(opts.role)] : [...ROLES.map((r) => r.memAgentId), ...(await domainKeys()).map(memAgentId)];
   const hits = await memory.recall(query.slice(0, 2000), {
     scope: { appId: MEM0_APP_ID, agentId: agents[0], userId: MEM0_USER_ID, runId: opts.runId },
     alsoAgents: agents.slice(1),
     kinds: opts.kinds,
     limit: (opts.limit ?? 6) + 6,
   });
-  return hits
+  const kept = hits
     .filter((h) => {
       const md = (h.metadata ?? {}) as Record<string, unknown>;
       if (opts.excludeUseCase && md.use_case === opts.excludeUseCase) return false;
@@ -121,6 +157,14 @@ export async function searchMemory(query: string, opts: { role?: string; kinds?:
       return true;
     })
     .slice(0, opts.limit ?? 6);
+  // Count the reads: which agent's memory each returned record came from.
+  const by = new Map<string, number>();
+  for (const h of kept) {
+    const r = String(((h.metadata ?? {}) as Record<string, unknown>).agent_role ?? "muse");
+    by.set(r, (by.get(r) ?? 0) + 1);
+  }
+  for (const [role, count] of by) logMemoryEvent({ role, kind: "recall", store: "mem0", count, source: opts.runId?.startsWith("turn-") ? "turn" : "search", useCaseId: opts.onlyUseCase ?? opts.excludeUseCase ?? "" });
+  return kept;
 }
 
 export function formatHits(hits: MemoryHit[]) {
@@ -142,6 +186,7 @@ export async function recallForTurn(uc: UseCaseRef & { description?: string }, p
   }
   try {
     const lessons = await letta.topLessons();
+    for (const l of lessons) logMemoryEvent({ role: l.role.key, kind: "recall", store: "letta", useCaseId: uc.id, source: "turn", detail: "top lessons put into the prompt" });
     if (lessons.length) parts.push(`Top lessons each role has learned (Letta):\n${lessons.map((l) => `${l.role.name} (${l.role.title}):\n${l.lessons}`).join("\n\n")}`);
   } catch (e) {
     console.warn("letta lessons failed", e);
@@ -166,7 +211,10 @@ export function roleForGate(gate: string, fallback = "muse") {
 async function reflect(roleKey: string, message: string) {
   try {
     const r = await letta.tellRole(roleKey, message);
-    if (r) await promoteLessons(roleKey);
+    if (r) {
+      logMemoryEvent({ role: roleKey, kind: "reflect", store: "letta", source: message.startsWith("[GATE") ? "gate" : "build", detail: r.tools.join(", ") });
+      await promoteLessons(roleKey);
+    }
   } catch (e) {
     console.warn(`letta ${roleKey} reflection failed`, e instanceof Error ? e.message : e);
   }
@@ -252,7 +300,7 @@ export async function promoteLessons(roleKey: string): Promise<number> {
 
 export async function promoteAllLessons() {
   let n = 0;
-  for (const r of ROLES) n += await promoteLessons(r.key).catch(() => 0);
+  for (const r of [...ROLES, ...(await letta.domainRoles().catch(() => []))]) n += await promoteLessons(r.key).catch(() => 0);
   return n;
 }
 

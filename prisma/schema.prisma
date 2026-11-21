@@ -676,3 +676,23 @@ model MemoryNarrative {
 
   @@index([agentRef, scope, createdAt])
 }
+
+// Settings > Agent memory (Doug, Nov 21): every time an agent's memory is read or written, so the page can say
+// whether it is used. One row per event; nothing is written in advance.
+model MemoryEvent {
+  id        String   @id @default(cuid())
+  // The memory role (muse, analyst, engineer, domain-claims-expert...) or app:<useCaseId>:<key> for a product's agent.
+  role      String
+  useCaseId String   @default("")
+  // recall (read into a prompt or searched), write (a fact saved), lesson (a lesson saved), reflect (the Letta persona learned), ask (a role was asked)
+  kind      String
+  // mem0 or letta
+  store     String
+  count     Int      @default(1)
+  source    String   @default("")
+  detail    String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([role, createdAt])
+  @@index([kind, createdAt])
+}

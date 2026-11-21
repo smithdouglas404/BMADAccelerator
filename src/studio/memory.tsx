@@ -8,7 +8,9 @@ import { api } from './live'
 import { useMe } from './flow'
 
 type Health = { mem0: { configured: boolean; up: boolean }; letta: { up: boolean; note?: string } }
-type StudioAgent = { ref: string; name: string; title: string; lettaAgent: string | null; mem0Agent: string }
+type Usage = { reads: number; recordsRead: number; writes: number; reflections: number; asked: number; lastRead: string | null; lastWrite: string | null; lastUsed: string | null; since: string | null; runs?: number; withPersona?: number }
+type Verdict = { level: 'used' | 'write-only' | 'read-only' | 'unused'; text: string }
+type StudioAgent = { ref: string; name: string; title: string; lettaAgent: string | null; mem0Agent: string; verdict: Verdict['level'] }
 type AppAgent = { ref: string; name: string; purpose: string; status: string; persona: boolean; facts: boolean; useCase: string; customer: string }
 type List = { status: Health; customers: string[]; useCases: { id: string; name: string; customer: string }[]; studio: StudioAgent[]; apps: AppAgent[] }
 type Block = { id?: string; label: string; value: string; description?: string | null; limit?: number | null; updated_at?: string | null; read_only?: boolean | null }
@@ -20,6 +22,7 @@ type Narr = { id: string; headline: string; sentences: { text: string; cites: st
 type Detail = {
   searched?: string
   ref: string; agentName: string; agentTitle: string; scopeNote: string
+  usage: Usage | null; usageNote: string; verdict: Verdict | null; recent: { at: string; kind: string; store: string; count: number; source: string; detail: string }[]
   config: { purpose: string; status: string; personaOn: boolean; factsOn: boolean; personaText: string } | null
   minds: Mind[]; facts: Fact[]; records: Rec[]; notes: string[]; narrative: Narr | null; narrativeStale: boolean
 }
@@ -27,6 +30,8 @@ type Detail = {
 const when = (s?: string | null) => (s ? new Date(s).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '')
 const anchor = (id: string) => `mem-${id.replace(/[^A-Za-z0-9_-]/g, '_')}`
 const meta = (f: Fact, k: string) => { const v = (f.metadata ?? {})[k]; return typeof v === 'string' || typeof v === 'number' ? String(v) : '' }
+const LEVEL: Record<string, string> = { used: 'used', 'write-only': 'write-only', 'read-only': 'read-only', unused: 'not used yet' }
+const EVENT: Record<string, string> = { recall: 'read', write: 'saved a fact', lesson: 'saved a lesson', reflect: 'Letta persona learned', ask: 'was asked' }
 const STATUS: Record<string, string> = { proposed: 'waiting for a yes', approved: 'on', off: 'off' }
 
 export function AgentMemory() {
@@ -112,7 +117,7 @@ export function AgentMemory() {
           {!list ? <p className="studio-muted">Reading the agents…</p> : <>
             <p className="eyebrow">Socra’s team · across products</p>
             {list.studio.map((a) => <button key={a.ref} type="button" className={`mem-agent${ref === a.ref ? ' is-active' : ''}`} onClick={() => setRef(a.ref)}>
-              <strong>{a.name}</strong><small>{a.title}{a.lettaAgent ? '' : ' · no Letta agent yet'}</small>
+              <strong>{a.name}</strong><small>{a.title}{a.lettaAgent ? '' : ' · no Letta agent yet'} · <span className={`mem-level is-${a.verdict}`}>{LEVEL[a.verdict]}</span></small>
             </button>)}
             <p className="eyebrow">Product agents · {list.apps.length}</p>
             {list.apps.length === 0 && <p className="studio-muted">No product has its own agents{customer || useCase ? ' in this filter' : ''} yet.</p>}
@@ -133,6 +138,19 @@ export function AgentMemory() {
               <button type="button" className="button button-quiet button-small" onClick={() => void load()} disabled={loading}><RefreshCw size={13} /> Read again</button>
             </div>
             {detail.notes.length > 0 && <ul className="mem-notes">{detail.notes.map((n) => <li key={n}>{n}</li>)}</ul>}
+
+            {detail.verdict && detail.usage && <div className="studio-card mem-usage">
+              <div className="stack-header"><div><p className="eyebrow">Is it used?</p><h3><span className={`mem-level is-${detail.verdict.level}`}>{LEVEL[detail.verdict.level]}</span> {detail.verdict.text}</h3></div></div>
+              <dl className="mem-usage-grid">
+                <div><dt>Read</dt><dd>{detail.usage.reads}</dd><small>{detail.usage.lastRead ? `last ${when(detail.usage.lastRead)}` : 'never'}</small></div>
+                <div><dt>Written</dt><dd>{detail.usage.writes + detail.usage.reflections}</dd><small>{detail.usage.lastWrite ? `last ${when(detail.usage.lastWrite)}` : 'never'}</small></div>
+                <div><dt>Asked</dt><dd>{detail.usage.asked}</dd><small>by other agents</small></div>
+                {detail.usage.runs !== undefined && <div><dt>Runs</dt><dd>{detail.usage.runs}</dd><small>{detail.usage.withPersona ?? 0} with its persona loaded</small></div>}
+                <div><dt>Last used</dt><dd className="mem-usage-when">{detail.usage.lastUsed ? when(detail.usage.lastUsed) : 'never'}</dd></div>
+              </dl>
+              {detail.usageNote && <p className="mem-trace">{detail.usageNote}</p>}
+              {detail.recent.length > 0 && <ul className="mem-recent">{detail.recent.map((r, i) => <li key={i}><small>{when(r.at)}</small> {EVENT[r.kind] ?? r.kind} · {r.store === 'letta' ? 'Letta' : 'Mem0'}{r.count > 1 ? ` · ${r.count} records` : ''}{r.source ? ` · ${r.source}` : ''}{r.detail ? ` · ${r.detail}` : ''}</li>)}</ul>}
+            </div>}
 
             <div className="studio-card mem-narrative">
               <div className="stack-header"><div><p className="eyebrow">In plain words</p><h3>{detail.narrative ? detail.narrative.headline || 'What this memory means' : 'What this memory means'}</h3></div><Sparkles size={16} /></div>

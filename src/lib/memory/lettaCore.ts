@@ -22,7 +22,7 @@ export const LESSONS_BLOCK_LABEL = "top_lessons";
 export const MEM0_APP_ID = "working-backwards-studio";
 export const MEM0_USER_ID = "bacc";
 
-export type RoleKey = "muse" | "validator" | "ux" | "engineer";
+export type RoleKey = "muse" | "validator" | "ux" | "engineer" | "analyst" | "architect" | "domain" | (string & {});
 
 export interface Role {
   key: RoleKey;
@@ -46,7 +46,7 @@ const COMMON_RULES = [
   "Keep your status block current with your memory tools: CURRENT_USE_CASE, CURRENT_TASK, OPEN_QUESTIONS.",
   "The top_lessons block is written by the app from your saved lessons. Do not edit it; save lessons with save_lesson.",
   "A message starting [GATE PASSED] or [APP GENERATED] reports progress in a use case. Decide whether there is a lesson that would help a future, similar use case. If there is, save it with save_lesson (one lesson per call, with a confidence from 0 to 1). Then reply in two or three sentences. Do not call ask_role for these.",
-  "When you need something another role knows, ask it with ask_role (role keys: muse, validator, ux, engineer; pass your own key as from_role). A message starting [QUESTION from the ...] is another role or the app asking you: answer it directly from your memory and never call ask_role while answering.",
+  "When you need something another role knows, ask it with ask_role (role keys: muse, validator, ux, engineer, analyst, architect, domain; pass your own key as from_role). A message starting [QUESTION from the ...] is another role or the app asking you: answer it directly from your memory and never call ask_role while answering.",
   "Plain language. Things only the owner decides: spending money or prices, secrets or production access, legal or privacy, deleting customer data, messages to people outside the project.",
 ].join("\n- ");
 
@@ -67,11 +67,48 @@ export const ROLES: Role[] = [
   role("muse", "Socra", "Product physician", "In each product Socra holds the conversation, writes the PRFAQ and the capability floor, and turns every yes into a decision. Remember which questions uncovered the real promise, which assumptions owners corrected, and which capabilities every product of a kind needs."),
   role("validator", "Use Case Validator", "Validator", "In each product the validator tests the problem, the customer, the evidence, the proof point and the thin slice. Remember which proof points held up in pilots and which were too soft."),
   role("ux", "UX / Component Mapper", "Product surface", "In each product the mapper turns capabilities into real shadcn/ui components and screens. Remember which screens and flows owners changed after seeing the built app."),
+  role("analyst", "Business analyst", "Requirements", "In each product the business analyst pins down the flows, roles, business rules, edge cases and acceptance criteria. Remember which rules and exceptions owners always had to be asked about, and which acceptance checks caught real gaps."),
+  role("architect", "Solution architect", "System shape", "In each product the architect shapes the data, integrations, security, privacy and scale. Remember which integrations and compliance rules each kind of product needed, and which trade-offs owners chose."),
+  role("domain", "Domain expert", "Industry practice", "When a product's field is not yet named, this is the general domain expert: how professionals work, the regulations and risks a newcomer misses. A field's own expert (a claims expert, a clinical expert) has its own memory once its field is named."),
   role("engineer", "Product Engineer", "Pilot boundary", "In each product the engineer shapes the pilot: build moves, AgentKit workflows and human-in-the-loop points, and Claude Code builds it. Remember what broke in builds, which agentic workflows earned their place, and what owners corrected on screen."),
 ];
 
+/** The slug a field's expert is filed under ("Claims expert" -> "claims-expert"). */
+export function fieldSlug(title: string): string {
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 36);
+}
+
+/**
+ * A domain expert is named for the product's field (Claims expert, Clinical expert...), so it is made
+ * when the field is first named, with the same memory as every other agent (Doug, Nov 21): a Letta
+ * persona and its own Mem0 id. Its name comes back from the key, so nothing is stored in code.
+ */
+export function domainRole(key: string): Role | undefined {
+  const m = /^domain-([a-z0-9][a-z0-9-]{1,35})$/.exec(key);
+  if (!m) return undefined;
+  const name = m[1].replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase());
+  return {
+    key,
+    name,
+    title: "Domain expert",
+    agentName: `bacc-${key}`,
+    memAgentId: memAgentId(key),
+    persona: persona(name, "Domain expert", `In each product of this field the ${name.toLowerCase()} brings how professionals in the industry really work: its rules, deadlines, vocabulary and the risks a newcomer misses. Remember which questions uncovered a real rule, which figures and sources held up, and what owners corrected.`),
+  };
+}
+
 export function roleFor(key: string): Role | undefined {
-  return ROLES.find((x) => x.key === key);
+  return ROLES.find((x) => x.key === key) ?? domainRole(key);
+}
+
+/** The memory role a specialist speaks and learns as. A field's expert gets its own, named by its title. */
+export function specialistRoleKey(specialist: string, title = ""): string {
+  if (specialist === "business-analyst") return "analyst";
+  if (specialist === "domain") {
+    const slug = fieldSlug(title);
+    return slug.length >= 2 ? `domain-${slug}` : "domain";
+  }
+  return specialist;
 }
 
 export function statusBlock(): string {

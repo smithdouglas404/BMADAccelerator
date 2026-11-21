@@ -10,6 +10,8 @@ import { claudeConfigured } from "@/lib/agent/auth";
 import { mem0Client, memoryStatus } from "./index";
 import * as letta from "./letta";
 import { MEM0_USER_ID, ROLES, SHARED_BLOCK_LABEL, memAgentId, roleFor } from "./lettaCore";
+import { usageFromEvents, usageFromRuns, verdictFor, type Usage } from "./usageCore";
+import { agentsView } from "@/lib/agentService";
 import {
   NARRATIVE_MAX_RECORDS,
   checkNarrative,
@@ -44,17 +46,21 @@ export async function listAgents(f: Filter) {
     orderBy: [{ useCaseId: "asc" }, { createdAt: "asc" }],
   });
   const ucName = new Map(useCases.map((u) => [u.id, u]));
+  // Socra's team: the fixed roles plus every field expert made so far (Claims expert...), each with how much it was used.
+  const fieldExperts = status.letta.up ? await letta.domainRoles().catch(() => []) : [];
+  const roles = [...ROLES, ...fieldExperts];
+  const events = await prisma.memoryEvent.findMany({ where: { role: { in: roles.map((r) => r.key) } }, select: { role: true, kind: true, store: true, count: true, source: true, createdAt: true } });
+  const ids = new Map<string, string | null>(status.letta.agents.map((a) => [a.role, a.id]));
+  for (const r of fieldExperts) ids.set(r.key, await letta.roleAgentId(r.key));
+  const idOf = (key: string) => ids.get(key) ?? null;
   return {
     status,
     customers,
     useCases,
-    studio: ROLES.map((r) => ({
-      ref: refString({ kind: "studio", role: r.key }),
-      name: r.name,
-      title: r.title,
-      lettaAgent: status.letta.agents.find((a) => a.role === r.key)?.id ?? null,
-      mem0Agent: r.memAgentId,
-    })),
+    studio: roles.map((r) => {
+      const usage = usageFromEvents(events.filter((e) => e.role === r.key));
+      return { ref: refString({ kind: "studio", role: r.key }), name: r.name, title: r.title, lettaAgent: idOf(r.key), mem0Agent: r.memAgentId, usage, verdict: verdictFor(usage, { facts: 0, blocks: 0 }).level };
+    }),
     apps: appAgents.map((a) => ({
       ref: refString({ kind: "app", useCaseId: a.useCaseId, key: a.key }),
       name: a.name,
@@ -145,7 +151,28 @@ export async function readAgentMemory(ref: AgentRef, f: Filter, q = "") {
   for (const m of minds) m.blocks = [...m.blocks].sort((a, b) => order(a.label) - order(b.label) || a.label.localeCompare(b.label));
   const snapshot: MemorySnapshot = { agentName, agentTitle, scopeNote, letta: minds.map((m) => ({ person: m.person, blocks: m.blocks, passages: m.passages })), facts };
   const records = sourceRecords(snapshot);
-  return { ref: refString(ref), agentName, agentTitle, scopeNote, useCase, config, minds, facts, records, fingerprint: recordsFingerprint(records), notes };
+
+  // Is it used? Counted from real events: the Studio's MemoryEvent rows, or a product agent's run steps in the shared service.
+  let usage: (Usage & { runs?: number; withPersona?: number }) | null = null;
+  let usageNote = "";
+  let recent: { at: string; kind: string; store: string; count: number; source: string; detail: string }[] = [];
+  if (ref.kind === "studio") {
+    const rows = await prisma.memoryEvent.findMany({ where: { role: ref.role, ...(f.useCaseId ? { OR: [{ useCaseId: f.useCaseId }, { useCaseId: "" }] } : {}) }, orderBy: { createdAt: "desc" }, take: 500 });
+    usage = usageFromEvents(rows);
+    recent = rows.slice(0, 12).map((r) => ({ at: r.createdAt.toISOString(), kind: r.kind, store: r.store, count: r.count, source: r.source, detail: r.detail }));
+    const first = await prisma.memoryEvent.findFirst({ orderBy: { createdAt: "asc" }, select: { createdAt: true } });
+    usageNote = first ? `Counting began ${first.createdAt.toISOString().slice(0, 10)}; reads and writes before that were not recorded.` : "Counting has not recorded anything yet (it began with this version).";
+  } else if (useCase) {
+    try {
+      const v = await agentsView(useCase.id);
+      usage = usageFromRuns(v.runs as { agent: string; created_at?: string; steps?: { kind: string; detail: string }[] }[], ref.key);
+      usageNote = v.note || `Counted from the shared agent service's last ${(v.runs as unknown[]).length} runs.`;
+    } catch (e) {
+      usageNote = `Runs could not be read: ${err(e)}`;
+    }
+  }
+  const verdict = usage ? verdictFor(usage, { facts: facts.length, blocks: minds.reduce((n, m) => n + m.blocks.length, 0) }) : null;
+  return { ref: refString(ref), usage, usageNote, verdict, recent, agentName, agentTitle, scopeNote, useCase, config, minds, facts, records, fingerprint: recordsFingerprint(records), notes };
 }
 
 const scopeKey = (f: Filter) => (f.useCaseId ? `uc:${f.useCaseId}` : f.customer ? `customer:${f.customer.trim().toLowerCase()}` : "");

@@ -18,6 +18,7 @@ import {
   questionMessage,
   renderPortfolio,
   roleFor,
+  domainRole,
   statusBlock,
   toolCalls,
   toolSources,
@@ -70,6 +71,50 @@ async function sharedBlock(): Promise<Block | undefined> {
 
 const agentIds = new Map<string, string>();
 
+type Ctx = { model: string; embedding: string; toolIds: string[]; sharedId: string; secrets: Record<string, string> };
+let ctx: Ctx | null = null;
+
+/** Creates (or finds) one role's Letta agent. Existing agents keep their memory; only a missing one is made. */
+async function ensureRoleAgent(role: Role, c: Ctx): Promise<string> {
+  const tags = [TAG, `${TAG}-role:${role.key}`, `app:${MEM0_APP_ID}`];
+  const existing = await findAgent(role);
+  if (existing) {
+    agentIds.set(role.key, existing.id);
+    return existing.id;
+  }
+  const a = await letta<Agent>("POST", "/v1/agents/", {
+    name: role.agentName,
+    description: `${role.name}, ${role.title} in the Working Backwards Studio: memory across products`,
+    model: c.model,
+    embedding: c.embedding,
+    memory_blocks: [
+      { label: "persona", value: role.persona, limit: 8000, read_only: true },
+      { label: `${role.key.replace(/-/g, "_")}_status`, value: statusBlock(), limit: 3000, description: "This role's working state. Update it with your memory tools." },
+      { label: LESSONS_BLOCK_LABEL, value: "none yet", limit: 6000, description: "The lessons this role learned across use cases, best first. Written by the app from Mem0." },
+    ],
+    block_ids: [c.sharedId],
+    tool_ids: c.toolIds,
+    include_base_tools: true,
+    tags,
+    secrets: c.secrets,
+  });
+  agentIds.set(role.key, a.id);
+  return a.id;
+}
+
+/** The field experts made so far (Claims expert, Clinical expert...), found by name in Letta. */
+export async function domainRoles(): Promise<Role[]> {
+  if (!lettaConfigured()) return [];
+  const out: Role[] = [];
+  const list = rows<Agent>(await letta("GET", `/v1/agents/?tags=${encodeURIComponent(`${TAG}`)}&limit=200`).catch(() => []));
+  for (const a of list) {
+    const key = a.name.startsWith("bacc-") ? a.name.slice(5) : "";
+    const r = key.startsWith("domain-") ? domainRole(key) : undefined;
+    if (r) out.push(r);
+  }
+  return out;
+}
+
 /**
  * Creates or refreshes the six role agents, their tools and the shared block. Safe to run again:
  * existing agents keep their memory. Returns the model it used, or why it did nothing.
@@ -110,6 +155,7 @@ export async function setupLetta(): Promise<{ ok: boolean; note: string }> {
   if (process.env.MEM0_BASE_URL) secrets.MEM0_BASE_URL = process.env.MEM0_BASE_URL;
   if (key()) secrets.LETTA_SERVER_PASSWORD = key();
 
+  ctx = { model, embedding, toolIds, sharedId: shared.id, secrets };
   for (const role of ROLES) {
     const tags = [TAG, `${TAG}-role:${role.key}`, `app:${MEM0_APP_ID}`];
     const existing = await findAgent(role);
@@ -137,6 +183,14 @@ export async function setupLetta(): Promise<{ ok: boolean; note: string }> {
       tags,
       secrets,
     });
+    agentIds.set(role.key, a.id);
+  }
+  // Field experts made earlier keep their memory; refresh their tools like the fixed roles.
+  for (const role of await domainRoles()) {
+    const a = await findAgent(role);
+    if (!a) continue;
+    await letta("PATCH", `/v1/agents/${a.id}`, { tool_ids: toolIds, secrets }).catch(() => undefined);
+    await letta("PATCH", `/v1/agents/${a.id}/core-memory/blocks/attach/${shared.id}`).catch(() => undefined);
     agentIds.set(role.key, a.id);
   }
   return { ok: true, note: `model ${model}, embedding ${embedding}` };
@@ -176,7 +230,25 @@ async function agentId(role: Role): Promise<string | null> {
   if (agentIds.has(role.key)) return agentIds.get(role.key)!;
   const a = await findAgent(role);
   if (a) agentIds.set(role.key, a.id);
+  // A field's expert is made the first time its field is named, with the same memory as every other agent.
+  if (!a && role.key.startsWith("domain-") && ctx) return ensureRoleAgent(role, ctx).catch((e) => {
+    console.warn(`letta ${role.key} not created`, e instanceof Error ? e.message : e);
+    return null;
+  });
   return a?.id ?? null;
+}
+
+/** A role's Letta agent id, without creating it. */
+export async function roleAgentId(roleKey: string): Promise<string | null> {
+  const role = roleFor(roleKey);
+  if (!role || !lettaConfigured()) return null;
+  return agentIds.get(role.key) ?? (await findAgent(role).catch(() => undefined))?.id ?? null;
+}
+
+/** Makes sure a role has its Letta agent now (used when a specialist first speaks). */
+export async function ensureRole(roleKey: string): Promise<boolean> {
+  const role = roleFor(roleKey);
+  return role ? (await agentId(role)) !== null : false;
 }
 
 async function send(id: string, content: string): Promise<LettaMessage[]> {
@@ -219,7 +291,7 @@ export async function askRole(roleKey: string, question: string, fromTitle: stri
 export async function topLessons(): Promise<{ role: Role; lessons: string }[]> {
   if (!(await ensureLetta())) return [];
   const out: { role: Role; lessons: string }[] = [];
-  for (const role of ROLES) {
+  for (const role of [...ROLES, ...(await domainRoles())]) {
     const id = await agentId(role);
     if (!id) continue;
     const b = await letta<Block>("GET", `/v1/agents/${id}/core-memory/blocks/${LESSONS_BLOCK_LABEL}`).catch(() => null);
