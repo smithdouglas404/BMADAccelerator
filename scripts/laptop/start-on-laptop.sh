@@ -127,6 +127,10 @@ for D in . agent-service memory/mem0; do
   F="$APP/$D/Dockerfile"
   grep -q "corp-ca.pem" "$F" || awk -v env="$CA_ENV" '{print} /^FROM /{print "COPY corp-ca.pem /etc/ssl/corp-ca.pem"; print "ENV " env}' "$F" > "$F.tmp" && mv "$F.tmp" "$F"
 done
+# uv (the Python installer in the Studio image) can't check the work network's certificate (its signature
+# type isn't supported), so on this laptop markitdown, the only Python tool the Studio runs, comes from pip.
+perl -0pi -e 's{RUN uv python install[^\n]*\\\n[^\n]*\n}{RUN apt-get update && apt-get install -y --no-install-recommends python3-venv && rm -rf /var/lib/apt/lists/* \\\n    && python3 -m venv /opt/uv-tools/markitdown && /opt/uv-tools/markitdown/bin/pip install --no-cache-dir "markitdown[pptx,docx,xlsx,xls,pdf]" \\\n    && ln -sf /opt/uv-tools/markitdown/bin/markitdown /usr/local/bin/markitdown && mkdir -p /opt/uv-python && chmod -R a+rX /opt/uv-tools /opt/uv-python\n}' "$APP/Dockerfile"
+grep -q "uv python install" "$APP/Dockerfile" && fail "I couldn't adjust the build for this network. Details are in $LOG."
 # Letta is used as published, so it gets the certificates at run time.
 cat > "$APP/docker-compose.override.yml" <<'YML'
 services:
@@ -166,6 +170,7 @@ if ! has_env CLAUDE_CODE_OAUTH_TOKEN && ask_yes "Sign in with your Claude plan n
     my @all = /(sk-ant-oat[A-Za-z0-9_-]+)/g; my ($best) = sort { length($b) <=> length($a) } @all;
     $best = $1 if $best && $best =~ /^(sk-ant-oat.{85,}?AA)(?=[A-Z][a-z])/; print $best if $best;' "$T")"
   rm -f "$T"
+  printf '\033c'  # clear the window so the sign-in token doesn't stay on screen
   if [ "${#TOKEN}" -ge 90 ]; then set_env CLAUDE_CODE_OAUTH_TOKEN "$TOKEN"; set_env BACC_CLAUDE_AUTH plan; echo "Signed in to your Claude plan."
   else echo "The plan sign-in didn't finish. (Details: the last lines above.)"; echo "The Studio still starts; you can sign in later by running this again."; fi
   unset TOKEN
