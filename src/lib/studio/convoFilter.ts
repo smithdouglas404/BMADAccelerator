@@ -35,15 +35,18 @@ function takingPart<T extends ConvoMsg>(round: T[], by: Map<string, string>): Se
   return who
 }
 
-/** Everyone who spoke, with how many conversations each took part in: people first, then agents as they first spoke. */
+/**
+ * Everyone who spoke, people first, then agents as they first spoke. Each one's count is exactly the number of
+ * messages picking them shows (Doug, Nov 21: the chip said 1 and a whole list appeared under it), so the number
+ * on a chip, the "x of N" line and the list always agree.
+ */
 export function speakers(list: ConvoMsg[]): Speaker[] {
   const seen = new Map<string, Speaker>()
   for (const m of list) {
     const s = speakerOf(m)
     if (!seen.has(s.key)) seen.set(s.key, { ...s, count: 0 })
   }
-  const by = new Map(list.map((m) => [m.id, speakerOf(m).key]))
-  for (const r of roundsOf(list)) for (const k of takingPart(r, by)) { const s = seen.get(k); if (s) s.count++ }
+  for (const s of seen.values()) s.count = exchangeOf(list, [s.key]).length
   const rank = { person: 0, agent: 1, signal: 2 }
   return [...seen.values()].sort((a, b) => rank[a.kind] - rank[b.kind])
 }
@@ -67,6 +70,20 @@ export function exchangeOf<T extends ConvoMsg>(list: T[], chosen: string[]): T[]
     }
   }
   return list.filter((m) => keep.has(m.id))
+}
+
+/** What a filter shows, in words people can check against the list: messages, the conversations they make, and how many the chosen said. */
+export function filterSummary(list: ConvoMsg[], chosen: string[]) {
+  const shown = exchangeOf(list, chosen)
+  const ids = new Set(shown.map((m) => m.id))
+  const conversations = roundsOf(list).filter((r) => r.some((m) => ids.has(m.id))).length
+  const own = shown.filter((m) => saidBy(m, chosen)).length
+  return { messages: shown.length, conversations, own }
+}
+
+/** Whether a message was said by one of the chosen (the rest of a listed conversation is its context). */
+export function saidBy(m: ConvoMsg, chosen: string[]): boolean {
+  return !chosen.length || chosen.includes(speakerOf(m).key)
 }
 
 /** The conversation as threads: each message under the one it answers, threads with the latest activity first. */

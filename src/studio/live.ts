@@ -3,7 +3,7 @@
 // shapes the design team's screens already use (data.ts and spec.ts types), so their components stay as
 // they are and show real products instead of the sample.
 import type { TeamMemberCoverage } from '@/lib/studio/coverageCore'
-import { ownerBacklogState } from '@/lib/studio/core'
+import { areaProgress, ownerBacklogState } from '@/lib/studio/core'
 import { needsTriage } from '@/lib/studio/journey'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BacklogItem, Capability, ConversationMessage, EvidenceItem, ExecutionItem, RecommendationItem } from './data'
@@ -85,7 +85,13 @@ export function ago(iso: string | null | undefined): string {
 export const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('') || '·'
 
 export function toCapabilities(d: Live): Capability[] {
-  return d.capabilities.map((c) => ({ id: c.key, label: c.label, kicker: c.kicker, readiness: c.readiness, delta: c.delta || 'new', description: c.description, signal: c.signal, color: c.color }))
+  // Readiness is counted from the records (agreed must-haves out of all in scope), not Socra's guess (Doug, Nov 21).
+  return d.capabilities.map((c) => ({ id: c.key, label: c.label, kicker: c.kicker, readiness: areaProgress(c.items ?? []).pct, delta: c.delta || 'new', description: c.description, signal: c.signal, color: c.color }))
+}
+
+/** Each area's counts: must-haves agreed, inferred and waiting, and open questions only a person can answer. */
+export function areaCounts(d: Live) {
+  return Object.fromEntries(d.capabilities.map((c) => [c.key, areaProgress(c.items ?? [], d.decisions.filter((x) => x.status === 'open' && (x.capability === c.label || x.capability === c.key)).length)]))
 }
 
 export function colorOf(d: Live, accent: string): string | undefined {
