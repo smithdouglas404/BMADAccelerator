@@ -5,6 +5,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Brain, Database, RefreshCw, Search, Sparkles, UserRound } from 'lucide-react'
 import { api } from './live'
+import { Rich } from './rich'
+import { fmtWhen } from '@/lib/studio/richText'
 import { useMe } from './flow'
 
 type Health = { mem0: { configured: boolean; up: boolean }; letta: { up: boolean; note?: string } }
@@ -27,7 +29,7 @@ type Detail = {
   minds: Mind[]; facts: Fact[]; records: Rec[]; notes: string[]; narrative: Narr | null; narrativeStale: boolean
 }
 
-const when = (s?: string | null) => (s ? new Date(s).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '')
+const when = (s?: string | null) => (s ? fmtWhen(s) : '')
 const anchor = (id: string) => `mem-${id.replace(/[^A-Za-z0-9_-]/g, '_')}`
 const meta = (f: Fact, k: string) => { const v = (f.metadata ?? {})[k]; return typeof v === 'string' || typeof v === 'number' ? String(v) : '' }
 const LEVEL: Record<string, string> = { used: 'used', 'write-only': 'write-only', 'read-only': 'read-only', unused: 'not used yet' }
@@ -182,9 +184,9 @@ export function AgentMemory() {
                 {mind.blocks.map((b) => { const id = b.id ?? `${mind.person}:${b.label}`; return <article key={id} id={anchor(id)} className={`mem-block${flash === id ? ' is-flash' : ''}`}>
                   <div className="mem-block-top"><span className="mem-cite is-static">{citeOf.get(id)}</span><strong>{b.label}</strong><small>{[b.read_only ? 'read-only' : '', b.limit ? `${(b.value ?? '').length} of ${b.limit} characters` : '', b.updated_at ? `changed ${when(b.updated_at)}` : ''].filter(Boolean).join(' · ')}</small></div>
                   {b.description && <p className="studio-muted">{b.description}</p>}
-                  <pre>{b.value}</pre>
+                  <Rich text={b.value} lines={12} />
                 </article> })}
-                {mind.passages.length > 0 && <><p className="eyebrow">Archival notes · {mind.passages.length}</p>{mind.passages.map((p) => <article key={p.id} id={anchor(p.id)} className={`mem-block${flash === p.id ? ' is-flash' : ''}`}><div className="mem-block-top"><span className="mem-cite is-static">{citeOf.get(p.id)}</span><small>{when(p.created_at)}</small></div><pre>{p.text}</pre></article>)}</>}
+                {mind.passages.length > 0 && <><p className="eyebrow">Archival notes · {mind.passages.length}</p>{mind.passages.map((p) => <article key={p.id} id={anchor(p.id)} className={`mem-block${flash === p.id ? ' is-flash' : ''}`}><div className="mem-block-top"><span className="mem-cite is-static">{citeOf.get(p.id)}</span><small>{when(p.created_at)}</small></div><Rich text={p.text} lines={8} /></article>)}</>}
               </>}
             </div>
 
@@ -195,7 +197,7 @@ export function AgentMemory() {
               {facts.length === 0 && <p className="studio-muted">{detail.facts.length ? 'No fact matches that search.' : 'No Mem0 facts for this agent.'}</p>}
               <div className="mem-facts">{facts.map((f) => <article key={f.id} id={anchor(f.id)} className={`mem-fact${flash === f.id ? ' is-flash' : ''}`}>
                 <div className="mem-block-top"><span className="mem-cite is-static">{citeOf.get(f.id)}</span>{meta(f, 'kind') && <span className="studio-agent-tag">{meta(f, 'kind')}</span>}<small>{[meta(f, 'use_case_title'), meta(f, 'source') || meta(f, 'app_id'), when(f.updated_at ?? f.created_at)].filter(Boolean).join(' · ')}</small></div>
-                <p>{f.memory}</p>
+                <Rich text={f.memory} lines={6} />
                 <button type="button" className="text-button" onClick={() => void showHistory(f.id)}>{hist[f.id] ? 'Hide history' : 'History'}</button>
                 {typeof hist[f.id] === 'string' && <p className="studio-warn">{hist[f.id] as string}</p>}
                 {Array.isArray(hist[f.id]) && ((hist[f.id] as { at?: string; old?: string; now?: string; event?: string }[]).length === 0 ? <p className="studio-muted">Mem0 has no earlier version of this record.</p> : <ul className="mem-recent">{(hist[f.id] as { at?: string; old?: string; now?: string; event?: string }[]).map((h, i) => <li key={i}><small>{when(h.at)}</small> {h.event?.toLowerCase()}{h.old ? <> · was “{h.old}”</> : null}{h.now ? <> · now “{h.now}”</> : null}</li>)}</ul>)}

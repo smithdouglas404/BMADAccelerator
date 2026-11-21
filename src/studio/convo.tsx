@@ -42,12 +42,12 @@ export function ConvoFilterBar<T extends ConvoMsg>({ list, who, setWho, layout, 
       {people.map((p) => <button key={p.key} type="button" className={`studio-convo-chip ${p.kind} ${who.includes(p.key) ? 'is-on' : ''}`} onClick={() => toggle(p.key)} aria-pressed={who.includes(p.key)} title={`${p.count} message${p.count === 1 ? '' : 's'}: every conversation ${p.name === 'You' ? 'you' : p.name} took part in, read whole (who else spoke, what was said to ${p.kind === 'person' ? 'them' : 'it'}, and the replies). ${p.name === 'You' ? 'Yours are' : 'Theirs are'} marked; the rest is the conversation around them. Pick more than one to combine.`}>{p.name} <small>{p.count}</small></button>)}
     </div>
     <div className="studio-convo-tools">
-      {who.length > 0 && <span className="studio-muted">{summaryLine(list, who, people)} <button type="button" className="text-button" onClick={() => setWho([])}><X size={12} /> Clear</button></span>}
       {setLayout && <span className="studio-convo-layout" role="group" aria-label="How to show it">
         <button type="button" className={layout === 'list' ? 'is-on' : ''} aria-pressed={layout === 'list'} onClick={() => setLayout('list')} title="Everything in the order it was said"><Rows3 size={13} /> In order</button>
         <button type="button" className={layout === 'threads' ? 'is-on' : ''} aria-pressed={layout === 'threads'} onClick={() => setLayout('threads')} title="Each statement with its replies under it, latest first"><ListTree size={13} /> By thread</button>
       </span>}
     </div>
+    <p className="studio-convo-summary studio-muted" aria-live="polite">{who.length > 0 && <>{summaryLine(list, who, people)} <button type="button" className="text-button" onClick={() => setWho([])}><X size={12} /> Clear</button></>}</p>
   </div>
 }
 

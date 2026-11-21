@@ -8,6 +8,7 @@ import { StudioTop } from './pages'
 import { ConnectTab } from './connect'
 import { JevValue } from './jev'
 import { AgentMemory } from './memory'
+import { Rich } from './rich'
 import { ECC_COPY } from '../lib/eccCopy'
 
 type KeyStatus = { env: string; name: string; source: 'saved' | 'env' | 'missing'; last4: string }
@@ -187,7 +188,7 @@ function Skills({ setToast }: { setToast: (s: string) => void }) {
         </div>
         <div className="studio-list">{list.slice(0, shown).map((s) => (
           <div key={s.id} className="studio-list-row studio-library-row">
-            <div className="studio-row-main"><strong>{s.name} <span className={`studio-source is-${s.source}`}>{s.source === 'ecc' ? 'ECC' : s.source === 'studio' ? 'Ours' : 'Yours'}</span></strong><small>{s.description || 'No description'}{s.source === 'yours' && !s.valid ? ' · did not pass the check' : ''}</small>{s.usedBy.length > 0 && <small className="studio-muted">Used by: {s.usedBy.join(', ')}</small>}</div>
+            <div className="studio-row-main"><strong>{s.name} <span className={`studio-source is-${s.source}`}>{s.source === 'ecc' ? 'ECC' : s.source === 'studio' ? 'Ours' : 'Yours'}</span></strong><Rich text={s.description || 'No description'} lines={3} className="studio-muted" />{s.source === 'yours' && !s.valid && <small>did not pass the check</small>}{s.usedBy.length > 0 && <small className="studio-muted">Used by: {s.usedBy.join(', ')}</small>}</div>
             <span className={isOn(s) ? 'studio-ok studio-where' : 'studio-muted studio-where'}>{where(s)}</span>
             <div className="studio-review-actions">
               {s.source === 'ecc' && !s.alwaysOn && <button type="button" className="button button-quiet" onClick={() => setOpen(open === s.id ? null : s.id)}>{open === s.id ? 'Done' : 'Switch on…'}</button>}

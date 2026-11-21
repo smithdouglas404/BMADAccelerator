@@ -1,6 +1,7 @@
 'use client'
 // Settings > Jev: what TypeSafe's Jev does for the Studio, measured against the old method.
 // Every number comes from logged calls (JevCall) and from what people did afterwards.
+import { Rich } from './rich'
 import { useEffect, useState } from 'react'
 import { Gauge } from 'lucide-react'
 import { api } from './live'
@@ -58,11 +59,11 @@ export function JevValue() {
           <div className="studio-list-row"><div className="studio-row-main"><strong>Turns it would have wrongly cut: {s.gate.wouldHaveBroken}</strong><small>Jev said light, but the turn did real work. This must stay near zero before anything is skipped.</small></div></div>
           <div className="studio-list-row"><div className="studio-row-main"><strong>Savings Jev missed: {s.gate.missedSaving}</strong><small>Jev said full, but the turn was only a reply.</small></div></div>
         </div>
-        {s.gate.recent.length > 0 && <div className="studio-list">{s.gate.recent.map((d, i) => <div key={i} className="studio-list-row"><div className="studio-row-main"><strong>Jev {d.jev}, turn {d.socra} ({d.did})</strong><small>{String(d.input?.owner_message ?? '').slice(0, 220)}</small></div></div>)}</div>}
+        {s.gate.recent.length > 0 && <div className="studio-list">{s.gate.recent.map((d, i) => <div key={i} className="studio-list-row"><div className="studio-row-main"><strong>Jev {d.jev}, turn {d.socra} ({d.did})</strong><Rich text={String(d.input?.owner_message ?? '')} lines={3} /></div></div>)}</div>}
       </section>}
       {s.disagreements.length > 0 && <section className="studio-card">
         <div className="stack-header"><div><p className="eyebrow">Where they differ</p><h3>Jev against the old method</h3></div></div>
-        <div className="studio-list">{s.disagreements.map((d, i) => <div key={i} className="studio-list-row"><div className="studio-row-main"><strong>{NAMES[d.feature as keyof typeof NAMES] ?? d.feature}: Jev {d.jev}, old {d.old}{d.used === 'jev' ? ' (Jev’s answer used)' : ''}{d.outcome ? ` · ${d.outcome}` : ''}</strong><small>{Object.values(d.input ?? {}).map(String).join(' → ').slice(0, 220)}</small></div></div>)}</div>
+        <div className="studio-list">{s.disagreements.map((d, i) => <div key={i} className="studio-list-row"><div className="studio-row-main"><strong>{NAMES[d.feature as keyof typeof NAMES] ?? d.feature}: Jev {d.jev}, old {d.old}{d.used === 'jev' ? ' (Jev’s answer used)' : ''}{d.outcome ? ` · ${d.outcome}` : ''}</strong><Rich text={Object.entries(d.input ?? {}).map(([k, v]) => `${k}: ${String(v)}`).join('\n')} lines={4} /></div></div>)}</div>
       </section>}
       {s.recentErrors.length > 0 && <section className="studio-card">
         <div className="stack-header"><div><p className="eyebrow">Failures</p><h3>Calls that failed (old method used)</h3></div></div>

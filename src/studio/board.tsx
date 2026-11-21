@@ -5,6 +5,7 @@
 // card to see and edit everything on it, add a card, and attach files. Every change is logged and Socra
 // hears it. Built on the design team's kanban classes; new pieces are styled in studio-extras.css.
 
+import { Rich } from './rich'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, Check, Download, FileText, History, MessageCircleQuestion, Network, Paperclip, Play, Plus, Target, Upload, X } from 'lucide-react'
 import { dayLabel, deferredUntil, hasDetail, needsTriage } from '@/lib/studio/journey'
@@ -144,7 +145,7 @@ export function BoardView({ live, me, buildNow, changeView, setToast, children, 
               onClick={() => { setConfirm(false); setDeferring(false); setPick(b.id) }} onKeyDown={(e) => { if (e.key === 'Enter') { setConfirm(false); setDeferring(false); setPick(b.id) } }}>
               <div className="build-card-top"><span className="studio-triage-tag">{later ? <>Deferred · {later.getFullYear() > 9000 ? 'no date' : `back ${dayLabel(later)}`}</> : back ? <><span className="studio-red-dot" /> Back from deferral</> : b.triage === 'working' ? <><MessageCircleQuestion size={11} /> Working on it</> : <><span className="studio-red-dot" /> New · {from}</>}</span><small className="studio-board-kind">{ago(b.createdAt)}</small></div>
               <h3>{b.title}</h3>
-              {b.note && <p className="studio-moved-by">{b.note.slice(0, 160)}</p>}
+              {b.note && <div className="studio-moved-by"><Rich text={b.note} lines={3} /></div>}
               {!later && <p className="studio-triage-open">Open it to accept, defer or reject <ArrowRight size={12} /></p>}
             </article>
             }
