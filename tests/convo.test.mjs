@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { speakers, exchangeOf, threadsOf } from "../src/lib/studio/convoFilter.ts";
+import { speakers, exchangeOf, threadsOf, filterSummary, saidBy } from "../src/lib/studio/convoFilter.ts";
 
 // Doug (Nov 21): filter the long conversation by who is talking, and see it as threads.
 const list = [
@@ -16,7 +16,7 @@ const list = [
 test("speakers come from the messages, people first", () => {
   const s = speakers(list);
   assert.deepEqual(s.map((x) => x.name), ["You", "Socra", "Business analyst", "Solution architect"]);
-  assert.equal(s.find((x) => x.name === "Business analyst").count, 2);
+  assert.equal(s.find((x) => x.name === "Business analyst").count, 5, "the chip counts the messages picking it shows");
 });
 
 test("picking an agent shows every conversation it took part in, whole", () => {
@@ -46,4 +46,14 @@ test("threads group replies under what they answer, latest first", () => {
   assert.deepEqual(t[0].replies.map((m) => m.id), ["g"]);
   const ba = t.find((x) => x.root.id === "b");
   assert.deepEqual(ba.replies.map((m) => m.id), ["c", "d"]);
+});
+
+test("every chip's number is exactly what picking it lists (Doug, Nov 21: it said 1 and showed 9)", () => {
+  for (const sp of speakers(list)) assert.equal(sp.count, exchangeOf(list, [sp.key]).length, sp.name);
+  const sum = filterSummary(list, ["solution-architect"]);
+  assert.equal(sum.messages, exchangeOf(list, ["solution-architect"]).length);
+  assert.equal(sum.own, 1);
+  assert.equal(sum.conversations, 2, "the statement it replied to comes from an earlier conversation");
+  assert.equal(saidBy(list[4], ["solution-architect"]), true);
+  assert.equal(saidBy(list[0], ["solution-architect"]), false);
 });

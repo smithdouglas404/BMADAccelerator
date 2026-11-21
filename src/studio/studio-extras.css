@@ -738,3 +738,8 @@ a.studio-home-brand { color: inherit; text-decoration: none; padding-bottom: 12p
 .studio-prfaq-verdict.is-ready { color: var(--blue, var(--acid-text)); }
 .studio-prfaq-answer { display: grid; gap: 8px; }
 .studio-prfaq-option em { display: inline-block; }
+
+/* Conversation filter (Doug, Nov 21): the chosen speakers' own messages are marked; the conversation around them is quieter. */
+.studio-convo-said > .message-card { box-shadow: inset 3px 0 0 var(--blue); }
+.studio-convo-context > .message-card { opacity: .62; }
+.studio-convo-context > .message-card:hover { opacity: 1; }
