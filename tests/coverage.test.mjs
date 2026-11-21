@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { promises as fs } from "fs";
 import path from "path";
 import { parseAreas, coverageOf, coverageLine, teamListens } from "../src/lib/studio/coverageCore.ts";
-import { SPECIALISTS } from "../src/lib/studio/core.ts";
+import { SPECIALISTS, areaProgress } from "../src/lib/studio/core.ts";
 
 const SKILLS = path.join(process.cwd(), "studio-skills");
 
@@ -72,4 +72,10 @@ test("Socra's prompt makes every specialist listen, and says when it is enough",
     { specialist: "business-analyst", area: "flow", label: "", status: "covered", note: "" },
   ]);
   assert.match(teamListens(full, { agentOf }), /clear enough to build and suggest Build/);
+});
+
+test("an area's progress is counted from its items, never guessed (Doug, Nov 21: one progress view)", () => {
+  const p = areaProgress([{ state: "confirmed" }, { state: "assumed" }, { state: "assumed" }, { state: "out" }], 2);
+  assert.deepEqual(p, { agreed: 1, total: 3, inferred: 2, open: 2, pct: 33 });
+  assert.equal(areaProgress([]).pct, 0);
 });

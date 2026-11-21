@@ -153,6 +153,17 @@ export function bumpReadiness(current: number, approved: boolean): number {
   return Math.max(0, Math.min(100, current + (approved ? 4 : 1)));
 }
 
+/**
+ * How far one of the product's areas really is (Doug, Nov 21: "merge into one progress view"), counted from the
+ * records, never guessed: its must-haves the people agreed ([confirmed]) out of all that are in ([out] is not),
+ * the rest inferred and waiting, and the questions only a person can answer that are still open for it.
+ */
+export function areaProgress(items: { state: string }[], openQuestions = 0) {
+  const inScope = items.filter((i) => i.state !== "out");
+  const agreed = inScope.filter((i) => i.state === "confirmed").length;
+  return { agreed, total: inScope.length, inferred: inScope.length - agreed, open: openQuestions, pct: inScope.length ? Math.round((agreed * 100) / inScope.length) : 0 };
+}
+
 export function overallReadiness(caps: { readiness: number }[]): number {
   if (!caps.length) return 0;
   return Math.round(caps.reduce((s, c) => s + c.readiness, 0) / caps.length);

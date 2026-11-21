@@ -743,3 +743,12 @@ a.studio-home-brand { color: inherit; text-decoration: none; padding-bottom: 12p
 .studio-convo-said > .message-card { box-shadow: inset 3px 0 0 var(--blue); }
 .studio-convo-context > .message-card { opacity: .62; }
 .studio-convo-context > .message-card:hover { opacity: 1; }
+
+/* One progress view (Doug, Nov 21): counts from the records, not guesses. */
+.studio-progress-totals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0 0; }
+.studio-progress-totals > div { padding: 8px; border: 1px solid var(--line); border-radius: var(--radius, 7px); }
+.studio-progress-totals dt { color: var(--ink); font-size: 15px; font-weight: 600; }
+.studio-progress-totals dd { margin: 2px 0 0; color: var(--faint); font-size: 12px; line-height: 1.3; }
+.studio-progress-track { display: block; height: 3px; margin-top: 5px; border-radius: 2px; background: rgba(var(--hi-rgb),.08); overflow: hidden; }
+.studio-progress-track > span { display: block; height: 100%; }
+.studio-progress .lens-list button > span:nth-child(2) { flex: 1; }
