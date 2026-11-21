@@ -10,7 +10,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { workspacePath } from "@/lib/workspace";
 import { formatHits, letta, logMemoryEvent, rememberAnswer, rememberCoverage, rememberDecision, rememberFinding, rememberLesson, searchMemory } from "@/lib/memory";
-import { ROLES, roleFor, specialistRoleKey } from "@/lib/memory/lettaCore";
+import { ROLES, RESEARCH_AGENTS, roleFor, specialistRoleKey } from "@/lib/memory/lettaCore";
 import { IMAGE_LIMIT, imagesConfigured, makeImage } from "@/lib/images";
 import { SPEC_BASIS, SPEC_STATUSES, TRACE_TYPES, cleanTrace } from "@/lib/studio/spec";
 import { SPEC_DEFS } from "@/lib/studio/specDefs";
@@ -143,16 +143,16 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
       ),
       tool(
         "share_finding",
-        "A specialist speaks in the conversation, visibly, in their own name: what they found or recommend, in two to four plain sentences, then one or two questions from its own skill's open areas, each with numbered options and one marked \"(suggested)\". Use it when a specialist finishes (Socra may share for a research specialist), or to answer someone who replied to a specialist. specialist: business-analyst, architect, engineer, ux or domain; for domain give the field's name in 'title' (for example \"Claims expert\").",
+        "A specialist speaks in the conversation, visibly, in their own name: what they found or recommend, in two to four plain sentences, then one or two questions from its own skill's open areas, each with numbered options and one marked \"(suggested)\". Use it when a specialist finishes (Socra may share for a research specialist), or to answer someone who replied to a specialist. specialist: business-analyst, architect, engineer, ux or domain (or category-researcher, industry-expert, innovation-scout when sharing what a research specialist found); for domain give the field's name in 'title' (for example \"Claims expert\").",
         {
-          specialist: z.enum(["business-analyst", "architect", "engineer", "ux", "domain"]),
+          specialist: z.enum(["business-analyst", "architect", "engineer", "ux", "domain", "category-researcher", "industry-expert", "innovation-scout"]),
           title: z.string().max(60).default(""),
           text: z.string().min(2),
           capability: z.string().default(""),
           about: ABOUT,
         },
         async ({ specialist, title, text, capability, about }) => {
-          const s = specialistByKey(specialist)!;
+          const s = specialistByKey(specialist) ?? { name: RESEARCH_AGENTS[specialist].name };
           const name = specialist === "domain" && title.trim() ? title.trim() : s.name;
           const roleKey = specialistRoleKey(specialist, title);
           rememberFinding(await uc(), roleKey, name, text);

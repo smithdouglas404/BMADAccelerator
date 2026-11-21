@@ -121,3 +121,14 @@ test("skill metrics come only from real events, and an unused skill is never use
   assert.equal(m["studio-muse"].lastUsed, "2026-11-21T11:00:00.000Z");
   assert.equal(m["tdd-workflow"], undefined);
 });
+
+test("every agent on Socra's team has a memory role, so none is left out of Agent memory", async () => {
+  const { STUDIO_TEAM } = await import("../src/lib/agent/team.ts");
+  const { RESEARCH_AGENTS } = await import("../src/lib/memory/lettaCore.ts");
+  const { SPECIALISTS } = await import("../src/lib/studio/core.ts");
+  const bySpecialist = new Map(SPECIALISTS.map((s) => [s.agent, s.key]));
+  for (const agent of Object.keys(STUDIO_TEAM)) {
+    const key = RESEARCH_AGENTS[agent]?.role ?? specialistRoleKey(bySpecialist.get(agent) ?? agent);
+    assert.ok(roleFor(key), `${agent} has no memory role (${key})`);
+  }
+});

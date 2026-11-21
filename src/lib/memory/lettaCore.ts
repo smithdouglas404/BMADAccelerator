@@ -22,7 +22,7 @@ export const LESSONS_BLOCK_LABEL = "top_lessons";
 export const MEM0_APP_ID = "working-backwards-studio";
 export const MEM0_USER_ID = "bacc";
 
-export type RoleKey = "muse" | "validator" | "ux" | "engineer" | "analyst" | "architect" | "domain" | (string & {});
+export type RoleKey = "muse" | "validator" | "ux" | "engineer" | "analyst" | "architect" | "domain" | "researcher" | "industry" | "scout" | (string & {});
 
 export interface Role {
   key: RoleKey;
@@ -47,7 +47,7 @@ const COMMON_RULES = [
   "Your human block holds what you learn about the people you work with (their role, how they like to decide, what they care about). When a message names a person and shows how they decide, add one short line with core_memory_append. Your archive holds longer notes the app saves for you: search it with archival_memory_search before you answer, and keep a detailed playbook there with archival_memory_insert.",
   "The top_lessons block is written by the app from your saved lessons. Do not edit it; save lessons with save_lesson.",
   "A message starting [GATE PASSED] or [APP GENERATED] reports progress in a use case. Decide whether there is a lesson that would help a future, similar use case. If there is, save it with save_lesson (one lesson per call, with a confidence from 0 to 1). Then reply in two or three sentences. Do not call ask_role for these.",
-  "When you need something another role knows, ask it with ask_role (role keys: muse, validator, ux, engineer, analyst, architect, domain; pass your own key as from_role). A message starting [QUESTION from the ...] is another role or the app asking you: answer it directly from your memory and never call ask_role while answering.",
+  "When you need something another role knows, ask it with ask_role (role keys: muse, validator, ux, engineer, analyst, architect, domain, researcher, industry, scout; pass your own key as from_role). A message starting [QUESTION from the ...] is another role or the app asking you: answer it directly from your memory and never call ask_role while answering.",
   "Plain language. Things only the owner decides: spending money or prices, secrets or production access, legal or privacy, deleting customer data, messages to people outside the project.",
 ].join("\n- ");
 
@@ -71,6 +71,9 @@ export const ROLES: Role[] = [
   role("analyst", "Business analyst", "Requirements", "In each product the business analyst pins down the flows, roles, business rules, edge cases and acceptance criteria. Remember which rules and exceptions owners always had to be asked about, and which acceptance checks caught real gaps."),
   role("architect", "Solution architect", "System shape", "In each product the architect shapes the data, integrations, security, privacy and scale. Remember which integrations and compliance rules each kind of product needed, and which trade-offs owners chose."),
   role("domain", "Domain expert", "Industry practice", "When a product's field is not yet named, this is the general domain expert: how professionals work, the regulations and risks a newcomer misses. A field's own expert (a claims expert, a clinical expert) has its own memory once its field is named."),
+  role("researcher", "Category researcher", "Category research", "In each product the category researcher studies the leading products of its kind and lists what they all have, most have and only one has. Remember which categories have which floor of capabilities, and which sources proved reliable."),
+  role("industry", "Industry expert", "Industry rules", "In each product the industry expert finds the laws, conventions and risks a newcomer misses (labelling, payments, privacy, accessibility). Remember which rules and risks each kind of product ran into, with the source."),
+  role("scout", "Innovation scout", "What nobody does yet", "In each product the innovation scout looks for what nobody in the category does yet, from the owner's context and the leaders' gaps. Remember which ideas owners picked or rejected and why."),
   role("engineer", "Product Engineer", "Pilot boundary", "In each product the engineer shapes the pilot: build moves, AgentKit workflows and human-in-the-loop points, and Claude Code builds it. Remember what broke in builds, which agentic workflows earned their place, and what owners corrected on screen."),
 ];
 
@@ -103,7 +106,16 @@ export function roleFor(key: string): Role | undefined {
 }
 
 /** The memory role a specialist speaks and learns as. A field's expert gets its own, named by its title. */
+/** The research specialists Socra shares for: their agent name, the memory role they speak as, and their display name. */
+export const RESEARCH_AGENTS: Record<string, { role: string; name: string }> = {
+  "category-researcher": { role: "researcher", name: "Category researcher" },
+  "industry-expert": { role: "industry", name: "Industry expert" },
+  "innovation-scout": { role: "scout", name: "Innovation scout" },
+};
+
 export function specialistRoleKey(specialist: string, title = ""): string {
+  if (RESEARCH_AGENTS[specialist]) return RESEARCH_AGENTS[specialist].role;
+  if (specialist === "use-case-validator") return "validator";
   if (specialist === "business-analyst") return "analyst";
   if (specialist === "domain") {
     const slug = fieldSlug(title);
