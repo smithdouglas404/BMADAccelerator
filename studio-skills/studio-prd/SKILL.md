@@ -96,6 +96,14 @@ Each section is Markdown: short paragraphs or bullets, no headings inside the se
 
 **A marketplace, "what it must do":** "A buyer can search by item and city (checked by: results appear within three seconds for the top 10 cities). A seller can list an item with photos in under two minutes (checked by: a new seller lists one unaided)." Good: each item can be tested. Thin: "It should be easy to use."
 
+## Anti-Patterns
+
+- Writing features before the problem and the customer are clear.
+- Showing an inferred line as confirmed.
+- A requirement nobody could check ("easy to use") with no acceptance line.
+- A third follow-up on one section, or a questionnaire instead of the Walkthrough's questions.
+- Asking the person something the PRFAQ, a document or an earlier answer already settled.
+
 ## Good Outcomes
 
 - A first-time creator can say what the product is, who uses it, how many, and how they will know it worked, without a template.
@@ -105,7 +113,16 @@ Each section is Markdown: short paragraphs or bullets, no headings inside the se
 
 ## Integration
 
+- **studio-business-analyst**, **studio-ux-designer**, **studio-domain-expert**: the specialists the Walkthrough names (analyst: most sections, UX: the journey, domain expert: risks).
 - **studio-prfaq**: the PRD keeps the PRFAQ's promise; contradictions go to Open questions.
 - **studio-trd**: the next step; the PRD's users, numbers, flows and risks feed its questions.
 - **studio-reimagine**: supplies the floor and keeps the person's differences ("why us") visible.
 - **studio-muse**: Socra opens this skill whenever a PRD section is written, probed or challenged, and sends the specialist the Walkthrough table names.
+
+## Review Checklist
+
+- [ ] The problem and the customer come before any requirement.
+- [ ] Each confirmed line rests on the person's words; the rest says "(inferred)".
+- [ ] Each requirement has a checkable acceptance line.
+- [ ] One follow-up at a time, two at most per section.
+- [ ] Contradictions with the PRFAQ are in Open questions.

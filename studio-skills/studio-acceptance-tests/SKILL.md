@@ -33,7 +33,7 @@ A prototype is high-fidelity when it does what the people said, not just looks l
 
 ## Output Format
 
-```
+```text
 AT-<n> <short name>  [from: <their words | decision | assumed: default>] [check: automated | preview | both]
 Given <situation, naming a sample record>
 When <action, by whom>
@@ -43,7 +43,8 @@ Then <visible result>
 ## Examples
 
 **A threshold rule.** The owner said "anything over 5,000 needs a supervisor".
-```
+
+```text
 AT-3 Supervisor above 5,000  [from: owner's words] [check: both]
 Given request R-1042 for 5,020 submitted by an adjuster
 When the adjuster approves it

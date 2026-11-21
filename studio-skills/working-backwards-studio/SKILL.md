@@ -51,6 +51,7 @@ Show product meaning first. Reveal technical interpretations progressively for P
 ## The living specification
 
 The PRD and TRD are living documents, never forms. A Socra answer updates the sections it bears on and shows the inference trail. Each section carries:
+
 - basis: Confirmed (the owner said so), Recommended, Inferred, Open decision, Not yet researched;
 - state: draft, exploring, evidence-backed, owner-approved, engineer-reviewed, ready for prototype, ready for pilot, production-ready;
 - review: Keep, Revise, Challenge or Remove. Keep confirms it; Revise and Challenge go back to Socra; Remove keeps the evidence and the conversation and can be undone;
@@ -60,6 +61,7 @@ Every package snapshots the spec as a version with a diff; any version can be re
 ## Session-scoped provenance
 
 `SPEC_TRACE.json` in a real export contains only edges of events that really happened for that product. Never flatten seeded, sample or demo traces into a package, and never write a trace step for something that did not happen. The Studio writes these edges as the events happen:
+
 - an owner message: `Validated use case` / Conversation (their words) and `Validated use case` / Backlog (the held title);
 - an ambient capture: `Primary customer flow` / Backlog;
 - a recommendation pulled forward: `Acceptance criteria` / Recommendation (inference) and `Acceptance criteria` / Backlog;
@@ -109,3 +111,11 @@ Use `scripts/inspect_package.py` to inspect a generated ZIP, validate required f
 ## Delivery expectations
 
 Report the checkpoint or saved version, the build result, the generated ZIP path when requested, and any integration boundaries. Do not claim that external Claude Code execution, Git pushes, Linear writes, or AgentKit runtime orchestration are live unless real credentials and backend execution have been configured.
+
+## Integration
+
+- **studio-muse**: Socra reads this rulebook alongside its own skill. Load both at the start of every turn.
+- **studio-reimagine**: the floor rule here is that skill's method.
+- **studio-prfaq**, **studio-prd**, **studio-trd**: the methods for the three living documents.
+- **studio-agentkit**: the agent model for generated apps.
+- **studio-letta-memory**, **studio-mem0-memory**: the memory section above in detail.

@@ -61,7 +61,7 @@ The TRD's sections, in reading order. The key never changes; the title and kicke
 
 First the materials step: ask whether they have **any technical material** (architecture diagrams, API specs, data models, security or compliance policies, integration guides, existing technical requirement documents, even rough or old ones) and let them add it. They can add more to any section at any time. Then each section in order: the specialist named in "Asked by" asks the question, checks the answer against the bar, and either accepts it or says in one or two plain sentences what is thin and asks **one** probing follow-up. At most two follow-ups per section; then it is kept as "needs work" and the walkthrough moves on. A finished section is written into the TRD from their answers, linked to them.
 
-Stay a product engineer, not a textbook: plain what, who, when and what-if questions about the process, with technical terms only when the person uses them. The walkthrough asks only the questions below; from the answers the architect infers the technical architecture: the sections named in "Also informs" are written from the same answers (marked inferred, with the answer it rests on), and the rest come from the conversation, the documents and what systems of this kind need. Generated products are usually AI systems, so always find out where a person is in the loop and which steps an agent may take on its own. For example, for a claims application: does it need to talk to the policy system or a payments system, and when?
+Stay a product engineer, not a textbook: plain what, who, when and what-if questions about the process, with technical terms only when the person uses them. The walkthrough asks only the questions below; from the answers the architect infers the technical architecture: the sections named in "Also informs" are written from the same answers (marked inferred, with the answer it rests on), and the rest come from the conversation, the documents and what systems of this kind need. Generated products are usually AI systems, so always find out where a person is in the loop and which steps an agent may take on its own. For example, for an ordering application: does it need to talk to the stock system or a payments system, and when?
 
 | Key | Asked by | Ask | Good enough when | Also informs |
 |---|---|---|---|---|
@@ -104,6 +104,14 @@ Each section is Markdown: short paragraphs or bullets, no headings inside the se
 
 **A marketplace, "people in the loop":** "An agent drafts the listing text from photos; the seller approves it before it goes live. Reports of fraud are reviewed by a person within a day; the agent may hide the listing while it waits." Good: who decides, what waits, what the agent may do alone. Thin: "A human reviews things."
 
+## Anti-Patterns
+
+- Technical terms the person never used.
+- Skipping where a person is in the loop and which steps an agent may take alone.
+- A system named with no timing and no plan for when it is down.
+- Showing an inferred line as confirmed.
+- Suggesting an agent for a fixed rule (see studio-agentkit).
+
 ## Good Outcomes
 
 - A non-technical owner can answer every question without learning a term, and still ends with a sensible architecture.
@@ -114,7 +122,16 @@ Each section is Markdown: short paragraphs or bullets, no headings inside the se
 
 ## Integration
 
+- **studio-solution-architect**, **studio-product-engineer**: the specialists the Walkthrough names (architect: roles and hosting, engineer: the rest).
 - **studio-prd**: its users, numbers, flows and risks feed the first TRD questions.
 - **studio-agentkit**: the workflow and agent model, human checkpoints and memory.
 - **studio-reimagine**: supplies the floor and keeps the person's differences visible.
 - **studio-muse**: Socra opens this skill whenever a TRD section is written, probed or challenged, and sends the specialist the Walkthrough table names.
+
+## Review Checklist
+
+- [ ] Every other system has data, direction, timing and a failure plan.
+- [ ] Every agent step and approval point names who decides and what waits.
+- [ ] Inferred lines say "(inferred)" and name the answer they rest on.
+- [ ] Questions are about the work, in the person's words.
+- [ ] One probing follow-up at a time, two at most per section.

@@ -86,7 +86,7 @@ None are written here on purpose: yours are the field's own, derived and recorde
 
 Speak once per turn, through `share_finding`, in this shape:
 
-```
+```text
 <one line: what you understood, in their words>
 
 <question 1, naming what they said and what good practice does>
@@ -109,6 +109,7 @@ Each area you derive is recorded with a short key, a label in the field's words,
 **Deriving areas, an equipment-rental product.** After research the expert records areas like "Damage and deposits", "Safety checks between rentals", "Late returns and fees", "Insurance and liability", each with what enough means and a source.
 
 **A targeted question with a number.** They said: "Customers sometimes bring things back late."
+
 - Targeted: "You said customers sometimes bring things back late. Rental businesses usually charge per day late after a short grace period (<source>). What should yours do? 1. A grace period of <n> hours, then a daily fee (suggested) 2. A daily fee from the first hour 3. No fee, a reminder only"
 - Worth considering: "Most rental businesses inspect between rentals and log it; a missing check is a common liability problem (<source>)."
 - Research I'd recommend: "Your own last year of late returns: how many, and how late. It decides the grace period."
@@ -147,6 +148,7 @@ Before you speak, check:
 
 - **studio-reimagine**: facilitate first; their way wins and becomes a deliberate difference with a why us.
 - **studio-business-analyst** and **studio-solution-architect**: turn your rules and regulations into the PRD's rules and the TRD's safeguards.
+- **studio-prd**: you ask the PRD walkthrough's risks question and your rules feed its edge cases.
 - **studio-prfaq**: your numbers and considerations ground the PRFAQ's claims.
 - **industry-expert** and **category-researcher**: their research files are your starting point.
 - **studio-research-numbers**: how every figure is found and recorded.

@@ -72,17 +72,18 @@ For people who have never written a PRFAQ (and anyone who asks), the PRFAQ is bu
 ## What it reads
 
 - **The first Generate**: everything the person has said for the PRFAQ (each talk, kept with the words as spoken), what they said in the conversation, and the documents they added on the PRFAQ (Word, PowerPoint, PDF and the rest, read through their text versions). Each quote names which of these it came from, so every line links back to the talk, the message or the document.
-- **Generate again, when a PRFAQ exists** (Doug, Nov 21): the person picks one of two.
+- **Generate again, when a PRFAQ exists:** the person picks one of two.
   - **Update it with what's new** (suggested): the PRFAQ stays exactly as it is. Only what came in since it was last written (new talks, new documents, new things said) is added: new lines inserted where they belong, gaps the new material answers filled. Nothing already there is reworded or removed.
   - **Start a brand-new one**: rewritten from scratch from everything: the current PRFAQ (edits included), every talk and message before, every document ever added, plus the new material. Nothing said before is lost; the new material is woven in.
   - Either way the previous version is kept and can be brought back.
 
-## How the PRFAQ is written down
+## How It Works
 
-- `# <headline>` then the subheading in italics, then the summary paragraph.
-- `## <Section>` for each later section; quotes as `> ` lines; FAQs as `**Q:**` and `**A:**` lines.
-- A Missing line is `> **Missing:** <the question>`.
-- Markers sit at the end of the sentence they support.
+1. **Read everything the person gave:** talks, messages and documents (see What it reads).
+2. **Write each section from their quotes** in press-release voice, in the format table's order, each statement ending with its source marker.
+3. **Mark every uncovered section** with a Missing line that asks for what is lacking.
+4. **Keep their edits.** Anything edited in place stands; a rewrite keeps every marker.
+5. **Review on request.** Ask Socra reads the PRFAQ as it stands and asks at most three questions, most important first.
 
 ## Inputs
 
@@ -90,13 +91,26 @@ In order of trust: what the person said (each talk kept as spoken, plus their me
 
 ## Output Format
 
-The PRFAQ is Markdown in the format table's order: `# <headline>`, the subheading in italics, the summary, then `## <Section>` for each later section; quotes as `> ` lines; FAQs as `**Q:**` and `**A:**` lines; every statement ends with its source marker; every uncovered section holds a `> **Missing:** <question>` line.
+The PRFAQ is Markdown in the format table's order:
+
+- `# <headline>`, the subheading in italics, then the summary paragraph.
+- `## <Section>` for each later section; quotes as `>` lines; FAQs as `**Q:**` and `**A:**` lines.
+- Every statement ends with its source marker, at the end of the sentence it supports.
+- Every uncovered section holds a `> **Missing:** <question>` line.
 
 ## Examples
 
-**A statement with lineage:** "Adjusters clear small claims in minutes instead of days. [^s3]" where s3 is the quote "we want adjusters to clear the small ones in a few minutes".
+**A statement with lineage:** "Clinics fill a cancelled slot within the hour instead of the next day. [^s3]" where s3 is the quote "when someone cancels we want the slot refilled in an hour, not tomorrow".
 
 **A Missing line:** `> **Missing:** Who is the first customer, and what are they doing today?` Good: a short question to the person, never a filled-in guess.
+
+## Anti-Patterns
+
+- Adding a number, name, customer, date or promise the person did not say.
+- Filling a gap with a guess instead of a Missing line.
+- Putting the category's floor in the PRFAQ (it belongs in the PRD).
+- Dropping source markers or overwriting a person's edit when rewriting.
+- More than three questions in one Ask Socra, or questions without numbered options.
 
 ## Good Outcomes
 
@@ -110,3 +124,11 @@ The PRFAQ is Markdown in the format table's order: `# <headline>`, the subheadin
 - **studio-prd**: the next step; it keeps the PRFAQ's promise and records contradictions as open questions.
 - **studio-reimagine**: protects the person's differences ("why us") and records them as deliberate.
 - **studio-muse**: Socra opens this skill for Generate PRFAQ, the walkthrough and Ask Socra on the PRFAQ.
+
+## Review Checklist
+
+- [ ] Every statement rests on a quote and ends with its marker.
+- [ ] Every section their words do not cover has a Missing line, phrased as a question.
+- [ ] Edits made in place are unchanged; the previous version is kept.
+- [ ] No floor items, invented names, numbers or quotes.
+- [ ] Ask Socra asked three questions at most, with one marked "(suggested)".
