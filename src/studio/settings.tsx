@@ -15,6 +15,7 @@ type Product = { id: string; name: string }
 
 type LibSkill = { id: string; name: string; description: string; source: 'studio' | 'ecc' | 'yours'; origin: string; alwaysOn: boolean; core: boolean; allProducts: boolean; useCases: string[]; valid: boolean; report: string; usedBy?: string }
 const SOURCES = [['studio', 'Ours'], ['ecc', 'ECC'], ['yours', 'Uploaded'], ['all', 'All']] as const
+type Home = { folder: string; link: string; ecc?: { repo: string; sha: string; version: string; license: string; skills: number; link: string } }
 const PAGE = 40
 
 export function SettingsPage() {
@@ -148,14 +149,14 @@ function Skills({ setToast }: { setToast: (s: string) => void }) {
   const [rows, setRows] = useState<LibSkill[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [source, setSource] = useState<(typeof SOURCES)[number][0]>('studio')
-  const [home, setHome] = useState<{ folder: string; link: string } | null>(null)
+  const [home, setHome] = useState<Home | null>(null)
   const [reading, setReading] = useState<{ id: string; markdown: string } | null>(null)
   const [q, setQ] = useState('')
   const [onOnly, setOnOnly] = useState(false)
   const [open, setOpen] = useState<string | null>(null)
   const [shown, setShown] = useState(PAGE)
   const load = () => void api<LibSkill[]>('/api/skills/library', { cache: 'no-store' }).then(setRows).catch(() => setRows([]))
-  useEffect(() => { load(); void api<Product[]>('/api/use-cases', { cache: 'no-store' }).then(setProducts).catch(() => setProducts([])); void api<{ folder: string; link: string }>('/api/skills/library?home=1', { cache: 'no-store' }).then(setHome).catch(() => setHome(null)) }, [])
+  useEffect(() => { load(); void api<Product[]>('/api/use-cases', { cache: 'no-store' }).then(setProducts).catch(() => setProducts([])); void api<Home>('/api/skills/library?home=1', { cache: 'no-store' }).then(setHome).catch(() => setHome(null)) }, [])
   const read = (s: LibSkill) => reading?.id === s.id ? setReading(null) : void api<{ id: string; markdown: string }>(`/api/skills/library?read=${encodeURIComponent(s.id)}`, { cache: 'no-store' }).then(setReading).catch((e: Error) => setToast(e.message))
   const upload = async (file: File) => {
     const form = new FormData()
@@ -181,6 +182,7 @@ function Skills({ setToast }: { setToast: (s: string) => void }) {
         <div className="stack-header"><div><p className="eyebrow">Skill library · {rows.length}</p><h3>ECC, the Studio’s skills and yours, in one place</h3></div><Wrench size={16} /></div>
         <p className="studio-muted">ECC (Everything Claude Code) is the open-source skills library, MIT licensed, pinned in the Studio. The Studio’s own skills are written in the same format. Switched on, a skill goes into each product’s workspace, where Socra, its specialists and Claude Code use it.</p>
         {source === 'studio' && <p className="studio-library-ours">Ours: {count('studio')} skills written for the Studio in ECC’s format (origin “Working Backwards Studio”), kept separate from ECC’s and never sent to it. All are always on. They live in the <code>{home?.folder || 'studio-skills'}</code> folder{home?.link ? <> · <a href={home.link} target="_blank" rel="noreferrer">open the folder on GitHub</a></> : null}. Press Read on any one to see it in full.</p>}
+        {source === 'ecc' && home?.ecc && <p className="studio-library-ours">ECC: {home.ecc.skills} skills imported from the open-source project, version {home.ecc.version}, pinned at commit <code>{home.ecc.sha.slice(0, 7)}</code> ({home.ecc.license}, its license kept with the copy) · <a href={home.ecc.link} target="_blank" rel="noreferrer">open that version on GitHub</a>. Off until you switch one on; ours sit beside them, never inside.</p>}
         <div className="studio-library-tools">
           <div className="studio-tabs" style={{ marginTop: 0 }}>{SOURCES.map(([k, l]) => <button key={k} type="button" className={source === k ? 'is-active' : ''} onClick={() => { setSource(k); setShown(PAGE) }}>{l} · {count(k)}</button>)}</div>
           <input className="studio-library-search" type="search" value={q} onChange={(e) => { setQ(e.target.value); setShown(PAGE) }} placeholder="Search skills, e.g. security, postgres, accessibility" aria-label="Search the skill library" />

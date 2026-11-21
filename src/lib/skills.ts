@@ -1,4 +1,7 @@
 import catalog from "@/data/ecc-skills.json";
+import pin from "@/data/ecc-pin.json";
+
+export const ECC_PIN = pin as { repo: string; sha: string; version: string; license: string; skills: number };
 
 // Skills library. Claude Code's .claude/skills/ is always loaded; Codex and Cursor
 // read .agents/skills/; Antigravity gets its own folder (path to confirm against
@@ -12,8 +15,8 @@ export const SKILL_TARGETS = [
 
 export type Skill = { id: string; description: string };
 
-// Full ECC (Everything Claude Code, MIT) catalog, generated from
-// github.com/affaan-m/everything-claude-code at d2ef268.
+// Full ECC (open source, MIT) catalog, rebuilt by scripts/ecc-catalog.mjs from the pinned copy in
+// vendor/ecc on every fetch; the pin (repository, commit, version, license) is in src/data/ecc-pin.json.
 export const ECC_SKILLS: Skill[] = catalog as Skill[];
 
 // Featured picks shown first in the picker, grouped for non-technical users.

@@ -4,7 +4,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ECC_REPO="https://github.com/affaan-m/everything-claude-code"
-ECC_SHA="${ECC_SHA:-d2ef2680594f9a17526a6e1a2e18b3d242c5d17b}"
+# ECC main as of Nov 19 2026 (VERSION 2.2.3, MIT). To update: change the SHA and run this script;
+# scripts/ecc-catalog.mjs then rebuilds the list the Skills screen shows from the pinned copy.
+ECC_SHA="${ECC_SHA:-4adeee6732a12d1540f49a4d50a38ce8c97f9a53}"
 # Anthropic's official skills (Apache 2.0): Generate uses frontend-design.
 ANTHROPIC_SKILLS_REPO="https://github.com/anthropics/skills"
 ANTHROPIC_SKILLS_SHA="${ANTHROPIC_SKILLS_SHA:-1780c5e5a552fd4d1c9d6a7b0cab26b0c2bef064}"
@@ -26,6 +28,7 @@ fetch() { # repo sha dest
 }
 
 fetch "$ECC_REPO" "$ECC_SHA" vendor/ecc
+node scripts/ecc-catalog.mjs "$ECC_REPO" "$ECC_SHA"
 fetch "$ANTHROPIC_SKILLS_REPO" "$ANTHROPIC_SKILLS_SHA" vendor/anthropic
 fetch "$AGENTKIT_REPO" "$AGENTKIT_SHA" vendor/agentkit
 echo "vendor ready: ECC ${ECC_SHA:0:7}, Anthropic skills ${ANTHROPIC_SKILLS_SHA:0:7}, AgentKit ${AGENTKIT_SHA:0:7}"

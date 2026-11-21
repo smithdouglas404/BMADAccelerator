@@ -1,7 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { prisma } from "@/lib/db";
-import { ECC_SKILLS } from "@/lib/skills";
+import { ECC_PIN, ECC_SKILLS } from "@/lib/skills";
 import { STUDIO_SKILLS_DIR, VENDOR_DIR } from "@/lib/provision";
 import { CORE_SKILLS } from "@/lib/agent/instructions";
 import { SPECIALISTS } from "@/lib/studio/core";
@@ -117,7 +117,11 @@ export async function studioSkillsHome() {
   const pkg = JSON.parse(await fs.readFile(path.join(process.cwd(), "package.json"), "utf8").catch(() => "{}")) as { repository?: string | { url?: string } };
   const repo = (typeof pkg.repository === "string" ? pkg.repository : pkg.repository?.url ?? "").replace(/^git\+/, "").replace(/\.git$/, "");
   const branch = process.env.STUDIO_SKILLS_BRANCH || "mac-studio";
-  return { folder: "studio-skills", link: /^https:\/\/github\.com\//.test(repo) ? `${repo}/tree/${branch}/studio-skills` : "" };
+  return {
+    folder: "studio-skills",
+    link: /^https:\/\/github\.com\//.test(repo) ? `${repo}/tree/${branch}/studio-skills` : "",
+    ecc: { ...ECC_PIN, link: `${ECC_PIN.repo}/tree/${ECC_PIN.sha}` },
+  };
 }
 
 // The full SKILL.md of one Studio or ECC skill, to read on the Skills screen.

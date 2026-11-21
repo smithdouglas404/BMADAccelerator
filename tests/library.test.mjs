@@ -73,3 +73,15 @@ test("the Skills screen opens on our own skills, each readable, with a link to t
   const lib = await fs.readFile(path.join(process.cwd(), "src/lib/skillLibrary.ts"), "utf8");
   assert.match(lib, /\[a-z0-9\]\[a-z0-9-\]\{0,99\}/, "Read only opens a skill by a safe name");
 });
+
+test("ECC is the open-source project, pinned; the list on screen is rebuilt from that exact copy (Doug, Nov 21)", async () => {
+  const pin = JSON.parse(await fs.readFile(path.join(process.cwd(), "src/data/ecc-pin.json"), "utf8"));
+  const catalog = JSON.parse(await fs.readFile(path.join(process.cwd(), "src/data/ecc-skills.json"), "utf8"));
+  const fetch = await fs.readFile(path.join(process.cwd(), "scripts/fetch-vendor.sh"), "utf8");
+  assert.equal(pin.repo, fetch.match(/ECC_REPO="([^"]+)"/)[1], "the pin names the repository fetched");
+  assert.equal(pin.sha, fetch.match(/ECC_SHA="\$\{ECC_SHA:-([0-9a-f]{40})\}"/)[1], "and the commit fetched");
+  assert.match(pin.license, /^MIT/);
+  assert.equal(pin.skills, catalog.length);
+  assert.match(fetch, /node scripts\/ecc-catalog\.mjs "\$ECC_REPO" "\$ECC_SHA"/, "every fetch rebuilds the list");
+  assert.ok(catalog.every((s) => s.description.length > 20), "every ECC skill has its description");
+});
