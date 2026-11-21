@@ -14,6 +14,8 @@ PORT="${NASIKO_PORT:-8480}"
 STUDIO="${STUDIO_LOCAL_URL:-http://localhost:3000}"
 # How the Studio's container reaches Nasiko (Docker Desktop: host.docker.internal; Podman: host.containers.internal).
 FROM_STUDIO="${NASIKO_URL_FROM_STUDIO:-http://host.docker.internal:${PORT}}"
+# Docker by default; on Podman set NASIKO_COMPOSE="podman compose" (and NASIKO_DOCKER_SOCK to the Podman socket).
+COMPOSE="${NASIKO_COMPOSE:-docker compose}"
 
 dest=vendor/nasiko
 if [ ! -f "$dest/.pinned" ] || [ "$(cat "$dest/.pinned")" != "$NASIKO_SHA" ]; then
@@ -41,14 +43,14 @@ if [ ! -f .env.nasiko ]; then
   echo "Created .env.nasiko with fresh passwords."
 fi
 
-docker compose -p bacc-nasiko -f docker-compose.nasiko.yml --env-file .env.nasiko up -d --build
+$COMPOSE -p bacc-nasiko -f docker-compose.nasiko.yml --env-file .env.nasiko up -d --build
 
 printf "Waiting for Nasiko on port %s" "$PORT"
 for _ in $(seq 1 90); do
   if curl -fsS "http://localhost:${PORT}/health" >/dev/null 2>&1; then echo " up."; break; fi
   printf "."; sleep 2
 done
-curl -fsS "http://localhost:${PORT}/health" >/dev/null 2>&1 || { echo; echo "Nasiko did not answer. Read why with: docker compose -p bacc-nasiko -f docker-compose.nasiko.yml logs server"; exit 1; }
+curl -fsS "http://localhost:${PORT}/health" >/dev/null 2>&1 || { echo; echo "Nasiko did not answer. Read why with: $COMPOSE -p bacc-nasiko -f docker-compose.nasiko.yml logs server"; exit 1; }
 
 # Connect the Studio (the password goes straight from the file to the Studio over this computer's own loopback).
 if curl -fsS "$STUDIO/api/nasiko" >/dev/null 2>&1; then
