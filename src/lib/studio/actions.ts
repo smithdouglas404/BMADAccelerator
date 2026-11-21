@@ -44,13 +44,14 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
   const source = o.source || "Working session";
   const uc = await prisma.useCase.findUniqueOrThrow({ where: { id: useCaseId } });
   const who = await whoSpoke(useCaseId, o.author);
-  const specialist = o.to ? specialistByKey(o.to) : undefined;
+  // An answer to one statement (Reply on a message in the conversation, or a question in an item's detail
+  // view) answers that statement, not whatever was said last. A reply to a specialist goes to that specialist.
+  const answered = o.replyTo ? await prisma.message.findFirst({ where: { id: o.replyTo, useCaseId, role: { in: ["muse", "agent"] } } }) : null;
+  const specialist = o.to ? specialistByKey(o.to) : answered?.role === "agent" && answered.addressed ? specialistByKey(answered.addressed) : undefined;
   const focus = uc.focus ? await prisma.capability.findFirst({ where: { useCaseId, key: uc.focus } }) : null;
-  const msg = await prisma.message.create({ data: { useCaseId, role: "user", agent: "You", content, author: who.name, authorRole: who.role, addressed: specialist?.key ?? "", raw: o.raw && o.raw !== content ? o.raw : "" } });
+  const msg = await prisma.message.create({ data: { useCaseId, role: "user", agent: "You", content, author: who.name, authorRole: who.role, addressed: specialist?.key ?? "", raw: o.raw && o.raw !== content ? o.raw : "", replyTo: answered?.id ?? "" } });
   // What a yes or a number answers: Socra's (or a specialist's) words since anyone last spoke.
   const lastUser = await prisma.message.findFirst({ where: { useCaseId, role: "user", createdAt: { lt: msg.createdAt } }, orderBy: { createdAt: "desc" } });
-  // An answer to one question (from an item's detail view) answers that question, not whatever was said last.
-  const answered = o.replyTo ? await prisma.message.findFirst({ where: { id: o.replyTo, useCaseId, role: { in: ["muse", "agent"] } } }) : null;
   const since = answered
     ? [answered]
     : await prisma.message.findMany({
@@ -158,8 +159,10 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
         useCaseId,
         "user",
         specialist
-          ? `${who.said} asked the ${specialist.name} directly: "${content}"\n\nThe Studio held it in the backlog (item ${item.id}). Send \`${specialist.agent}\` with the Agent tool to answer it; the answer reaches them through mcp__studio__share_finding as the ${specialist.name}${specialist.key === "domain" ? " (named for this product's field)" : ""}. Then carry what it changes into the product truth.\n\n${personaVoice(who.role)}`
-          : `${who.said} said: "${content}"\n\nThe Studio held it in the backlog in their words (item ${item.id}). Curate it and carry its meaning into the product truth. Then:\n${itemAsk({ node: `backlog:${item.id}`, title: item.title, text: content, stage: "said", by: who.name || who.role })}\n\n${personaVoice(who.role)}`,
+          ? answered
+            ? `${who.said} replied to the ${specialist.name}'s statement (msg:${answered.id}): “${clip(answered.content, 600)}”\n\nTheir reply: "${content}"\n\nThe Studio held it in the backlog (item ${item.id}). Send \`${specialist.agent}\` with the Agent tool, giving it the statement and the reply. As the ${specialist.name}${specialist.key === "domain" ? " (named for this product's field)" : ""}, through mcp__studio__share_finding, it acknowledges in one line what it understood, then asks at most one follow-up question if something is still unclear (numbered options, its suggestion marked "(suggested)"), and nothing more. If the reply decides something (a new product name, a rule, a scope choice), carry it out now rather than only acknowledging it: rename with set_product (owner_asked true) when they gave a name, record_decision for a choice, and the spec sections it touches; then signal what changed in one line ("Renamed ClaimSnap to X"). If it changes what another specialist said, have that specialist revisit only that point. Do not re-run the whole team.\n\n${personaVoice(who.role)}`
+            : `${who.said} asked the ${specialist.name} directly: "${content}"\n\nThe Studio held it in the backlog (item ${item.id}). Send \`${specialist.agent}\` with the Agent tool to answer it; the answer reaches them through mcp__studio__share_finding as the ${specialist.name}${specialist.key === "domain" ? " (named for this product's field)" : ""}. Then carry what it changes into the product truth.\n\n${personaVoice(who.role)}`
+          : `${who.said} said: "${content}"${answered ? `\n\nIt is a reply to your statement (msg:${answered.id}): “${clip(answered.content, 600)}”. Acknowledge in one line what you understood and act on it: if it decides something (a new product name, a rule, a scope choice), carry it out now (rename with set_product owner_asked true, record_decision, the spec sections it touches) and signal what changed; then ask at most one follow-up if something is still unclear.` : ""}\n\nThe Studio held it in the backlog in their words (item ${item.id}). Curate it and carry its meaning into the product truth. Then:\n${itemAsk({ node: `backlog:${item.id}`, title: item.title, text: content, stage: "said", by: who.name || who.role })}\n\n${personaVoice(who.role)}`,
         `msg:${msg.id} backlog:${item.id}`,
       );
   }

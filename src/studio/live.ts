@@ -18,7 +18,7 @@ export type LiveDecision = { id: string; text: string; status: 'approved' | 'ass
 export type LiveBacklog = { id: string; title: string; note: string; kind: BacklogItem['kind']; group: string; source: string; recKind: string; probe: string; state: string; hidden: string; includeInBuild: boolean; builtInVersion: number; createdAt: string; trackerUrl: string; annotationId?: string; triage?: string; deferUntil?: string | null }
 export type LiveMove = { id: string; title: string; capability: string; decision: string; status: string; owner: string; signal: string; hidden: string; components: string[]; routes: string[]; trackerUrl: string; movedBy?: string; moveReason?: string; prompt?: string }
 export type LiveCapability = { id: string; key: string; label: string; kicker: string; description: string; readiness: number; delta: string; signal: string; color: string; items: { id: string; text: string; state: string }[] }
-export type LiveMessage = { id: string; role: string; agent: string; content: string; accent: string; createdAt: string; author: string; authorRole: string; addressed: string; raw: string; ref: string }
+export type LiveMessage = { id: string; role: string; agent: string; content: string; accent: string; createdAt: string; author: string; authorRole: string; addressed: string; raw: string; ref: string; replyTo?: string }
 export type LiveMember = { id: string; name: string; role: string }
 export type LiveEvidence = { id: string; source: string; type: string; insight: string; confidence: string; trace: string; createdAt: string; documentId: string }
 export type LiveDocument = { id: string; fileName: string; mimeType: string; sizeBytes: number; kind: string; summary: string; description: string; origin: string; moveId: string; status: string; createdAt: string; exists?: boolean }
@@ -94,7 +94,7 @@ export function colorOf(d: Live, accent: string): string | undefined {
 }
 
 /** A conversation message with what the team's type doesn't carry: who spoke, a specialist, an undo. */
-export type StudioMessage = ConversationMessage & { specialist?: string; author?: string; authorRole?: string; addressed?: string; raw?: string; ref?: string }
+export type StudioMessage = ConversationMessage & { specialist?: string; author?: string; authorRole?: string; addressed?: string; raw?: string; ref?: string; replyTo?: string }
 
 export function toMessages(d: Live, me?: { name?: string }): StudioMessage[] {
   return d.messages.map((m) => ({
@@ -110,6 +110,7 @@ export function toMessages(d: Live, me?: { name?: string }): StudioMessage[] {
     addressed: m.role === 'user' ? m.addressed || undefined : undefined,
     raw: m.raw || undefined,
     ref: m.ref || undefined,
+    replyTo: m.replyTo || undefined,
   }))
 }
 

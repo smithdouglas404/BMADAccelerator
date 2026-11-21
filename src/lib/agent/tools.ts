@@ -46,6 +46,14 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
     const turn = currentItems(useCaseId);
     return turn.length && turn.filter((n) => n.startsWith("backlog:")).length <= 1 && turn.filter((n) => n.startsWith("move:")).length <= 1 ? turn : [];
   };
+  // A turn that answers a reply (Reply on a statement) threads its messages under that reply, so the
+  // acknowledgement and follow-up show with it (Doug, Nov 21). Only when the turn answers exactly one reply.
+  const replyThread = async () => {
+    const ids = currentCauses(useCaseId).filter((c) => c.startsWith("msg:")).map((c) => c.slice(4));
+    if (!ids.length) return "";
+    const replies = await prisma.message.findMany({ where: { useCaseId, id: { in: ids }, role: "user", NOT: { replyTo: "" } }, select: { id: true } });
+    return replies.length === 1 ? replies[0].id : "";
+  };
   const capKey = async (c: string) => {
     if (!c) return "";
     const caps = await prisma.capability.findMany({ where: { useCaseId } });
@@ -113,7 +121,7 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
         { text: z.string().min(1), capability: z.string().default("").describe("The capability this is about (key or label), if any"), about: ABOUT },
         async ({ text, capability, about }) => {
           tally.spoke++;
-          await prisma.message.create({ data: { useCaseId, role: "muse", agent: speaker === "Socra" ? "Socra · Product physician" : speaker, content: text, accent: await capKey(capability), about: await aboutNodes(about), turnId: currentTurnId(useCaseId) } });
+          await prisma.message.create({ data: { useCaseId, role: "muse", agent: speaker === "Socra" ? "Socra · Product physician" : speaker, content: text, accent: await capKey(capability), about: await aboutNodes(about), turnId: currentTurnId(useCaseId), replyTo: await replyThread() } });
           return ok();
         },
       ),
@@ -139,7 +147,7 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
         async ({ specialist, title, text, capability, about }) => {
           const s = specialistByKey(specialist)!;
           const name = specialist === "domain" && title.trim() ? title.trim() : s.name;
-          await prisma.message.create({ data: { useCaseId, role: "agent", agent: `${name} · Specialist`, addressed: specialist, content: text, accent: await capKey(capability), about: await aboutNodes(about), turnId: currentTurnId(useCaseId) } });
+          await prisma.message.create({ data: { useCaseId, role: "agent", agent: `${name} · Specialist`, addressed: specialist, content: text, accent: await capKey(capability), about: await aboutNodes(about), turnId: currentTurnId(useCaseId), replyTo: await replyThread() } });
           return ok();
         },
       ),
@@ -154,13 +162,14 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
           stageLabel: z.string().default(""),
           customerQuote: z.string().default(""),
           validatedUseCase: z.string().default(""),
+          owner_asked: z.boolean().default(false).describe("True only when a person asked for this name in their own words (for example a reply 'call it X'): then it replaces the name they chose before."),
         },
-        async (a) => {
+        async ({ owner_asked, ...a }) => {
           const data = Object.fromEntries(Object.entries(a).filter(([, v]) => v.trim())) as Prisma.UseCaseUpdateInput;
           // The name is yours to give only while it is a working name from the first words. A name the owner typed
           // (or one already chosen) is theirs: it changes only when they rename it.
           let kept = "";
-          if (data.name) {
+          if (data.name && !owner_asked) {
             const uc = await prisma.useCase.findUnique({ where: { id: useCaseId }, select: { name: true, description: true } });
             if (uc && uc.name !== workingName(uc.description)) { delete data.name; kept = ` The product's name stays "${uc.name}": the owner chose it.`; }
           }
