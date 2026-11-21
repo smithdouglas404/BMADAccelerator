@@ -21,6 +21,8 @@ import * as letta from "./letta";
 const client = process.env.MEM0_BASE_URL ? new Mem0RestClient(process.env.MEM0_BASE_URL, process.env.MEM0_API_KEY ?? "") : null;
 export const memory = new AgentMemory({ client, log: (m) => console.warn(m) });
 export const memoryConfigured = () => memory.configured;
+/** The raw Mem0 client, for reading records on Settings > Agent memory (null when Mem0 is not configured). */
+export const mem0Client = () => client;
 
 type UseCaseRef = { id: string; name: string; customer?: string };
 

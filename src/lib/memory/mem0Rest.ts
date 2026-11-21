@@ -83,6 +83,13 @@ export class Mem0RestClient implements MemoryClient {
     });
   }
 
+  /** Every record under one scope (the self-hosted server's GET /memories), for Settings > Agent memory. */
+  async list(params: { user_id?: string; agent_id?: string; run_id?: string }, topK = 200): Promise<unknown> {
+    // top_k/limit: the server lists 20 by default; newer servers read one of these, older ones ignore them.
+    const q = new URLSearchParams([...(Object.entries(params).filter(([, v]) => v) as [string, string][]), ["top_k", String(topK)], ["limit", String(topK)]]);
+    return this.call("GET", `/memories?${q}`);
+  }
+
   async health(): Promise<boolean> {
     try {
       await this.call("GET", "/configure");
