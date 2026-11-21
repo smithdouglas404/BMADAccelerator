@@ -67,3 +67,45 @@ Keep it light: enough to define the product and the service, not a full specific
 | prd-acceptance | business-analyst | How would you check each of those works, and how would you know the promise was kept? | At least one observable check per key requirement. | prd-functional |
 | prd-metrics | business-analyst | How will you measure success, and what number would make you call it a win? | It names at least one measure with a target or a clear before-and-after. | prd-rollout |
 | prd-risks | domain | What could stop this working: people not adopting it, rules, other teams, timing? | It names the biggest risks and how each would be handled or watched. | prd-edge-cases, prd-open-questions |
+
+## Inputs
+
+Read only what the section needs, in this order of trust:
+
+1. The person's own answers in the walkthrough, and anything they said in the conversation (their words win).
+2. Documents they added to the PRD or to this section (business cases, research, process maps, earlier requirement documents), read as text.
+3. The PRFAQ (the promise the PRD must keep), the validated use case and the evidence library.
+4. The category's floor: what leading products of this kind always have (studio-reimagine). Marked inferred or recommended, never confirmed.
+
+## How It Works
+
+1. **Start from the problem and the customer.** Before any requirement, the first section says who has the problem, what they do today and what it costs. If this is vague, every later section is built on sand: ask again.
+2. **Ask a few plain questions, infer the rest.** The walkthrough asks only the questions in its table. The sections each answer "also informs" are drafted from the same answers (marked inferred, with the answer they rest on), and the rest come from the conversation, documents and the floor. The person keeps, edits, challenges or removes anything inferred.
+3. **Check, don't flatter.** Each answer is held against its bar. Say what is missing in one or two plain sentences and ask one follow-up; after two follow-ups keep it as "needs work" and move on.
+4. **Write in their words.** A section written from an answer is confirmed. Never add a fact, number, name, system or promise they did not say; carried-over text that their answer does not contradict stays marked inferred.
+5. **Make it testable.** Requirements and acceptance criteria must be checkable: Given / When / Then or a plain observable result.
+6. **Keep the lineage.** Every update names where it came from (their answer, a document, the conversation, an inference) so "Why did this change?" has a true answer.
+
+## Output Format
+
+Each section is Markdown: short paragraphs or bullets, no headings inside the section (the screen supplies the title). Requirements are a numbered list, one checkable statement each. Acceptance criteria are Given / When / Then lines or one observable result per requirement. Open questions name the options and who decides. Any line the team added rather than the person is marked "(inferred)".
+
+## Examples
+
+**A claims product, "who uses it":** "Policyholders (about 40,000 a year) file claims; about 25 adjusters triage them; a team lead approves anything over 2,000 dollars; the finance system pays out." Good: kinds of people, rough numbers, who approves. Thin: "Customers and staff."
+
+**A marketplace, "what it must do":** "A buyer can search by item and city (checked by: results appear within three seconds for the top 10 cities). A seller can list an item with photos in under two minutes (checked by: a new seller lists one unaided)." Good: each item can be tested. Thin: "It should be easy to use."
+
+## Good Outcomes
+
+- A first-time creator can say what the product is, who uses it, how many, and how they will know it worked, without a template.
+- Nothing the person did not say is shown as confirmed.
+- Every requirement can be checked by someone who was not in the room.
+- The TRD can be written from the PRD without asking the person the same things again.
+
+## Integration
+
+- **studio-prfaq**: the PRD keeps the PRFAQ's promise; contradictions go to Open questions.
+- **studio-trd**: the next step; the PRD's users, numbers, flows and risks feed its questions.
+- **studio-reimagine**: supplies the floor and keeps the person's differences ("why us") visible.
+- **studio-muse**: Socra opens this skill whenever a PRD section is written, probed or challenged, and sends the specialist the Walkthrough table names.

@@ -149,3 +149,13 @@ test("projection: backlog and spec diffs, idempotent on re-sync", () => {
   assert.ok(again.idempotent);
   assert.equal(again.gitRecords, first.gitRecords);
 });
+
+test("the Studio's PRFAQ, PRD and TRD skills are in ECC's format with the sections ECC skills carry", () => {
+  for (const name of ["studio-prfaq", "studio-prd", "studio-trd"]) {
+    const md = skillText(name);
+    assert.match(md, /^---\nname: /, `${name} frontmatter`);
+    assert.match(md, new RegExp(`^name: ${name}$`, "m"));
+    assert.match(md, /^origin: Working Backwards Studio$/m, `${name} origin`);
+    for (const h of ["When to Activate", "Inputs", "Output Format", "Examples", "Good Outcomes", "Integration"]) assert.match(md, new RegExp(`^## ${h}$`, "m"), `${name} has ${h}`);
+  }
+});

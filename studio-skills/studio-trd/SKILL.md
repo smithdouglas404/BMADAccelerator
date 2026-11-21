@@ -74,3 +74,47 @@ Stay a product engineer, not a textbook: plain what, who, when and what-if quest
 | trd-errors | engineer | What should happen when something goes wrong: another system is down, information is missing, or the AI isn't sure? | It covers those three cases with what the person sees and what happens next. | trd-observability, trd-testing |
 | trd-deploy | architect | Where does it need to run, and does your company have rules about that (cloud, region, approved tools, data staying in the country)? | It names where it runs and any rules, or confirms there are none. | trd-security, trd-hardening, trd-dependencies |
 | trd-hardening | engineer | What would have to be true for you to trust it with real customers? | It lists concrete things to check or sign off, with who does it. | trd-testing, trd-risks, trd-observability |
+
+## Inputs
+
+Read only what the section needs, in this order of trust:
+
+1. The person's own answers in the walkthrough and the conversation, especially how the work really happens today.
+2. Technical documents they added to the TRD or to a section (architecture diagrams, API specs, data models, security or compliance policies, integration guides, earlier technical requirement documents), read as text.
+3. The PRD (users and numbers, flows, requirements, risks), the PRFAQ and the evidence library.
+4. What systems of this kind need (studio-reimagine's floor; for agents and workflows, studio-agentkit). Marked inferred or recommended, never confirmed.
+
+## How It Works
+
+1. **Ask about the work, not the technology.** Start from a day in the life: who does what, in what order, and what should happen behind the scenes at each step. Technical terms are used only when the person uses them.
+2. **Find the other systems and the when.** For each system the product touches: what goes in or out, and when (as it happens, daily, on request), and what happens when it is unavailable.
+3. **Find the people in the loop and the steps that run on their own.** Generated products are usually AI systems, so always establish which steps an agent may take alone, which need judgement (sorting, checking, drafting, chasing), and where a person must say yes or no before it goes on, and what waits while they decide.
+4. **Infer the architecture from the answers.** The sections each answer "also informs" are drafted from the same answers (marked inferred, with the answer each rests on): boundary, shape of the system, capability-to-service mapping, events, data, storage, security and so on. The person keeps, edits, challenges or removes anything inferred.
+5. **Check, don't flatter.** Each answer is held against its bar; say what is missing in one or two plain sentences and ask one probing follow-up. After two follow-ups keep it as "needs work" and move on. Offer numbered options with one marked "(suggested)" when the person is not technical.
+6. **Pull workflows into one picture.** Agents, events and human approvals are written as one workflow model (studio-agentkit): trigger, steps, who or what does each, where a person decides, what happens on failure.
+7. **Keep the lineage.** Every update names where it came from (their answer, a document, the conversation, an inference).
+
+## Output Format
+
+Each section is Markdown: short paragraphs or bullets, no headings inside the section. Systems and integrations are a list with direction, data, timing and what happens when down. Workflows are numbered steps naming the trigger, the actor (person, agent or fixed rule) and any approval point. Roles are a list with what each may see and do and a rough number. Any line the team added rather than the person is marked "(inferred)" with the answer it rests on.
+
+## Examples
+
+**A claims application, "other systems":** "It reads the policy from the policy admin system when a claim is filed (as it happens), sends approved payments to the payments system once a day at 6pm, and nothing else. If the policy system is down, the claim is saved and checked within the hour." Good: system, data, direction, timing, failure. Thin: "It connects to our other systems."
+
+**A marketplace, "people in the loop":** "An agent drafts the listing text from photos; the seller approves it before it goes live. Reports of fraud are reviewed by a person within a day; the agent may hide the listing while it waits." Good: who decides, what waits, what the agent may do alone. Thin: "A human reviews things."
+
+## Good Outcomes
+
+- A non-technical owner can answer every question without learning a term, and still ends with a sensible architecture.
+- Every other system has data, direction, timing and a failure plan.
+- Every agent step and every approval point is written down with who decides.
+- Nothing inferred is shown as confirmed.
+- Claude Code can build the prototype's architecture from the TRD without guessing.
+
+## Integration
+
+- **studio-prd**: its users, numbers, flows and risks feed the first TRD questions.
+- **studio-agentkit**: the workflow and agent model, human checkpoints and memory.
+- **studio-reimagine**: supplies the floor and keeps the person's differences visible.
+- **studio-muse**: Socra opens this skill whenever a TRD section is written, probed or challenged, and sends the specialist the Walkthrough table names.
