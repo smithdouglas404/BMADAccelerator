@@ -27,7 +27,7 @@ Treat the **use case** as the central object. Keep these artifacts attached to i
 - visual annotations and captured frames
 - AgentKit routes and technical interpretation
 - traceable Kanban/execution state
-- the living PRD (16 sections) and TRD (21 sections), each with completeness, confidence, basis, state, review and trace
+- the living PRD and TRD (their sections come from the studio-prd and studio-trd skills), each with completeness, confidence, basis, state, review and trace
 - spec versions and diffs, one per package, restorable
 - Claude Code package, generation iteration, Git branch, and optional Linear projection
 

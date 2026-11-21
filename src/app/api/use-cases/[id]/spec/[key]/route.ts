@@ -14,6 +14,8 @@ const Body = z.object({
   note: z.string().max(4000).default(""),
   content: z.string().max(40000).optional(),
   status: z.enum(SPEC_STATUSES.map((s) => s.key) as [string, ...string[]]).optional(),
+  // "Ask Socra to probe" this section (Doug, Nov 21: the agents push back and ask).
+  probe: z.boolean().optional(),
   // Who made the change, for the record.
   by: z.string().max(80).default(""),
 });
@@ -26,7 +28,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid" }, { status: 400 });
   const s = await prisma.specSection.findUnique({ where: { useCaseId_key: { useCaseId: id, key } } });
   if (!s) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const { review, note, content, status, by } = parsed.data;
+  const { review, note, content, status, by, probe } = parsed.data;
   const who = by.trim() || "Owner";
   const data: Record<string, unknown> = { updatedBy: who };
   const step = (detail: string) => cleanTrace([...(Array.isArray(s.trace) ? s.trace : []), { label: `${who === "Owner" ? "Owner" : who} review`, detail, type: "conversation" }]);
@@ -66,6 +68,17 @@ export async function PATCH(req: Request, { params }: Ctx) {
             : `The owner asked to revise ${s.ref} ${s.title}${note ? `: "${note}"` : ""}${content !== undefined ? ` and edited it to: "${content.slice(0, 800)}"` : ""}. Carry the revision into this section and any sections it touches (set_spec_section), then tell them in one line.`,
         `spec:${key}`,
       );
+  }
+  if (probe) {
+    if (!agentsEnabled()) return NextResponse.json({ error: "The team isn't switched on here, so nobody can ask about this section yet." }, { status: 422 });
+    const skill = s.tab === "prd" ? "studio-prd" : "studio-trd";
+    await prisma.message.create({ data: { useCaseId: id, role: "user", agent: "You", content: `Probe ${s.title}${note ? `: ${note}` : ""}`, author: who, about: [`spec:${key}`] } });
+    await enqueue(
+      id,
+      "spec",
+      `${who} asked you to probe ${s.tab.toUpperCase()} section ${s.ref} ${s.title} (${key})${note ? `: "${note}"` : ""}. Current text: "${s.content.slice(0, 800) || "(empty)"}". Open the ${skill} skill: find this section's walkthrough question and bar (or what the section holds), send the specialist it names, and ask the one or two sharpest questions that would raise it to its bar, with numbered options and one marked "(suggested)" where they may not know. Push back honestly on anything vague. When they answer, update the section (set_spec_section) and the sections it informs.`,
+      `spec:${key}`,
+    );
   }
   return NextResponse.json(after);
 }

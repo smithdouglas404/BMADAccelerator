@@ -11,7 +11,8 @@ import { prfaqMarkers, prfaqWithFootnotes, type Source } from "./prfaqDraft";
 import { truthExport } from "./truthlog";
 import { readInterpretation } from "./truth";
 import { truthGraphSchema } from "@/studio/graph";
-import { SPEC_DEFS, explainReadiness, specDiff, type SpecSnapshot } from "./spec";
+import { explainReadiness, specDiff, type SpecSnapshot } from "./spec";
+import { SPEC_DEFS } from "./specDefs";
 import { withDocuments } from "./evidenceDocs";
 
 /** The four routes exist for every product, in order. */
@@ -25,11 +26,12 @@ export async function ensureRoutes(useCaseId: string) {
 
 /** Every PRD and TRD section exists for every product from the start, as "Not yet researched". */
 export async function ensureSpec(useCaseId: string) {
-  const rows = await prisma.specSection.findMany({ where: { useCaseId }, select: { id: true, key: true, title: true } });
-  // Section names follow the current definitions (a renamed section keeps its content and trace).
+  const rows = await prisma.specSection.findMany({ where: { useCaseId }, select: { id: true, key: true, title: true, kicker: true, ref: true, position: true } });
+  // Section names, labels and order follow the studio-prd / studio-trd skills (a renamed section keeps its content and trace).
   for (const r of rows) {
     const def = SPEC_DEFS.find((d) => d.key === r.key);
-    if (def && def.title !== r.title) await prisma.specSection.update({ where: { id: r.id }, data: { title: def.title, kicker: def.kicker } });
+    if (def && (def.title !== r.title || def.kicker !== r.kicker || def.ref !== r.ref || def.position !== r.position))
+      await prisma.specSection.update({ where: { id: r.id }, data: { title: def.title, kicker: def.kicker, ref: def.ref, position: def.position } });
   }
   const have = new Set(rows.map((s) => s.key));
   const missing = SPEC_DEFS.filter((d) => !have.has(d.key));
@@ -61,7 +63,8 @@ export async function studioState(id: string) {
     },
   });
   if (!uc) return null;
-  if (uc.spec.length < SPEC_DEFS.length) {
+  const stale = uc.spec.some((r) => { const d = SPEC_DEFS.find((x) => x.key === r.key); return !!d && (d.ref !== r.ref || d.title !== r.title || d.kicker !== r.kicker || d.position !== r.position) });
+  if (uc.spec.length < SPEC_DEFS.length || stale) {
     await ensureSpec(id);
     return studioState(id);
   }

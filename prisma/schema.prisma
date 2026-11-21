@@ -35,6 +35,8 @@ model UseCase {
   // Generate PRFAQ (Doug, Nov 21): { sources: { s1: { quote, from, name } }, docs: [document ids picked],
   // versions: [{ at, how, by, markdown, sources }] (newest first, so a Generate new or Reformat can be undone) }.
   prfaqSources      Json      @default("{}")
+  // The guided PRD and TRD walkthroughs (Doug, Nov 21): { prd: { on, step, status, rounds }, trd: {...} }.
+  specWalk          Json      @default("{}")
   // The validated use case and its signals (problem, customer, evidence, proof, thinSlice).
   validatedUseCase  String    @default("")
   validation        Json      @default("{}")

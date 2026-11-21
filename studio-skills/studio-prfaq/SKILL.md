@@ -83,3 +83,30 @@ For people who have never written a PRFAQ (and anyone who asks), the PRFAQ is bu
 - `## <Section>` for each later section; quotes as `> ` lines; FAQs as `**Q:**` and `**A:**` lines.
 - A Missing line is `> **Missing:** <the question>`.
 - Markers sit at the end of the sentence they support.
+
+## Inputs
+
+In order of trust: what the person said (each talk kept as spoken, plus their messages in the conversation), documents they added to the PRFAQ (read as text, each quote naming its document), and, only for review questions, the PRFAQ as it stands. The category's floor does not go into the PRFAQ; it belongs in the PRD.
+
+## Output Format
+
+The PRFAQ is Markdown in the format table's order: `# <headline>`, the subheading in italics, the summary, then `## <Section>` for each later section; quotes as `> ` lines; FAQs as `**Q:**` and `**A:**` lines; every statement ends with its source marker; every uncovered section holds a `> **Missing:** <question>` line.
+
+## Examples
+
+**A statement with lineage:** "Adjusters clear small claims in minutes instead of days. [^s3]" where s3 is the quote "we want adjusters to clear the small ones in a few minutes".
+
+**A Missing line:** `> **Missing:** Who is the first customer, and what are they doing today?` Good: a short question to the person, never a filled-in guess.
+
+## Good Outcomes
+
+- Every line can be traced to the person's words; nothing in it was invented.
+- A person who has never seen a PRFAQ understands what it is and why it matters before being asked anything.
+- Pressing Generate again never throws away work: it updates the PRFAQ with what is new, and the previous version is kept.
+- The PRD can be written from it.
+
+## Integration
+
+- **studio-prd**: the next step; it keeps the PRFAQ's promise and records contradictions as open questions.
+- **studio-reimagine**: protects the person's differences ("why us") and records them as deliberate.
+- **studio-muse**: Socra opens this skill for Generate PRFAQ, the walkthrough and Ask Socra on the PRFAQ.

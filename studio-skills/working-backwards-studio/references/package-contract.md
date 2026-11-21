@@ -58,7 +58,7 @@ The prompt must:
 
 ## Living spec files (v2)
 
-- `PRD.md` and `TRD.md`: one `## Title` per section, its content, then `Completeness: N% · state · confidence confidence · Basis · ref` (PR-001..016, TR-001..021).
+- `PRD.md` and `TRD.md`: one `## Title` per section, its content, then `Completeness: N% · state · confidence confidence · Basis · ref` (refs PRD 1.., TRD 1.., in the order of the studio-prd and studio-trd skills).
 - `SPEC_DIFF.md`: what changed in the spec since the previous package (version N).
 - `SPEC_TRACE.json`: a flat array of provenance edges, exactly:
 
