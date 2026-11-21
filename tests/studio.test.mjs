@@ -151,7 +151,7 @@ test("projection: backlog and spec diffs, idempotent on re-sync", () => {
 });
 
 test("the Studio's PRFAQ, PRD, TRD and specialist skills are in ECC's format with the sections ECC skills carry", () => {
-  for (const name of ["studio-prfaq", "studio-prd", "studio-trd", "studio-business-analyst", "studio-solution-architect", "studio-ux-designer", "studio-product-engineer", "studio-domain-expert"]) {
+  for (const name of ["studio-prfaq", "studio-prd", "studio-trd", "studio-business-analyst", "studio-solution-architect", "studio-ux-designer", "studio-product-engineer", "studio-domain-expert", "studio-research-numbers", "studio-sample-data", "studio-competitor-teardown", "studio-acceptance-tests", "studio-pilot-metrics"]) {
     const md = skillText(name);
     assert.match(md, /^---\nname: /, `${name} frontmatter`);
     assert.match(md, new RegExp(`^name: ${name}$`, "m"));

@@ -138,6 +138,7 @@ Before you speak, check:
 - **studio-domain-expert**: supplies the field's regulations and numbers; you turn them into the system's shape.
 - **studio-agentkit**: when an integration needs an agent, it is designed the AgentKit way.
 - **studio-muse**: Socra sends you when the words touch your open areas.
+- **studio-research-numbers**: the volumes and peaks behind your size-and-speed answers.
 
 ## Never
 

@@ -149,6 +149,8 @@ Before you speak, check:
 - **studio-business-analyst** and **studio-solution-architect**: turn your rules and regulations into the PRD's rules and the TRD's safeguards.
 - **studio-prfaq**: your numbers and considerations ground the PRFAQ's claims.
 - **industry-expert** and **category-researcher**: their research files are your starting point.
+- **studio-research-numbers**: how every figure is found and recorded.
+- **studio-competitor-teardown**: what the field's leading products all do.
 
 ## Never
 

@@ -138,6 +138,7 @@ Before you speak, check:
 - **studio-domain-expert**: the field's own rules and numbers come from it; you make them precise.
 - **studio-product-engineer**: your approvals and exceptions become its human checkpoints and build moves.
 - **studio-muse**: Socra sends you when the words touch your open areas and doesn't repeat your questions.
+- **studio-acceptance-tests**: turns your answered rules, exceptions and approvals into checkable tests.
 
 ## Never
 

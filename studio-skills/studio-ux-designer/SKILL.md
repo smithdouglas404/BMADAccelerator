@@ -136,6 +136,8 @@ Before you speak, check:
 - **frontend-design-direction** (ECC) and **frontend-design**: every build reads them; your answers give them the product's direction.
 - **studio-business-analyst**: its flows and states are the screens you design.
 - **studio-muse**: Socra sends you when the words touch your open areas or someone marks up the preview.
+- **studio-competitor-teardown**: the leaders' screen patterns to start from.
+- **studio-sample-data**: the data your screens show.
 
 ## Never
 

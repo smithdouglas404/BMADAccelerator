@@ -135,6 +135,8 @@ Before you speak, check:
 - **studio-trd**: your answers land in the TRD's workflows, human-in-the-loop and release sections.
 - **working-backwards-studio**: keeps each build move traceable from requirement to review.
 - **studio-muse**: Socra sends you when the words touch your open areas, and before a build.
+- **studio-pilot-metrics**: covers your `proof` area.
+- **studio-sample-data**: the build's data, so the prototype looks real.
 
 ## Never
 
