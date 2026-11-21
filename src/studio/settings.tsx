@@ -151,6 +151,7 @@ function Skills({ setToast }: { setToast: (s: string) => void }) {
   const [rows, setRows] = useState<LibSkill[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [source, setSource] = useState<(typeof SOURCES)[number][0]>('all')
+  useEffect(() => { if (new URLSearchParams(window.location.search).get('source') === 'studio') setSource('studio') }, [])
   const [q, setQ] = useState('')
   const [onOnly, setOnOnly] = useState(false)
   const [open, setOpen] = useState<string | null>(null)
@@ -180,6 +181,7 @@ function Skills({ setToast }: { setToast: (s: string) => void }) {
       <section className="studio-card">
         <div className="stack-header"><div><p className="eyebrow">Skill library · {rows.length}</p><h3>ECC, the Studio’s skills and yours, in one place</h3></div><Wrench size={16} /></div>
         <p className="studio-muted">ECC (Everything Claude Code) is the open-source skills library, MIT licensed. The Studio imports it from <a href={ECC_COPY.url} target="_blank" rel="noreferrer">our own copy</a>, kept apart from the public project, at a pinned version. <a href={ECC_COPY.studioGroupUrl} target="_blank" rel="noreferrer">Our skills</a> sit in their own group there, in the same format. Switched on, a skill goes into each product’s workspace, where Socra, its specialists and Claude Code use it.</p>
+        {source === 'studio' && <p className="studio-muted"><strong>Our skills live in our private copy of ECC:</strong> <a href={ECC_COPY.studioGroupUrl} target="_blank" rel="noreferrer">{ECC_COPY.owner}/{ECC_COPY.repo} · studio-skills</a></p>}
         <div className="studio-library-tools">
           <div className="studio-tabs" style={{ marginTop: 0 }}>{SOURCES.map(([k, l]) => <button key={k} type="button" className={source === k ? 'is-active' : ''} onClick={() => { setSource(k); setShown(PAGE) }}>{l} · {count(k)}</button>)}</div>
           <input className="studio-library-search" type="search" value={q} onChange={(e) => { setQ(e.target.value); setShown(PAGE) }} placeholder="Search skills, e.g. security, postgres, accessibility" aria-label="Search the skill library" />
