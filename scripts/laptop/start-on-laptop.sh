@@ -3,6 +3,7 @@
 #
 # Run it from Terminal with one line (Doug's laptop):
 #   bash -c "$(curl -fsSL https://raw.githubusercontent.com/smithdouglas404/BMADAccelerator/claude/project-thread-i43blx/scripts/laptop/start-on-laptop.sh)"
+#   To get the newest version later (keeps your data):  add " - update" after the closing quote of that line.
 #
 # What it does, start to finish, with nothing typed:
 #   1. Finds the data package you downloaded (socra-laptop-data.zip, in Downloads).
@@ -13,6 +14,10 @@
 #   6. Starts the Studio on http://localhost:3000 (generated apps on 4100-4129, same as the Mac) and opens it.
 # Safe to run again: data is loaded only the first time, keys you already gave are kept.
 set -uo pipefail
+# "update" (bash -c "$(curl …)" - update): get the newest Studio code from GitHub (branch mac-studio, the
+# version the Mac Studio runs), rebuild and restart. Your use cases, documents, memory and keys stay as they are.
+MODE="${1:-}"
+CODE_BRANCH="${SOCRA_BRANCH:-mac-studio}"
 
 HOME_DIR="$HOME/SocraStudio"
 APP="$HOME_DIR/BMADAccelerator"
@@ -102,10 +107,21 @@ echo "Podman is ready."
 
 # ---------- 3. the code ----------
 say "Step 3 of 6: putting the Studio's code in place"
-mkdir -p "$APP"
-[ -f "$APP/.env" ] && cp "$APP/.env" "$HOME_DIR/.env.keep"
-tar -xzf "$DATA/studio-code.tar.gz" -C "$APP" 2>>"$LOG" || fail "The code didn't unpack. Details are in $LOG."
-[ -f "$HOME_DIR/.env.keep" ] && mv "$HOME_DIR/.env.keep" "$APP/.env"
+if [ "$MODE" = "update" ]; then
+  echo "Getting the newest version from GitHub ($CODE_BRANCH)..."
+  rm -rf "$APP.new"; mkdir -p "$APP.new"
+  curl -fsSL "https://codeload.github.com/smithdouglas404/BMADAccelerator/tar.gz/refs/heads/$CODE_BRANCH" \
+    | tar -xzf - -C "$APP.new" --strip-components=1 2>>"$LOG" \
+    && [ -f "$APP.new/docker-compose.yml" ] || fail "I couldn't download the newest version. Check the internet connection and run this again."
+  [ -f "$APP/.env" ] && cp "$APP/.env" "$APP.new/.env"
+  rm -rf "$APP.previous"; [ -d "$APP" ] && mv "$APP" "$APP.previous"   # the last version, kept in case you need to go back
+  mv "$APP.new" "$APP"
+else
+  mkdir -p "$APP"
+  [ -f "$APP/.env" ] && cp "$APP/.env" "$HOME_DIR/.env.keep"
+  tar -xzf "$DATA/studio-code.tar.gz" -C "$APP" 2>>"$LOG" || fail "The code didn't unpack. Details are in $LOG."
+  [ -f "$HOME_DIR/.env.keep" ] && mv "$HOME_DIR/.env.keep" "$APP/.env"
+fi
 cd "$APP" || exit 1
 sh scripts/memory-secrets.sh >/dev/null
 echo "Code is in $APP."
