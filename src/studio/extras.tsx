@@ -42,7 +42,10 @@ export function ProductSwitcher({ live, children }: { live: Live; children: Reac
 }
 
 /** Plain markdown (headings, lists, quotes, paragraphs) rendered without HTML injection. */
-export function StudioMarkdown({ text }: { text: string }) {
+/** `cite` draws a line's source marker ([^s3], [^m:<id>]); `missing` draws a '> **Missing:**' line (the PRFAQ). */
+export type MarkdownHooks = { cite?: (key: string) => ReactNode; missing?: (text: string) => ReactNode }
+export function StudioMarkdown({ text, cite, missing }: { text: string } & MarkdownHooks) {
+  const inline = (s: string) => inlineMd(s, cite)
   const blocks: ReactNode[] = []
   const lines = text.replace(/\r/g, '').split('\n')
   let list: string[] = []
@@ -73,6 +76,8 @@ export function StudioMarkdown({ text }: { text: string }) {
     if (h) { flush(); blocks.push(<h3 key={`h${blocks.length}`} className={`studio-md-h${h[1].length}`}>{inline(h[2])}</h3>); continue }
     const li = line.match(/^\s*(?:[-*]|\d+[.)])\s+(.*)$/)
     if (li) { if (para.length) { const p = para; para = []; blocks.push(<p key={`p${blocks.length}`}>{inline(p.join(' '))}</p>) } list.push(li[1]); continue }
+    const gap = missing ? line.match(/^>\s*\*\*Missing:\*\*\s*(.*)$/) : null
+    if (gap) { flush(); blocks.push(<div key={`m${blocks.length}`}>{missing!(gap[1])}</div>); continue }
     const q = line.match(/^>\s?(.*)$/)
     if (q) { flush(); blocks.push(<div key={`q${blocks.length}`} className="quote-callout"><span>“</span><p>{inline(q[1].replace(/[“”"]/g, ''))}</p></div>); continue }
     if (!line.trim()) { flush(); continue }
@@ -83,9 +88,9 @@ export function StudioMarkdown({ text }: { text: string }) {
   return <div className="studio-md">{blocks}</div>
 }
 
-function inline(s: string): ReactNode[] {
-  return s.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).filter(Boolean).map((part, i) =>
-    part.startsWith('**') ? <strong key={i}>{part.slice(2, -2)}</strong> : part.startsWith('`') ? <code key={i}>{part.slice(1, -1)}</code> : <span key={i}>{part}</span>,
+function inlineMd(s: string, cite?: (key: string) => ReactNode): ReactNode[] {
+  return s.split(/(\*\*[^*]+\*\*|`[^`]+`|\[\^[^\]\s]+\])/g).filter(Boolean).map((part, i) =>
+    part.startsWith('**') ? <strong key={i}>{part.slice(2, -2)}</strong> : part.startsWith('`') ? <code key={i}>{part.slice(1, -1)}</code> : part.startsWith('[^') ? (cite ? <span key={i}>{cite(part.slice(2, -1))}</span> : null) : /^_(.+)_\s*$/.test(part) ? <em key={i}>{part.trim().slice(1, -1)} </em> : <span key={i}>{part}</span>,
   )
 }
 

@@ -198,6 +198,18 @@ services:
     volumes:
       - ./connector-gate/${CONNECTOR_GATE_CONF:-nginx.conf}:/etc/nginx/nginx.conf:ro
       - ./connector-gate/pass.conf:/etc/nginx/pass.conf:ro
+  # Generated apps through the tunnel: p4101.innume.com ... p4129.innume.com -> app:4101..4129.
+  # Cloudflare tunnel points a wildcard hostname (*.innume.com, listed after the specific ones) at http://localhost:8089.
+  preview-router:
+    image: nginx:1.27-alpine
+    profiles: ["public"]
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "127.0.0.1:8089:8080"
+    volumes:
+      - ./connector-gate/preview-router.conf:/etc/nginx/nginx.conf:ro
   tunnel:
     image: cloudflare/cloudflared:2024.12.2
     profiles: ["public"]

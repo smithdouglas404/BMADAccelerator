@@ -20,7 +20,7 @@ export async function fakeAgentTurn(uc: UseCase, prompt: string, tally: RunTally
     return prisma.message.create({ data: { useCaseId: uc.id, role: "agent", agent: `${agent} · Specialist`, addressed: key, content, about, turnId } });
   };
   // Items the Studio asked about (itemAsk): the stand-in sends the named specialist and asks about each.
-  const asks = [...prompt.matchAll(/Item: ((?:backlog|move):\w+) \(“([^”]*)”\)\. Specialist for this stage: ([\w-]+) \(([^:]+):/g)];
+  const asks = [...prompt.matchAll(/Item: ((?:backlog|move):\w+|prfaq) \(“([^”]*)”\)\. Specialist for this stage: ([\w-]+) \(([^:]+):/g)];
   if (asks.length) {
     for (const [, node, title, agent, name] of asks) {
       const after = prompt.slice(prompt.indexOf(`Item: ${node}`));
@@ -29,6 +29,12 @@ export async function fakeAgentTurn(uc: UseCase, prompt: string, tally: RunTally
       if (skill) onTool?.("Skill", { skill });
       onTool?.("Agent", { subagent_type: agent });
       const key = agent === "solution-architect" ? "architect" : agent === "product-engineer" ? "engineer" : agent === "ux-component-mapper" ? "ux" : "business-analyst";
+      const gap = node === "prfaq" ? prompt.match(/^\s+- 1\. (.+)$/m)?.[1] : undefined;
+      if (gap) {
+        await specialist(key, name.replace(/ \(validator\)$/, ""), `I read the PRFAQ against the format. The biggest gap: ${gap}`, about);
+        await say(`${gap}\n\n1. Tell me in your own words (suggested)\n2. Skip it for now and keep it marked missing`, uc.focus, about);
+        continue;
+      }
       await specialist(key, name.replace(/ \(validator\)$/, ""), `I looked at “${title}”. Before it can be built it needs who uses it and what “done” means for them.`, about);
       await say(`About “${title}”: who uses this first, and what should they be able to do afterwards?\n\n1. The people who run it day to day, so they finish the job without help (suggested)\n2. Their customers, so they see where things stand\n3. Both, starting with the day-to-day team`, uc.focus, about);
     }

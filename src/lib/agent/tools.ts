@@ -5,14 +5,15 @@ import { tool, createSdkMcpServer } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 
 /** The backlog items or Board cards a message is about, so it shows in each item's detail view and Traceability. */
-const ABOUT = z.array(z.string()).max(10).default([]).describe('The backlog items or Board cards this is about: "backlog:<id>" or "move:<id>" (the prompt names them as "Item: ..."). Always set it when you ask or answer about an item.');
+const ABOUT = z.array(z.string()).max(10).default([]).describe('The backlog items or Board cards this is about: "backlog:<id>" or "move:<id>", or "prfaq" for the PRFAQ (the prompt names them as "Item: ..."). Always set it when you ask or answer about an item.');
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { workspacePath } from "@/lib/workspace";
 import { formatHits, letta, rememberAnswer, rememberDecision, rememberLesson, searchMemory } from "@/lib/memory";
 import { ROLES } from "@/lib/memory/lettaCore";
 import { IMAGE_LIMIT, imagesConfigured, makeImage } from "@/lib/images";
-import { SPEC_BASIS, SPEC_DEFS, SPEC_STATUSES, TRACE_TYPES, cleanTrace } from "@/lib/studio/spec";
+import { SPEC_BASIS, SPEC_STATUSES, TRACE_TYPES, cleanTrace } from "@/lib/studio/spec";
+import { SPEC_DEFS } from "@/lib/studio/specDefs";
 import { ensureSpec } from "@/lib/studio/state";
 import { currentCauses, currentItems, currentTurnId, nodesForIds, recordChange } from "@/lib/studio/truthlog";
 import { teamCoverage } from "@/lib/studio/coverage";
@@ -43,7 +44,7 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
   // the message is about that item, so questions always reach the item's detail view.
   const aboutNodes = async (about: string[]) => {
     const named = await nodesForIds(useCaseId, about.map((a) => a.replace(/^(backlog|move):/, "")));
-    const items = named.filter((n) => /^(backlog|move):/.test(n));
+    const items = [...named.filter((n) => /^(backlog|move):/.test(n)), ...(about.includes("prfaq") ? ["prfaq"] : [])];
     if (items.length) return [...new Set(items)];
     const turn = currentItems(useCaseId);
     return turn.length && turn.filter((n) => n.startsWith("backlog:")).length <= 1 && turn.filter((n) => n.startsWith("move:")).length <= 1 ? turn : [];
@@ -207,10 +208,12 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
       ),
       tool(
         "update_prfaq",
-        "Replace the living PRFAQ (Markdown). Shape: '# <headline>' then a one-line kicker '_FOR <who>_', a summary paragraph, '## Why customers care' (problem, solution, a customer quote as a '> ' line), '## How to get started', '## Customer FAQs' (Q/A), '## Internal & engineering FAQs' (data, auth, integrations, risks). Keep the owner's own words where they said them. It is the product's dream of the future, written as if launched.",
+        "Replace the living PRFAQ (Markdown), in the Amazon format the studio-prfaq skill sets out (its sections in order, '# <headline>', the subheading in italics, '## <Section>', quotes as '> ' lines, FAQs as **Q:**/**A:** lines). Keep the owner's own words where they said them. It is the product's dream of the future, written as if launched. If it carries source markers ([^s3], [^m:<id>]) or '> **Missing:**' lines, keep every marker on its line; a Missing line goes only when a person's words answer it, and the new line ends with [^m:<that message id>].",
         { markdown: z.string().min(40) },
         async ({ markdown }) => {
+          const before = (await uc()).prfaq;
           await prisma.useCase.update({ where: { id: useCaseId }, data: { prfaq: markdown, prfaqUpdatedAt: new Date() } });
+          await recordChange(useCaseId, { node: "prfaq", kind: "changed", summary: `${speaker} updated the PRFAQ`, before, after: markdown, by: speaker, fromTurn: true });
           return ok("PRFAQ updated.");
         },
       ),

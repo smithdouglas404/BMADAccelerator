@@ -29,7 +29,8 @@ export const ECC_ALWAYS = ["frontend-design-direction"];
 
 export function frontmatterOf(md: string) {
   const m = md.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-  const get = (k: string) => m?.[1].match(new RegExp(`^${k}:\\s*['"]?(.*?)['"]?\\s*$`, "m"))?.[1] ?? "";
+  // ECC writes origin under "metadata:" (indented); the Studio's skills may use either.
+  const get = (k: string) => m?.[1].match(new RegExp(`^\\s*${k}:\\s*['"]?(.*?)['"]?\\s*$`, "m"))?.[1] ?? "";
   return { name: get("name"), description: get("description"), origin: get("origin") };
 }
 

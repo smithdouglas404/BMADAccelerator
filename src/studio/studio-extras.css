@@ -675,3 +675,66 @@ a.studio-home-brand { color: inherit; text-decoration: none; padding-bottom: 12p
 .studio-team-tip .studio-team-skill { font: 12px 'DM Mono', monospace; color: var(--faint); }
 .studio-team-tip .studio-team-open { color: var(--ink); }
 @media (max-width: 900px) { .studio-team-tip { right: auto; left: 0; top: calc(100% + 4px); width: min(290px, 80vw); } }
+/* Generate PRFAQ from what you said (Doug, Nov 21): talk panel, documents, Reformat / Generate new, line
+   sources and Missing lines. Fixed standard sizes (14px body, 12px minimum). */
+.studio-prfaq-talk { display: grid; gap: 12px; margin: 0 0 16px; padding: 14px 16px; border: 1px solid var(--line-strong, var(--line)); border-radius: var(--radius, 8px); background: var(--panel-strong, var(--panel)); font-size: 14px; }
+.studio-prfaq-talk-head { display: flex; align-items: flex-start; gap: 10px; }
+.studio-prfaq-talk-head > div { display: grid; gap: 2px; flex: 1; }
+.studio-prfaq-talk-head small { color: var(--muted); font-size: 13px; line-height: 1.45; }
+.studio-prfaq-talk-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; }
+.studio-prfaq-talk-text { min-height: 120px; }
+.studio-prfaq-docs { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.studio-prfaq-docs .eyebrow { width: 100%; }
+.studio-prfaq-doc { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 13px; cursor: pointer; }
+.studio-prfaq-doc input { margin: 0; }
+.studio-prfaq-talk-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.studio-prfaq-choice { display: grid; gap: 8px; }
+.studio-prfaq-choice p { margin: 0; }
+.studio-prfaq-option { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 10px 12px; text-align: left; border: 1px solid var(--line-strong, var(--line)); border-radius: var(--radius, 8px); background: var(--panel); color: var(--ink); cursor: pointer; font: inherit; }
+.studio-prfaq-option:hover { border-color: var(--blue, var(--acid)); }
+.studio-prfaq-option span { display: grid; gap: 2px; }
+.studio-prfaq-option small { color: var(--muted); font-size: 13px; line-height: 1.45; }
+.studio-prfaq-choice > .button { justify-self: start; }
+.studio-prfaq-versions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.studio-prfaq-missing { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0; padding: 8px 12px; border: 1px dashed var(--line-strong, var(--line)); border-radius: var(--radius, 8px); color: var(--muted); font-size: 14px; }
+.studio-prfaq-missing > span { flex: 1; min-width: 200px; }
+.studio-prfaq-missing b { color: var(--ink); }
+.studio-cite-wrap { position: relative; display: inline; }
+.studio-cite { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; margin: 0 1px; padding: 0 4px; border: 1px solid var(--line-strong, var(--line)); border-radius: 999px; background: var(--panel); color: var(--muted); font-size: 12px; line-height: 1; vertical-align: baseline; position: relative; top: -0.3em; cursor: pointer; }
+.studio-cite:hover, .studio-cite.is-open { border-color: var(--blue, var(--acid)); color: var(--ink); }
+.studio-cite-pop { position: fixed; z-index: 60; display: grid; gap: 6px; width: min(360px, calc(100vw - 16px)); padding: 12px; border: 1px solid var(--line-strong, var(--line)); border-radius: var(--radius, 8px); background: var(--panel-strong, var(--panel)); box-shadow: var(--shadow, 0 8px 24px rgba(0,0,0,.12)); font-size: 13px; font-weight: 400; font-style: normal; line-height: 1.5; text-align: left; }
+.studio-cite-quote { color: var(--ink); }
+.studio-cite-pop .text-button { justify-self: start; }
+.studio-prfaq-questions { display: grid; gap: 12px; margin-top: 16px; }
+.studio-prfaq-trace summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.studio-prfaq-option.is-suggested { border-color: var(--blue, var(--acid)); }
+.studio-prfaq-option em { margin-left: 6px; color: var(--blue, var(--acid-text)); font-size: 12px; font-style: normal; }
+.studio-prfaq-option:disabled { opacity: .6; cursor: default; }
+.studio-prfaq-choice-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.studio-prfaq-fresh { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; border-radius: var(--radius, 8px); background: rgba(var(--blue-rgb, 59, 130, 246), .08); font-size: 14px; }
+.studio-prfaq-fresh > span { flex: 1; min-width: 200px; }
+/* The PRFAQ's way in and the guided walkthrough (Doug, Nov 21). */
+.studio-prfaq-start, .studio-prfaq-walk { display: grid; gap: 12px; margin: 0 0 16px; padding: 16px; border: 1px solid var(--line-strong, var(--line)); border-radius: var(--radius, 8px); background: var(--panel-strong, var(--panel)); font-size: 14px; }
+.studio-prfaq-start .studio-md p { margin: 0 0 8px; line-height: 1.55; }
+.studio-prfaq-doors { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; }
+.studio-prfaq-walk-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.studio-prfaq-walk-head > div { display: grid; gap: 2px; }
+.studio-prfaq-walk-head small { color: var(--muted); font-size: 13px; }
+.studio-prfaq-steps { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.studio-prfaq-step { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
+.studio-prfaq-step.is-current { border-color: var(--blue, var(--acid)); color: var(--ink); font-weight: 600; }
+.studio-prfaq-step.is-ready { color: var(--ink); background: rgba(var(--blue-rgb, 59, 130, 246), .08); }
+.studio-prfaq-step.is-needs-work { color: var(--ink); border-style: dashed; }
+.studio-prfaq-walk-step { display: grid; gap: 10px; }
+.studio-prfaq-walk-step .studio-md p { margin: 0 0 8px; line-height: 1.55; }
+.studio-prfaq-ask { margin: 0; font-size: 18px; line-height: 1.4; }
+.studio-prfaq-bar { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.studio-prfaq-exchange { display: grid; gap: 8px; }
+.studio-prfaq-turn { display: grid; gap: 2px; max-width: 90%; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--radius, 8px); background: var(--panel); }
+.studio-prfaq-turn.is-mine { justify-self: end; background: rgba(var(--blue-rgb, 59, 130, 246), .06); }
+.studio-prfaq-turn small { color: var(--muted); font-size: 12px; }
+.studio-prfaq-turn p { margin: 0; white-space: pre-wrap; line-height: 1.5; }
+.studio-prfaq-verdict { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; }
+.studio-prfaq-verdict.is-ready { color: var(--blue, var(--acid-text)); }
+.studio-prfaq-answer { display: grid; gap: 8px; }
+.studio-prfaq-option em { display: inline-block; }

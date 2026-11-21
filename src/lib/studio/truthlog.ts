@@ -26,7 +26,7 @@ export function currentTurnId(useCaseId: string) {
 
 /** The backlog items and Board cards a running turn is about (its causes), for messages that name none. */
 export function currentItems(useCaseId: string) {
-  return currentCauses(useCaseId).filter((c) => /^(backlog|move):/.test(c));
+  return currentCauses(useCaseId).filter((c) => /^(backlog|move):/.test(c) || c === "prfaq");
 }
 
 const clip = (s: string, n = 600) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
