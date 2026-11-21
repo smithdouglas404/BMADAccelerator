@@ -8,7 +8,8 @@ import { api } from './live'
 type F = { calls: number; errors: number; usedJev: number; compared: number; agreed: number; medianMs: number; p95Ms: number; tokens: number }
 type Stats = {
   configured: boolean; on: boolean
-  features: { approval: F; markup: F; links: F }
+  features: { approval: F; markup: F; links: F; gate: F }
+  gate: { messages: number; turnsDone: number; jevLight: number; jevFull: number; unsettled: number; wouldSave: number; wouldHaveBroken: number; missedSaving: number; recent: { at: string; input: Record<string, unknown>; jev: string; socra: string; did: string }[] }
   cost: Record<string, number>
   approvals: { rescued: number; blocked: number; byJev: number; undone: number }
   links: { jev: { accepted: number; dismissed: number }; socra: { accepted: number; dismissed: number } }
@@ -16,8 +17,8 @@ type Stats = {
   disagreements: { feature: string; at: string; input: Record<string, unknown>; jev: string; old: string; used: string; outcome: string }[]
 }
 
-const NAMES = { approval: 'Hearing a yes', markup: 'Sorting mark-ups', links: 'Story map links' } as const
-const OLD = { approval: 'the word rules', markup: 'Socra’s reading', links: 'Socra' } as const
+const NAMES = { approval: 'Hearing a yes', markup: 'Sorting mark-ups', links: 'Story map links', gate: 'Message gate (watching only)' } as const
+const OLD = { approval: 'the word rules', markup: 'Socra’s reading', links: 'Socra', gate: 'what Socra’s turn did' } as const
 const pct = (a: number, b: number) => (b ? `${Math.round((a / b) * 100)}%` : '–')
 const usd = (n: number) => (n < 0.01 ? `$${n.toFixed(5)}` : `$${n.toFixed(2)}`)
 const rate = (x: { accepted: number; dismissed: number }) => `${pct(x.accepted, x.accepted + x.dismissed)} accepted (${x.accepted} of ${x.accepted + x.dismissed})`
@@ -48,6 +49,17 @@ export function JevValue() {
           <div className="studio-list-row"><div className="studio-row-main"><strong>Story map links</strong><small>Jev’s: {rate(s.links.jev)}. Socra’s: {rate(s.links.socra)}.</small></div></div>
         </div>
       </section>
+      {s.gate.messages > 0 && <section className="studio-card">
+        <div className="stack-header"><div><p className="eyebrow">Message gate · watching only, nothing is skipped</p><h3>Would Jev have saved a Socra turn?</h3></div></div>
+        <p className="studio-muted">For each message, Jev says whether it needs a full Socra turn; afterwards the Studio records what the turn really was (light = only talking, no specialist, no changes). Questions and limits are in the typesafe-ai skill’s gate.json.</p>
+        <div className="studio-list">
+          <div className="studio-list-row"><div className="studio-row-main"><strong>{s.gate.messages} messages judged</strong><small>Jev: light {s.gate.jevLight}, full {s.gate.jevFull}, unsure {s.gate.unsettled} · turns finished {s.gate.turnsDone}</small></div></div>
+          <div className="studio-list-row"><div className="studio-row-main"><strong>Turns Jev would have saved: {s.gate.wouldSave}</strong><small>Jev said light and the turn really was light ({pct(s.gate.wouldSave, s.gate.wouldSave + s.gate.wouldHaveBroken)} of its light calls).</small></div></div>
+          <div className="studio-list-row"><div className="studio-row-main"><strong>Turns it would have wrongly cut: {s.gate.wouldHaveBroken}</strong><small>Jev said light, but the turn did real work. This must stay near zero before anything is skipped.</small></div></div>
+          <div className="studio-list-row"><div className="studio-row-main"><strong>Savings Jev missed: {s.gate.missedSaving}</strong><small>Jev said full, but the turn was only a reply.</small></div></div>
+        </div>
+        {s.gate.recent.length > 0 && <div className="studio-list">{s.gate.recent.map((d, i) => <div key={i} className="studio-list-row"><div className="studio-row-main"><strong>Jev {d.jev}, turn {d.socra} ({d.did})</strong><small>{String(d.input?.owner_message ?? '').slice(0, 220)}</small></div></div>)}</div>}
+      </section>}
       {s.disagreements.length > 0 && <section className="studio-card">
         <div className="stack-header"><div><p className="eyebrow">Where they differ</p><h3>Jev against the old method</h3></div></div>
         <div className="studio-list">{s.disagreements.map((d, i) => <div key={i} className="studio-list-row"><div className="studio-row-main"><strong>{NAMES[d.feature as keyof typeof NAMES] ?? d.feature}: Jev {d.jev}, old {d.old}{d.used === 'jev' ? ' (Jev’s answer used)' : ''}{d.outcome ? ` · ${d.outcome}` : ''}</strong><small>{Object.values(d.input ?? {}).map(String).join(' → ').slice(0, 220)}</small></div></div>)}</div>

@@ -1,9 +1,12 @@
+import { promises as fs } from "fs";
+import path from "path";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { STUDIO_SKILLS_DIR } from "@/lib/provision";
 import {
   APPROVAL_MAX_CHARS, APPROVAL_QUESTIONS, JEV_MODEL, JEV_URL, LINK_PAIRS_PER_REQUEST, MARK_LABEL, MARK_QUESTIONS,
-  approvalVerdict, candidatePairs, decideYes, markVerdict, pairQuestions, pairVerdict,
-  type Answers, type LinkGuess, type MarkKind, type Question, type Story,
+  approvalVerdict, candidatePairs, decideYes, gateVerdict, markVerdict, pairQuestions, pairVerdict, turnWeight,
+  type Answers, type GateConfig, type LinkGuess, type MarkKind, type Question, type Story,
 } from "./core";
 
 export * from "./core";
@@ -124,6 +127,48 @@ export async function guessLinks(useCaseId: string, product: string, stories: St
   return guesses.sort((x, y) => y.p - x.p);
 }
 
+// ---- 4. The gate: does this message need a full Socra turn? (log-only) ----
+
+let gateCfg: GateConfig | null | undefined;
+/** The gate's questions and thresholds, from the typesafe-ai skill's gate.json (null when missing: the gate stays off). */
+export async function gateConfig(): Promise<GateConfig | null> {
+  if (gateCfg === undefined) gateCfg = await fs.readFile(path.join(STUDIO_SKILLS_DIR, "typesafe-ai", "gate.json"), "utf8").then((t) => JSON.parse(t) as GateConfig).catch(() => null);
+  return gateCfg;
+}
+
+const gatePending = new Map<string, Promise<unknown>>();
+
+/**
+ * Jev's call on whether a message needs a full turn. Logged only: the turn runs either way. Never throws
+ * and never delays the message. noteGateTurn later adds what the turn really was.
+ */
+export function judgeGate(useCaseId: string, messageId: string, lastSocra: string, message: string) {
+  if (!jevEnabled()) return;
+  const p = (async () => {
+    const cfg = await gateConfig();
+    if (!cfg?.enabled) return;
+    const input = { owner_message: message.slice(0, cfg.maxChars), socra_last_message: lastSocra.slice(0, cfg.maxChars) };
+    try {
+      const r = await askJev(input, cfg.questions, 4000);
+      await log({ useCaseId, feature: "gate", ref: `msg:${messageId}`, input, answers: r.answers as Prisma.InputJsonValue, jev: gateVerdict(r.answers, cfg), used: "old", ms: r.ms, inputTokens: r.inputTokens });
+    } catch (e) {
+      await log({ useCaseId, feature: "gate", ref: `msg:${messageId}`, input, used: "old", error: (e as Error).message.slice(0, 300) });
+    }
+  })().finally(() => gatePending.delete(messageId));
+  gatePending.set(messageId, p);
+}
+
+/** After a turn: what it really was (light or full), beside Jev's call on the messages that caused it. */
+export async function noteGateTurn(causes: string[], tools: string[], agents: string[]) {
+  const cfg = await gateConfig();
+  if (!cfg?.enabled) return;
+  const weight = turnWeight(tools, agents, cfg.lightTools);
+  for (const c of causes.filter((x) => x.startsWith("msg:"))) {
+    await gatePending.get(c.slice(4));
+    await prisma.jevCall.updateMany({ where: { feature: "gate", ref: c }, data: { old: weight, outcome: `${agents.length} specialists, ${tools.filter((t) => !cfg.lightTools.includes(t)).length} changes` } }).catch(() => undefined);
+  }
+}
+
 // ---- the value, for Settings > Jev ----
 
 export async function jevStats() {
@@ -153,13 +198,29 @@ export async function jevStats() {
     return { accepted: l.filter((x) => x.status === "confirmed").length, dismissed: l.filter((x) => x.status === "dismissed").length };
   };
   const disagreements = rows
-    .filter((r) => !r.error && r.old && r.jev && r.jev !== "unsettled" && r.jev !== r.old)
+    .filter((r) => r.feature !== "gate" && !r.error && r.old && r.jev && r.jev !== "unsettled" && r.jev !== r.old)
     .slice(0, 12)
     .map((r) => ({ feature: r.feature, at: r.createdAt, input: r.input, jev: r.jev, old: r.old, used: r.used, outcome: r.outcome }));
   return {
     configured: Boolean(process.env.TYPESAFE_API_KEY),
     on: jevEnabled(),
-    features: { approval: feature("approval"), markup: feature("markup"), links: feature("links") },
+    features: { approval: feature("approval"), markup: feature("markup"), links: feature("links"), gate: feature("gate") },
+    gate: (() => {
+      const g = rows.filter((r) => r.feature === "gate" && !r.error);
+      const done = g.filter((r) => r.old);
+      const light = done.filter((r) => r.jev === "light");
+      return {
+        messages: g.length,
+        turnsDone: done.length,
+        jevLight: g.filter((r) => r.jev === "light").length,
+        jevFull: g.filter((r) => r.jev === "full").length,
+        unsettled: g.filter((r) => r.jev === "unsettled").length,
+        wouldSave: light.filter((r) => r.old === "light").length,
+        wouldHaveBroken: light.filter((r) => r.old === "full").length,
+        missedSaving: done.filter((r) => r.jev === "full" && r.old === "light").length,
+        recent: done.filter((r) => r.jev !== "unsettled" && r.jev !== r.old).slice(0, 10).map((r) => ({ at: r.createdAt, input: r.input, jev: r.jev, socra: r.old, did: r.outcome })),
+      };
+    })(),
     approvals: {
       rescued: approval.filter((r) => r.jev === "yes" && r.old === "no").length,
       blocked: approval.filter((r) => r.jev === "no" && r.old === "yes").length,

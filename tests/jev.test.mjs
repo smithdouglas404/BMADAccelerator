@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { promises as fs } from "fs";
 import path from "path";
-import { approvalVerdict, decideYes, markVerdict, pairVerdict, candidatePairs, jevCostUsd, APPROVAL_QUESTIONS, MARK_QUESTIONS } from "../src/lib/jev/core.ts";
+import { approvalVerdict, decideYes, gateVerdict, turnWeight, markVerdict, pairVerdict, candidatePairs, jevCostUsd, APPROVAL_QUESTIONS, MARK_QUESTIONS } from "../src/lib/jev/core.ts";
 
 const noul = (n) => ({ type: "noul", noul: n });
 
@@ -46,4 +46,17 @@ test("questions stay plain and in one place, and the cost follows TypeSafe's pri
   assert.match(actions, /jevOutcome\(`decision:\$\{d\.id\}`, "undone"\)/, "an undone approval is counted against Jev");
   const lib = await fs.readFile(path.join(process.cwd(), "src/lib/jev/index.ts"), "utf8");
   assert.match(lib, /return \{ yes: rulesYes, callId: null \};\n  \}\n\}/, "a failed call falls back to the rules, never a silent no");
+});
+
+test("gate: a message needs a full turn when it gives work or asks; only a clear nothing is light; the data file is whole", async () => {
+  const cfg = JSON.parse(await fs.readFile(path.join("studio-skills", "typesafe-ai", "gate.json"), "utf8"));
+  assert.ok(cfg.questions.gives_work && cfg.questions.asks_question && cfg.lightTools.includes("say"));
+  assert.equal(gateVerdict({ gives_work: noul(0.05), asks_question: noul(0.1) }, cfg), "light", "'ok thanks'");
+  assert.equal(gateVerdict({ gives_work: noul(0.9), asks_question: noul(0.1) }, cfg), "full");
+  assert.equal(gateVerdict({ gives_work: noul(0.1), asks_question: noul(0.8) }, cfg), "full");
+  assert.equal(gateVerdict({ gives_work: noul(0.5), asks_question: noul(0.1) }, cfg), "unsettled");
+  assert.equal(gateVerdict({ gives_work: noul(0.05) }, cfg), "unsettled", "a missing answer is never light");
+  assert.equal(turnWeight(["say", "get_state"], [], cfg.lightTools), "light");
+  assert.equal(turnWeight(["say", "set_spec_section"], [], cfg.lightTools), "full");
+  assert.equal(turnWeight(["say"], ["business-analyst"], cfg.lightTools), "full");
 });
