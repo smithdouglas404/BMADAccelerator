@@ -696,3 +696,19 @@ model MemoryEvent {
   @@index([role, createdAt])
   @@index([kind, createdAt])
 }
+
+// Every time a skill is really used or looked at, so Settings > Skills can show the numbers on each skill (Doug, Nov 21).
+model SkillEvent {
+  id        String   @id @default(cuid())
+  // The skill's name (studio-muse, tdd-workflow ...).
+  skill     String
+  // loaded (put in an agent's instructions), used (an agent read or invoked it in a turn), viewed (opened on the Skills page)
+  kind      String
+  // The agent or person: Socra, a specialist, or a viewer.
+  agent     String   @default("")
+  useCaseId String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([skill, createdAt])
+  @@index([kind, createdAt])
+}

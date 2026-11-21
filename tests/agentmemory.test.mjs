@@ -107,3 +107,17 @@ test("the Letta and Mem0 skills exist in ECC's layout and every specialist is to
     assert.ok(STUDIO_TEAM[key].prompt.includes("skills/studio-mem0-memory/SKILL.md"), `${key} is not told to read studio-mem0-memory`);
   }
 });
+
+test("skill metrics come only from real events, and an unused skill is never used", async () => {
+  const { aggregateSkillEvents } = await import("../src/lib/skillMetricsCore.ts");
+  const m = aggregateSkillEvents([
+    { skill: "studio-muse", kind: "loaded", agent: "Socra", useCaseId: "a", createdAt: "2026-11-21T10:00:00Z" },
+    { skill: "studio-muse", kind: "used", agent: "Socra", useCaseId: "b", createdAt: "2026-11-21T11:00:00Z" },
+    { skill: "studio-muse", kind: "viewed", agent: "a person", useCaseId: "", createdAt: "2026-11-21T12:00:00Z" },
+  ]);
+  assert.equal(m["studio-muse"].used, 2);
+  assert.equal(m["studio-muse"].viewed, 1);
+  assert.equal(m["studio-muse"].useCases, 2);
+  assert.equal(m["studio-muse"].lastUsed, "2026-11-21T11:00:00.000Z");
+  assert.equal(m["tdd-workflow"], undefined);
+});

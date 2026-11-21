@@ -3,6 +3,7 @@ import { coreInstructions, CORE_SKILLS } from "./instructions";
 import path from "path";
 import { query, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { prisma } from "@/lib/db";
+import { logSkillEvents } from "@/lib/skillMetrics";
 import { workspacePath } from "@/lib/workspace";
 import { currentItems, currentTurnId, setTurnCauses, setTurnId } from "@/lib/studio/truthlog";
 import { provisionWorkspace, shadcnLookupDir, syncStudioSkills, writeIntake, STUDIO_SKILLS_DIR } from "@/lib/provision";
@@ -97,6 +98,7 @@ export async function kick(useCaseId: string) {
       setTurnCauses(useCaseId, causes);
       // The turn as it really runs: what caused it, the core skills loaded, and what it used (Traceability).
       const turn = await prisma.agentTurn.create({ data: { useCaseId, causes, loaded: [...CORE_SKILLS] } }).catch(() => null);
+      await logSkillEvents(CORE_SKILLS.map((skill) => ({ skill, kind: "loaded" as const, agent: "Socra", useCaseId })));
       const used = { skills: new Set<string>(), agents: new Set<string>(), tools: new Set<string>() };
       if (turn) setTurnId(useCaseId, turn.id);
       let failure = "";
@@ -113,6 +115,7 @@ export async function kick(useCaseId: string) {
       }
       setTurnCauses(useCaseId, []);
       setTurnId(useCaseId, "");
+      await logSkillEvents([...used.skills].map((skill) => ({ skill, kind: "used" as const, agent: [...used.agents].join(", ") || "Socra", useCaseId })));
       if (turn)
         await prisma.agentTurn
           .update({ where: { id: turn.id }, data: { status: ok ? "done" : "failed", error: failure, skills: [...used.skills], agents: [...used.agents], tools: [...used.tools], endedAt: new Date() } })
