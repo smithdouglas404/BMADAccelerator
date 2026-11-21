@@ -1,9 +1,11 @@
 #!/bin/bash
 # Socra · Working Backwards Studio, on a laptop with Podman (macOS).
 #
-# Run it from Terminal with one line (Doug's laptop):
-#   bash -c "$(curl -fsSL https://raw.githubusercontent.com/smithdouglas404/BMADAccelerator/claude/project-thread-i43blx/scripts/laptop/start-on-laptop.sh)"
-#   To get the newest version later (keeps your data):  add " - update" after the closing quote of that line.
+# Run it from Terminal with one line (Doug's laptop). Each line saves this script on the laptop first, then runs it:
+#   mkdir -p ~/SocraStudio/bin && curl -fsSL <this file's address> -o ~/SocraStudio/bin/socra.new && mv ~/SocraStudio/bin/socra.new ~/SocraStudio/bin/socra.sh && bash ~/SocraStudio/bin/socra.sh [update|check|logs]
+#   (nothing)  set up / start the Studio       update  newest Studio code from GitHub, rebuild, keep your data
+#   check      one screen: last result, versions, is localhost:3000 answering?       logs  what each app's start log says
+# From the second run on, the work happens in the background, so closing the window does not stop it.
 #
 # What it does, start to finish, with nothing typed:
 #   1. Finds the data package you downloaded (socra-laptop-data.zip, in Downloads).
@@ -19,7 +21,7 @@ set -uo pipefail
 MODE="${1:-}"
 CODE_BRANCH="${SOCRA_BRANCH:-mac-studio}"
 # Release of THIS script (the laptop fixes). Settings > Update compares it with the newest one on GitHub.
-SCRIPT_REV="8"
+SCRIPT_REV="9"
 
 HOME_DIR="$HOME/SocraStudio"
 APP="$HOME_DIR/BMADAccelerator"
@@ -29,7 +31,7 @@ mkdir -p "$HOME_DIR"
 export COMPOSE_PROJECT_NAME=bmadaccelerator
 
 say()  { printf '\n\033[1m%s\033[0m\n' "$*"; }
-fail() { printf '\n\033[31m%s\033[0m\n' "$*"; osascript -e "display dialog \"$*\" buttons {\"OK\"} with title \"Socra Studio\" with icon stop" >/dev/null 2>&1; exit 1; }
+fail() { FAIL_MSG="$*"; printf '\n\033[31m%s\033[0m\n' "$*"; osascript -e "display dialog \"$*\" buttons {\"OK\"} with title \"Socra Studio\" with icon stop" >/dev/null 2>&1; exit 1; }
 popup_secret() { # $1 prompt; prints the answer, empty if skipped
   osascript <<EOF 2>/dev/null
 try
@@ -79,6 +81,54 @@ if [ "$MODE" = "logs" ]; then
   diagnose
   exit 0
 fi
+
+if [ "$MODE" = "check" ]; then
+  for p in /opt/podman/bin /opt/homebrew/bin /usr/local/bin; do [ -x "$p/podman" ] && export PATH="$p:$PATH"; done
+  RES=$(cat "$HOME_DIR/.last-result" 2>/dev/null || echo "nothing recorded yet")
+  VER=$(cat "$HOME_DIR/.version" 2>/dev/null || true); REL=$(cat "$HOME_DIR/.script-rev" 2>/dev/null || echo "older")
+  CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 6 http://localhost:3000 2>/dev/null || true); CODE=${CODE:-000}
+  UP=no; [ "$CODE" -ge 200 ] 2>/dev/null && [ "$CODE" -lt 400 ] && UP=yes
+  RUNNING=no; ps -axo command | grep -v grep | grep "SocraStudio/bin/socra.sh" | grep -vq "socra.sh check\|socra.sh logs" && RUNNING=yes
+  PM=no; podman info >/dev/null 2>&1 && PM=yes
+  HELPER=no; curl -fs --max-time 4 http://127.0.0.1:3099/status >/dev/null 2>&1 && HELPER=yes
+  echo "== Socra check, $(date) =="
+  echo "Last update or setup:        $RES"
+  echo "Studio version here:         ${VER:0:7}${VER:+ }(laptop fixes release $REL; newest release is $SCRIPT_REV)"
+  echo "Podman machine running:      $PM"
+  echo "localhost:3000 answering:    $UP (code $CODE)"
+  echo "Update button's helper:      $HELPER"
+  echo "An update is running now:    $RUNNING"
+  echo; echo "-- last lines of the last run --"; tail -n 12 "$HOME_DIR/last-run.txt" 2>/dev/null | cut -c1-200
+  echo
+  if [ "$RUNNING" = yes ]; then echo "VERDICT: an update is still running. Wait, then run this check again."
+  elif [ "$UP" = yes ] && [ "${RES%% *}" = "done" ]; then echo "VERDICT: all good. The Studio is up and the last update finished."
+  elif [ "$UP" = yes ]; then echo "VERDICT: the Studio is up, but the last update did not finish. Run the update line again."
+  elif [ "$PM" = no ]; then echo "VERDICT: Podman's machine is stopped. Open Podman Desktop, start the machine, then run the update line again."
+  else echo "VERDICT: the Studio is not answering. Run the update line again; if this check says the same after that, send me this screen."
+  fi
+  exit 0
+fi
+
+# From the second run on (or any update), the work runs in the background in its own session: closing the window,
+# or Terminal restarting, no longer stops it. Its output goes to last-run.txt and the outcome to .last-result.
+if [ -z "${SOCRA_DETACHED:-}" ] && [ -z "${SOCRA_UPDATER:-}" ] && [ -f "$0" ] && { [ "$MODE" = "update" ] || [ -f "$HOME_DIR/.data-loaded" ]; }; then
+  RUNLOG="$HOME_DIR/last-run.txt"; : > "$RUNLOG"
+  echo "running since $(date)" > "$HOME_DIR/.last-result"
+  SOCRA_DETACHED=1 perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' nohup bash "$0" "$@" >> "$RUNLOG" 2>&1 < /dev/null &
+  CHILD=$!
+  echo "Working in the background. If this window closes, it keeps going."
+  echo "To see how it is going at any time: bash $HOME_DIR/bin/socra.sh check"
+  tail -n +1 -f "$RUNLOG" & TAILP=$!
+  while kill -0 "$CHILD" 2>/dev/null; do sleep 1; done
+  sleep 1; kill "$TAILP" 2>/dev/null
+  echo; echo "RESULT: $(cat "$HOME_DIR/.last-result")"
+  exit 0
+fi
+on_exit() {
+  if [ -n "${SOCRA_OK:-}" ]; then echo "done at $(date)" > "$HOME_DIR/.last-result"
+  else echo "FAILED at $(date): ${FAIL_MSG:-it stopped unexpectedly (see $HOME_DIR/last-run.txt and $LOG)}" > "$HOME_DIR/.last-result"; fi
+}
+trap on_exit EXIT
 
 # ---------- 1. the data package ----------
 say "Step 1 of 6: finding your data package"
@@ -144,7 +194,7 @@ echo "Podman is ready."
 say "Step 3 of 6: putting the Studio's code in place"
 if [ "$MODE" = "update" ]; then
   echo "Getting the newest version from GitHub ($CODE_BRANCH)..."
-  NEW_SHA=$(curl -fsS --max-time 20 "https://api.github.com/repos/smithdouglas404/BMADAccelerator/branches/$CODE_BRANCH" | perl -0777 -ne 'print $1 if /"commit"\s*:\s*\{\s*"sha"\s*:\s*"([0-9a-f]{40})"/')
+  NEW_SHA=$(curl -fs --max-time 20 "https://api.github.com/repos/smithdouglas404/BMADAccelerator/branches/$CODE_BRANCH" | perl -0777 -ne 'print $1 if /"commit"\s*:\s*\{\s*"sha"\s*:\s*"([0-9a-f]{40})"/')
   [ -n "$NEW_SHA" ] || NEW_SHA="refs/heads/$CODE_BRANCH"
   rm -rf "$APP.new"; mkdir -p "$APP.new"
   curl -fsSL "https://codeload.github.com/smithdouglas404/BMADAccelerator/tar.gz/$NEW_SHA" \
@@ -176,12 +226,14 @@ security find-certificate -a -p /System/Library/Keychains/SystemRootCertificates
 security find-certificate -a -p "$HOME/Library/Keychains/login.keychain-db" >> "$CA" 2>>"$LOG"
 grep -q "BEGIN CERTIFICATE" "$CA" || fail "I couldn't read this Mac's certificates. Details are in $LOG."
 podman machine ssh "sudo sh -c 'cat > /etc/pki/ca-trust/source/anchors/corp-ca.pem && update-ca-trust'" < "$CA" >>"$LOG" 2>&1 \
-  || echo "(Couldn't add the certificates to Podman's machine; carrying on.)"
+  || echo "(optional certificate step for Podman's own machine did not apply; image downloads work without it)" >>"$LOG"
 CA_ENV="NODE_EXTRA_CA_CERTS=/etc/ssl/corp-ca.pem SSL_CERT_FILE=/etc/ssl/corp-ca.pem REQUESTS_CA_BUNDLE=/etc/ssl/corp-ca.pem CURL_CA_BUNDLE=/etc/ssl/corp-ca.pem GIT_SSL_CAINFO=/etc/ssl/corp-ca.pem PIP_CERT=/etc/ssl/corp-ca.pem"
 for D in . agent-service memory/mem0; do
   cp "$CA" "$APP/$D/corp-ca.pem" 2>/dev/null
   F="$APP/$D/Dockerfile"
-  grep -q "corp-ca.pem" "$F" || awk -v env="$CA_ENV" '{print} /^FROM /{print "COPY corp-ca.pem /etc/ssl/corp-ca.pem"; print "ENV " env}' "$F" > "$F.tmp" && mv "$F.tmp" "$F"
+  if ! grep -q "corp-ca.pem" "$F"; then
+    awk -v env="$CA_ENV" '{print} /^FROM /{print "COPY corp-ca.pem /etc/ssl/corp-ca.pem"; print "ENV " env}' "$F" > "$F.tmp" && mv "$F.tmp" "$F"
+  fi
 done
 # uv (the Python installer in the Studio image) can't check the work network's certificate (its signature
 # type isn't supported), so on this laptop markitdown, the only Python tool the Studio runs, comes from pip.
@@ -350,9 +402,17 @@ podman compose up -d >>"$LOG" 2>&1 || fail "The Studio didn't start. Details are
 # npm's download cache and the agents' session folder are volumes Podman creates as root; the Studio runs as
 # "node", so generated apps couldn't install. Hand them to node (safe to repeat).
 podman compose exec -T -u root app sh -c 'chown -R node:node /home/node/.npm /home/node/.claude /data/workspaces' >>"$LOG" 2>&1
-for i in $(seq 1 90); do curl -fs -o /dev/null http://localhost:3000 2>/dev/null && break; sleep 2; done
-curl -fs -o /dev/null http://localhost:3000 2>/dev/null || fail "The Studio is starting slowly. Wait a minute and open http://localhost:3000. Details are in $LOG."
+# The version is recorded as soon as the new code is built and started.
 [ "$MODE" = "update" ] && [ -n "${NEW_SHA:-}" ] && printf '%s\n' "${NEW_SHA#refs/heads/}" > "$HOME_DIR/.version"
+# "Done" only when the Studio really answers: two good answers in a row, up to 4 minutes.
+echo "Waiting for the Studio to answer on localhost:3000 (it can take a minute or two)..."
+GOOD=0
+for i in $(seq 1 120); do
+  CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://localhost:3000 2>/dev/null || true)
+  if [ "${CODE:-000}" -ge 200 ] 2>/dev/null && [ "${CODE:-000}" -lt 400 ]; then GOOD=$((GOOD+1)); [ "$GOOD" -ge 2 ] && break; else GOOD=0; fi
+  sleep 2
+done
+[ "$GOOD" -ge 2 ] || fail "The Studio did NOT answer on localhost:3000 after 4 minutes. It may still be starting. Wait a few minutes and run the check line; if it still says not answering, send me that screen."
 
 # The updater behind Settings > Update: a tiny local service (127.0.0.1:3099 only), started by macOS at login.
 # Its file is refreshed on every run (a running updater notices and restarts itself); the login service is set up
@@ -485,6 +545,9 @@ PLIST
   curl -fs --max-time 5 http://127.0.0.1:3099/status >/dev/null 2>&1 && echo "Update button ready: Settings > Update." \
     || echo "(The Update button's helper didn't start; updates still work from Terminal.)"
 fi
-[ -t 0 ] && open http://localhost:3000
-say "Done. The Studio is on http://localhost:3000 with your use cases."
-echo "After a restart, if localhost:3000 does not open: start the machine in Podman Desktop, then run this same line again (no pop-ups, your data stays)."
+if [ -t 0 ] || { [ -n "${SOCRA_DETACHED:-}" ] && [ -z "${SOCRA_UPDATER:-}" ]; }; then open http://localhost:3000; fi
+SOCRA_OK=1
+VER=$(cat "$HOME_DIR/.version" 2>/dev/null || true)
+say "Done. The Studio is answering on http://localhost:3000 (version ${VER:0:7}, laptop fixes release $SCRIPT_REV)."
+echo "To check at any time: bash $HOME_DIR/bin/socra.sh check"
+echo "After a restart, if localhost:3000 does not open: start the machine in Podman Desktop, then run the update line again (no pop-ups, your data stays)."
