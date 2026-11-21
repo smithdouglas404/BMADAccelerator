@@ -6,7 +6,7 @@ import { validationScore, workingName, type Validation } from "@/lib/studio/core
 import { explainReadiness } from "@/lib/studio/spec";
 import { ensureRoutes, ensureSpec } from "@/lib/studio/state";
 import { ensureStarted } from "@/lib/studio/actions";
-import { journey, needsTriage, hasDetail, idleDays } from "@/lib/studio/journey";
+import { journey, needsTriage, hasDetail, idleDays, questionTally } from "@/lib/studio/journey";
 
 // Every product the team is shaping, newest first. Archived ones only with ?archived=1.
 export async function GET(req: Request) {
@@ -16,6 +16,9 @@ export async function GET(req: Request) {
     orderBy: { updatedAt: "desc" },
     include: { capabilities: { select: { readiness: true } }, spec: true, decisions: { select: { status: true, includeInBuild: true } }, moves: { select: { status: true, prompt: true } }, backlog: { select: { triage: true, state: true, kind: true, deferUntil: true } }, _count: { select: { backlog: true, decisions: true, evidence: true, feedback: true, messages: { where: { role: "user" } } } } },
   });
+  // Every question asked and answered, per product, for the same "answered of asked" the product's screens show.
+  const talk = await prisma.message.findMany({ where: { useCaseId: { in: rows.map((r) => r.id) }, role: { in: ["user", "muse", "agent"] } }, select: { id: true, useCaseId: true, role: true, content: true, createdAt: true, replyTo: true } });
+  const tally = (id: string) => questionTally(talk.filter((m) => m.useCaseId === id));
   return NextResponse.json(
     rows.map((u) => ({
       id: u.id,
@@ -49,6 +52,9 @@ export async function GET(req: Request) {
           builds: u.generateCount,
           markups: u._count.feedback,
           validationScore: validationScore((u.validation ?? {}) as Validation),
+          ...(() => { const q = tally(u.id); return { questionsAsked: q.asked, questionsAnswered: q.answered } })(),
+          resolvedDecisions: u.decisions.filter((d) => d.status === "approved" || d.status === "rejected").length,
+          triagedItems: u.backlog.filter((b) => !needsTriage(b) && !!b.triage).length,
         });
         return { progress: j.percent, nextStep: j.next ? { label: j.next.label, view: j.next.view, gain: j.next.weight } : null, needsYou: u.backlog.filter((b) => needsTriage(b)).length + u.decisions.filter((d) => d.status === "open").length, idleDays: idleDays(u.updatedAt) };
       })(),

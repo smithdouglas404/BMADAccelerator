@@ -7,6 +7,9 @@ export async function register() {
   // built app, a few at a time, in the background.
   const { resumePreviews } = await import("@/lib/preview");
   setTimeout(() => void resumePreviews().catch((e) => console.error("resume previews", e)), 3000);
+  // Socra's turns that a restart cut off are taken up again (an item never waits for its product to be opened).
+  const { resumeAll } = await import("@/lib/agent/runner");
+  setTimeout(() => void resumeAll().catch((e) => console.error("resume turns", e)), 8000);
   // What is waiting on people goes out by email, Slack or webhook (Settings > Connect).
   const { startNotifier } = await import("@/lib/notify");
   startNotifier();

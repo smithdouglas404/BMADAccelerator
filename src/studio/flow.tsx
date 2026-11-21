@@ -8,7 +8,7 @@ import { ArrowRight, Check, Compass, Layers3, PenTool, Scale, ShieldCheck, Undo2
 import { ROLES, SPECIALISTS, numberedOptions, personaOf, type Persona } from '@/lib/studio/core'
 import type { ViewId } from './data'
 import { api, initials, type Live, type StudioMessage } from './live'
-import { journey, needsTriage, hasDetail } from '@/lib/studio/journey'
+import { journey, needsTriage, hasDetail, questionTally } from '@/lib/studio/journey'
 
 type Act = (fn: () => Promise<unknown>, ok?: string) => Promise<void>
 
@@ -83,6 +83,9 @@ export function journeyOf(live: Live) {
     builds: live.generateCount,
     markups: live.feedback.length,
     validationScore: live.validationScore,
+    ...(() => { const q = questionTally(live.messages); return { questionsAsked: q.asked, questionsAnswered: q.answered } })(),
+    resolvedDecisions: live.decisions.filter((d) => d.status === 'approved' || d.status === 'rejected').length,
+    triagedItems: live.backlog.filter((b) => !needsTriage(b) && !!b.triage).length,
   })
 }
 
@@ -166,7 +169,7 @@ export function NextMove({ live, changeView }: { live: Live; changeView: (v: Stu
         <button type="button" className="studio-journey-steps-toggle" onClick={() => setOpen(!open)} aria-expanded={open}>{open ? 'Hide steps' : 'All steps'}</button>
         <button type="button" onClick={() => changeView(j.next!.view)}>{j.next.cta} <ArrowRight size={13} /></button>
       </div>
-      {open && <ol className="studio-journey-steps">{j.steps.map((s) => <li key={s.key} className={s.done ? 'is-done' : s === j.next ? 'is-next' : ''}><button type="button" onClick={() => changeView(s.view)}>{s.done ? <Check size={12} /> : <span className="studio-journey-dot" />}<span>{s.label}</span><small>{s.done ? 'done' : `+${s.weight}%`}</small></button></li>)}</ol>}
+      {open && <ol className="studio-journey-steps">{j.steps.map((s) => <li key={s.key} className={s.done ? 'is-done' : s === j.next ? 'is-next' : ''}><button type="button" onClick={() => changeView(s.view)}>{s.done ? <Check size={12} /> : <span className="studio-journey-dot" />}<span>{s.label}</span><small>{s.done ? 'done' : s.progress ? `${s.progress.done} of ${s.progress.total} ${s.progress.noun} · ${Math.round((100 * s.progress.done) / s.progress.total)}%` : `+${s.weight}%`}</small></button></li>)}</ol>}
     </div>
   )
 }
@@ -217,7 +220,7 @@ export function optionsFrom(messages: StudioMessage[]) {
 
 /** Open checkpoints: what only the people on the product can decide, with Approve, Reject and a comment. */
 export function Checkpoints({ live, me, act }: { live: Live; me: Me; act: Act }) {
-  const open = live.decisions.filter((d) => d.status === 'open')
+  const open = live.decisions.filter((d) => d.status === 'open').reverse() // newest first (Doug, Nov 21)
   const [notes, setNotes] = useState<Record<string, string>>({})
   if (!open.length) return null
   const by = me.name ? `${me.name} (${me.role})` : `The ${me.role.toLowerCase()}`
