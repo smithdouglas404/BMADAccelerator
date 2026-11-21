@@ -6,10 +6,12 @@
 // questions Socra asked about this item, the answers, and every move with who and why. No fixed text
 // stands in for a question: if Socra hasn't asked yet, it says so.
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight, Bot, CornerDownRight, GitCommitHorizontal, History, Loader2, MessageCircleQuestion, MessageSquare, Send, Sparkles, UserRound, Wrench } from 'lucide-react'
 import { ASSISTANT_NAME } from '@/lib/brand'
 import { api, ago, type Live } from './live'
+import { ConvoFilterBar } from './convo'
+import { exchangeOf } from '@/lib/studio/convoFilter'
 import type { Me } from './flow'
 
 type Entry = {
@@ -121,12 +123,17 @@ export function ItemTraceability({ trace, error, plain }: { trace: Trace | null;
   const [open, setOpen] = useState<Record<string, boolean>>({})
   const end = useRef<HTMLOListElement>(null)
   const p = plain ?? ((t: string) => t)
+  // Filter by who (Doug, Nov 21): the same speakers as the record, people and agents alike.
+  const [who, setWho] = useState<string[]>([])
+  const asConvo = useMemo(() => (trace?.entries ?? []).map((e) => ({ id: e.id, role: e.kind === 'said' || e.kind === 'answer' ? 'user' : e.kind === 'signal' ? 'signal' : 'agent', label: e.who })), [trace])
+  const entries = useMemo(() => { const keep = new Set(exchangeOf(asConvo, who).map((m) => m.id)); return (trace?.entries ?? []).filter((e) => keep.has(e.id)) }, [trace, asConvo, who])
   if (!trace) return <section className="studio-card-section"><span className="eyebrow"><History size={11} /> Traceability</span><p className="studio-muted">{error || 'Loading…'}</p></section>
   const c = trace.counts
   return <section className="studio-card-section studio-trace" aria-label="Traceability">
     <div className="studio-card-section-head"><span className="eyebrow"><History size={11} /> Traceability · {trace.entries.length}</span><small className="studio-muted">{c.questions} asked · {c.answers} answered · {c.turns} agent {c.turns === 1 ? 'turn' : 'turns'} · {c.moves} {c.moves === 1 ? 'move' : 'moves'}</small></div>
+    {trace.entries.length > 0 && <ConvoFilterBar list={asConvo} who={who} setWho={setWho} shown={entries.length} />}
     {trace.entries.length === 0 ? <p className="studio-card-empty">Nothing recorded for this item yet.</p> :
-      <ol className="studio-trace-list" ref={end}>{trace.entries.map((e) => {
+      <ol className="studio-trace-list" ref={end}>{entries.map((e) => {
         const d = e.detail
         const long = e.text.length > 220
         return <li key={e.id} className={`studio-trace-${e.kind}`}>
