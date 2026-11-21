@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { pullForward } from "@/lib/studio/actions";
 import { recordChange } from "@/lib/studio/truthlog";
 import { agentsEnabled, enqueue } from "@/lib/agent/runner";
+import { itemAsk } from "@/lib/studio/itemAsk";
 
 type Ctx = { params: Promise<{ id: string; itemId: string }> };
 
@@ -56,7 +57,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
         "user",
         withdraw
           ? `${who} withdrew the backlog item “${item.title}” (id ${itemId}). Take it out of the product truth wherever it shaped something (spec sections with it in related, floor items, cards), say in one line what that changes, and move any card it drove back with move_card.`
-          : `${who} changed the backlog item “${item.title}” (id ${itemId}) to: “${after.title}”${after.note ? ` — ${after.note}` : ""}. Carry the change into the spec sections and cards it touches, and say in one line what it changes.`,
+          : `${who} changed the backlog item “${item.title}” (id ${itemId}) to: “${after.title}”${after.note ? ` — ${after.note}` : ""}. Carry the change into the spec sections and cards it touches, and say in one line what it changes (say with about ["backlog:${itemId}"]); if the new wording leaves something a builder needs unclear, ask about it the same way, with numbered options and your suggestion marked.`,
         `backlog:${itemId}`,
       );
     return NextResponse.json(after);
@@ -106,15 +107,17 @@ async function triage(useCaseId: string, item: Item, to: "working" | "accepted" 
   }
   await prisma.useCase.update({ where: { id: useCaseId }, data: { updatedAt: new Date() } });
   if (agentsEnabled()) {
+    const nodes = moveId ? [`backlog:${item.id}`, `move:${moveId}`] : [`backlog:${item.id}`];
+    const ask = (stage: "accepted" | "working") => itemAsk({ node: nodes[0], extraNodes: nodes.slice(1), title: item.title, text: item.note, stage, by });
     const prompt =
       to === "accepted"
-        ? `${by} ${ready ? "chose to work on the backlog item now" : "accepted the backlog item"} “${item.title}” (id ${item.id}); it is on the Board as a card${ready ? " in Ready to shape" : ""} (move:${moveId}). Run your skills on it: ${ready ? "have the right specialist look at it, " : ""}shape it: tie it to a capability and a decision, write its acceptance criteria on the card, and ask ${by} the one question that would make it ready to build, with numbered options.`
+        ? `${by} ${ready ? "chose to work on the backlog item now" : "accepted the backlog item"} “${item.title}” (id ${item.id}); it is on the Board as a card${ready ? " in Ready to shape" : " in Backlog"} (move:${moveId}). Shape it: tie it to a capability and a decision and write its acceptance criteria on the card (upsert_move with id ${moveId}).\n${ask("accepted")}`
         : to === "rejected"
-          ? `${by} rejected the backlog item “${item.title}” (id ${item.id}). ${suggestion ? "Don't propose it again unless they ask." : "Take it out of the product truth wherever it shaped something, and say in one line what that changes."}`
+          ? `${by} rejected the backlog item “${item.title}” (id ${item.id}). ${suggestion ? "Don't propose it again unless they ask." : "Take it out of the product truth wherever it shaped something, and say in one line what that changes"} (with say about ["backlog:${item.id}"]). Ask nothing.`
           : to === "deferred"
-            ? `${by} deferred the backlog item “${item.title}” (id ${item.id}) for later. Keep it in history, don't shape it now, and don't raise it again unless asked.`
-            : `${by} wants to work on “${item.title}” (id ${item.id}) now${item.note ? ` (${item.note.slice(0, 600)})` : ""}. Open it up: say in one line what you understand it to mean, then ask the two or three questions that would make it a clear requirement, with numbered options and your suggestion marked.`;
-    await enqueue(useCaseId, "user", prompt, `backlog:${item.id}`);
+            ? `${by} deferred the backlog item “${item.title}” (id ${item.id}) for later. Keep it in history, don't shape it now, and don't raise it again unless asked. Ask nothing.`
+            : `${by} wants to talk “${item.title}” (id ${item.id}) through now${item.note ? ` (${item.note.slice(0, 600)})` : ""}. Say in one line what you understand it to mean.\n${ask("working")}`;
+    await enqueue(useCaseId, "user", prompt, nodes.join(" "));
   }
   return { ok: true, triage: to, moveId };
 }

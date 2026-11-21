@@ -12,6 +12,7 @@ import { ASSISTANT_NAME } from '@/lib/brand'
 import { api, ago, type Live } from './live'
 import type { Me, StudioView } from './flow'
 import { DocumentPanel } from './sources'
+import { ItemQuestions, ItemTraceability, useItemTrace } from './itemtrace'
 
 type Status = 'queued' | 'ready' | 'building' | 'review' | 'done'
 const COLUMNS: { id: Status; label: string; description: string }[] = [
@@ -82,7 +83,7 @@ export function BoardView({ live, me, buildNow, changeView, setToast, children }
       await api(`/api/use-cases/${live.id}/moves/${id}`, { method: 'PATCH', json: { status, by, why } })
       const forward = ORDER.indexOf(status) > ORDER.indexOf(card.status)
       if (forward && (status === 'ready' || status === 'building' || status === 'review')) { setGuide({ id, status }); setOpen(id) }
-      setToast(status === 'done' ? `“${card.title}” is done. It stays traceable to its decision.` : `“${card.title}” moved to ${LABEL[status]}${ORDER.indexOf(status) < ORDER.indexOf(card.status) ? `. ${ASSISTANT_NAME} will ask what isn’t right yet.` : ''}`)
+      setToast(status === 'done' ? `“${card.title}” is done. It stays traceable to its decision.` : `“${card.title}” moved to ${LABEL[status]}${ORDER.indexOf(status) < ORDER.indexOf(card.status) ? `. ${ASSISTANT_NAME} will ask what isn’t right yet, on the card and in the conversation.` : `. ${ASSISTANT_NAME} and the specialist are looking at it: their questions show on the card.`}`)
     } catch (e) {
       setLocal((l) => { const n = { ...l }; delete n[id]; return n })
       setToast(e instanceof Error ? e.message : String(e))
@@ -149,7 +150,7 @@ export function BoardView({ live, me, buildNow, changeView, setToast, children }
     })}</div>
 
     {children}
-    <div className="pilot-footer"><div><span className="live-pulse" /> {ASSISTANT_NAME} is watching for a blocker, not micromanaging the work.</div><button className="text-button" type="button" onClick={() => changeView('storymap')}>See how the stories connect <ArrowRight size={14} /></button></div>
+    <div className="pilot-footer"><div><span className="live-pulse" /> {live.agentBusy ? `${ASSISTANT_NAME}: ${live.agentStatus || 'working'}` : fresh.filter((b) => !b.triage).length ? `${fresh.filter((b) => !b.triage).length} new ${fresh.filter((b) => !b.triage).length === 1 ? 'item waits' : 'items wait'} on you` : `${cards.filter((c) => c.status !== 'done').length} cards in motion, ${cards.filter((c) => c.status === 'done').length} done`}</div><button className="text-button" type="button" onClick={() => changeView('storymap')}>See how the stories connect <ArrowRight size={14} /></button></div>
     {(() => { const b = fresh.find((x) => x.id === pick); if (!b) return null; const close = () => { setPick(''); setConfirm(false) }; const busy = triaging === b.id
       return <div className="studio-card-overlay" onClick={(e) => { if (e.detail < 2) close() }}><aside className="studio-card-panel" onClick={(e) => e.stopPropagation()} aria-label="Backlog item details">
         <div className="studio-card-head"><p className="eyebrow">New on the Board · needs you</p><button className="icon-button subtle" type="button" onClick={close} aria-label="Close"><X size={16} /></button></div>
@@ -160,12 +161,22 @@ export function BoardView({ live, me, buildNow, changeView, setToast, children }
         {!confirm && <div className="studio-detail-actions"><button type="button" className="button button-primary" disabled={busy} onClick={() => setConfirm(true)}><Check size={14} /> Accept</button><button type="button" className="button button-quiet" disabled={busy} onClick={() => void triage(b.id, 'deferred')}>Defer</button><button type="button" className="button button-quiet" disabled={busy} onClick={() => void triage(b.id, 'rejected')}><X size={14} /> Reject</button></div>}
         {confirm && <div className="studio-work-ask" role="group" aria-label="Work on this now?"><strong>Work on this now?</strong><small>Yes puts it in Ready to shape and {ASSISTANT_NAME} starts shaping it. No adds it to the Backlog column.</small><span><button type="button" className="button button-primary button-small" disabled={busy} onClick={() => void triage(b.id, 'accepted', true)}>Yes, work on it now</button><button type="button" className="button button-quiet button-small" disabled={busy} onClick={() => void triage(b.id, 'accepted')}>Not yet, add to Backlog</button></span></div>}
         {b.triage !== 'working' && <button className="text-button" type="button" disabled={busy} onClick={() => void triage(b.id, 'working')}><MessageCircleQuestion size={13} /> Not sure yet? Talk it through with {ASSISTANT_NAME}</button>}
+        <ItemRecord live={live} me={me} node={`backlog:${b.id}`} setToast={setToast} />
       </aside></div> })()}
-    {open && <CardPanel key={open} live={live} id={open} by={by} guide={guide?.id === open ? guide.status : undefined} onClose={() => { setOpen(''); setGuide(null) }} onMove={(s) => void move(open, s, 'moved from the card')} setToast={setToast} buildNow={buildNow} changeView={changeView} />}
+    {open && <CardPanel key={open} live={live} me={me} id={open} by={by} guide={guide?.id === open ? guide.status : undefined} onClose={() => { setOpen(''); setGuide(null) }} onMove={(s) => void move(open, s, 'moved from the card')} setToast={setToast} buildNow={buildNow} changeView={changeView} />}
   </div>
 }
 
-function CardPanel({ live, id, by, guide, onClose, onMove, setToast, buildNow, changeView }: { live: Live; id: string; by: string; guide?: Status; onClose: () => void; onMove: (s: Status) => void; setToast: (v: string) => void; buildNow: (opts?: { force?: boolean }) => void; changeView: (v: StudioView) => void }) {
+/** An item's questions and Traceability, from the record (shared with the Product page's backlog detail). */
+export function ItemRecord({ live, me, node, setToast }: { live: Live; me: Me; node: string; setToast: (v: string) => void }) {
+  const { trace, error, reload } = useItemTrace(live, node)
+  return <>
+    <ItemQuestions live={live} me={me} node={node} trace={trace} reload={reload} setToast={setToast} />
+    <ItemTraceability trace={trace} error={error} plain={(t) => plain(t, live)} />
+  </>
+}
+
+function CardPanel({ live, me, id, by, guide, onClose, onMove, setToast, buildNow, changeView }: { live: Live; me: Me; id: string; by: string; guide?: Status; onClose: () => void; onMove: (s: Status) => void; setToast: (v: string) => void; buildNow: (opts?: { force?: boolean }) => void; changeView: (v: StudioView) => void }) {
   const details = useRef<HTMLTextAreaElement>(null)
   const [docOpen, setDocOpen] = useState('')
   const [d, setD] = useState<CardDetail | null>(null)
@@ -252,10 +263,7 @@ function CardPanel({ live, id, by, guide, onClose, onMove, setToast, buildNow, c
           {m.trackerUrl && <a className="text-button" href={m.trackerUrl} target="_blank" rel="noreferrer">Open in the tracker <ArrowRight size={12} /></a>}
         </section>}
 
-        <section className="studio-card-section"><span className="eyebrow"><History size={11} /> What happened · {d!.history.length}</span>
-          {d!.history.length === 0 ? <p className="studio-card-empty">Nothing logged yet.</p> :
-            <ol className="studio-card-history">{d!.history.map((h) => <li key={h.id}><span>{plain(h.summary, live)}</span><small>{ago(h.createdAt)}</small></li>)}</ol>}
-        </section>
+        <ItemRecord live={live} me={me} node={`move:${id}`} setToast={setToast} />
       </>}
     </aside>
   </div>
@@ -263,11 +271,11 @@ function CardPanel({ live, id, by, guide, onClose, onMove, setToast, buildNow, c
 
 /** What moving a card asks for: Ready wants detail, Being made real wants something to build, Review wants a try. */
 function MoveGuide({ status, detailed, busy, hasApp, onDetail, onSocra, onGenerate, onTry }: { status: Status; detailed: boolean; busy: boolean; hasApp: boolean; onDetail: () => void; onSocra: () => void; onGenerate: () => void; onTry: () => void }) {
+  // Ready to shape: no fixed questions here. Socra's own questions about this card show under "Questions about this item".
   if (status === 'ready') return <div className="studio-move-guide">
-    <strong><MessageCircleQuestion size={14} /> {ASSISTANT_NAME}: let’s get some detail before this is built.</strong>
-    <ol><li>Who uses this, and at what moment?</li><li>What does “done” look like? What can they do afterwards that they couldn’t before?</li><li>Which rules, limits or edge cases must it handle?</li></ol>
-    <p className="studio-muted" style={{ margin: 0 }}>Write it below, or answer {ASSISTANT_NAME} in the conversation: it is asking the same now and writes your answers onto this card.</p>
-    <div className="studio-move-guide-actions"><button className="button button-primary button-small" type="button" onClick={onDetail}>Add detail here</button><button className="button button-quiet button-small" type="button" onClick={onSocra}>Answer {ASSISTANT_NAME} <ArrowRight size={12} /></button></div>
+    <strong><MessageCircleQuestion size={14} /> {detailed ? 'Ready to shape.' : 'This card needs detail before it is built.'}</strong>
+    <p className="studio-muted" style={{ margin: 0 }}>{ASSISTANT_NAME} has the specialist look at it and asks what is missing, below and in the conversation. You can also write the detail yourself.</p>
+    <div className="studio-move-guide-actions"><button className="button button-primary button-small" type="button" onClick={onDetail}>Add detail here</button><button className="button button-quiet button-small" type="button" onClick={onSocra}>Open the conversation <ArrowRight size={12} /></button></div>
   </div>
   if (status === 'building') return detailed
     ? <div className="studio-move-guide"><strong><Play size={14} /> Ready to build.</strong><p className="studio-muted" style={{ margin: 0 }}>This card has enough detail. Generate the prototype to have Claude Code build it{hasApp ? ' into the next version' : ''}.</p><div className="studio-move-guide-actions"><button className="button button-primary button-small" type="button" disabled={busy} onClick={onGenerate}><Play size={12} /> {busy ? 'A build is running…' : 'Generate the prototype'}</button></div></div>

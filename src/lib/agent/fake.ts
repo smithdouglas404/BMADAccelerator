@@ -1,19 +1,39 @@
 import { recordChange } from "@/lib/studio/truthlog";
 import type { UseCase } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { currentTurnId } from "@/lib/studio/truthlog";
 import { colorFor, workingName } from "@/lib/studio/core";
 import type { RunTally } from "./tools";
 
 // A scripted stand-in for Socra, used only by automated tests and the sandbox check
 // (BACC_FAKE_AGENT=1 with no Claude sign-in). It drives the same screens the real Socra does:
 // product, PRFAQ, capabilities, decisions, recommendations, evidence, validation, moves and routes.
-export async function fakeAgentTurn(uc: UseCase, prompt: string, tally: RunTally) {
-  const say = async (content: string, accent = "") => {
+export async function fakeAgentTurn(uc: UseCase, prompt: string, tally: RunTally, onTool?: (name: string, input: Record<string, unknown>) => void) {
+  const turnId = currentTurnId(uc.id);
+  const say = async (content: string, accent = "", about: string[] = []) => {
     tally.spoke++;
-    await prisma.message.create({ data: { useCaseId: uc.id, role: "muse", agent: "Socra · Product physician", content, accent } });
+    onTool?.("mcp__studio__say", {});
+    await prisma.message.create({ data: { useCaseId: uc.id, role: "muse", agent: "Socra · Product physician", content, accent, about, turnId } });
   };
-  const specialist = async (key: string, agent: string, content: string) =>
-    prisma.message.create({ data: { useCaseId: uc.id, role: "agent", agent: `${agent} · Specialist`, addressed: key, content } });
+  const specialist = async (key: string, agent: string, content: string, about: string[] = []) => {
+    onTool?.("mcp__studio__share_finding", {});
+    return prisma.message.create({ data: { useCaseId: uc.id, role: "agent", agent: `${agent} · Specialist`, addressed: key, content, about, turnId } });
+  };
+  // Items the Studio asked about (itemAsk): the stand-in sends the named specialist and asks about each.
+  const asks = [...prompt.matchAll(/Item: ((?:backlog|move):\w+) \(“([^”]*)”\)\. Specialist for this stage: ([\w-]+) \(([^:]+):/g)];
+  if (asks.length) {
+    for (const [, node, title, agent, name] of asks) {
+      const after = prompt.slice(prompt.indexOf(`Item: ${node}`));
+      const about = JSON.parse(after.match(/about (\[[^\]]*\])/)?.[1] ?? JSON.stringify([node])) as string[];
+      const skill = after.match(/Skill for this stage: ([\w-]+)/)?.[1];
+      if (skill) onTool?.("Skill", { skill });
+      onTool?.("Agent", { subagent_type: agent });
+      const key = agent === "solution-architect" ? "architect" : agent === "product-engineer" ? "engineer" : agent === "ux-component-mapper" ? "ux" : "business-analyst";
+      await specialist(key, name.replace(/ \(validator\)$/, ""), `I looked at “${title}”. Before it can be built it needs who uses it and what “done” means for them.`, about);
+      await say(`About “${title}”: who uses this first, and what should they be able to do afterwards?\n\n1. The people who run it day to day, so they finish the job without help (suggested)\n2. Their customers, so they see where things stand\n3. Both, starting with the day-to-day team`, uc.focus, about);
+    }
+    if (!/interpret_annotation/.test(prompt)) return;
+  }
   if (prompt.includes("[opening]")) {
     const k = kindOf(uc.description);
     // Socra names the product from what was said (the working name came from the first words).

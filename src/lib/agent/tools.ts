@@ -3,6 +3,9 @@ import { markReadBySocra } from "@/lib/jev";
 import { LINK_KINDS, LINK_LABEL, MAX_SUGGESTED_PER_STORY, maySuggest, wouldCycle } from "@/lib/studio/storymap";
 import { tool, createSdkMcpServer } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
+
+/** The backlog items or Board cards a message is about, so it shows in each item's detail view and Traceability. */
+const ABOUT = z.array(z.string()).max(10).default([]).describe('The backlog items or Board cards this is about: "backlog:<id>" or "move:<id>" (the prompt names them as "Item: ..."). Always set it when you ask or answer about an item.');
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { workspacePath } from "@/lib/workspace";
@@ -11,7 +14,7 @@ import { ROLES } from "@/lib/memory/lettaCore";
 import { IMAGE_LIMIT, imagesConfigured, makeImage } from "@/lib/images";
 import { SPEC_BASIS, SPEC_DEFS, SPEC_STATUSES, TRACE_TYPES, cleanTrace } from "@/lib/studio/spec";
 import { ensureSpec } from "@/lib/studio/state";
-import { currentCauses, nodesForIds, recordChange } from "@/lib/studio/truthlog";
+import { currentCauses, currentItems, currentTurnId, nodesForIds, recordChange } from "@/lib/studio/truthlog";
 import { VALIDATION_SIGNALS, colorFor, numberItems, overallReadiness, slugify, specialistByKey, validationScore, workingName, type Validation } from "@/lib/studio/core";
 
 const ROLE_KEYS = ROLES.map((r) => r.key) as [string, ...string[]];
@@ -33,6 +36,16 @@ const itemSchema = z.object({
 export function studioTools(useCaseId: string, slug: string, tally: RunTally, opts: { speaker?: string } = {}) {
   const speaker = opts.speaker ?? "Socra";
   const uc = () => prisma.useCase.findUniqueOrThrow({ where: { id: useCaseId } });
+  // The backlog items and cards a message is about ("backlog:<id>", "move:<id>" or a bare id). When none is
+  // named and the turn answers exactly one item (a backlog item and the card made from it count as one),
+  // the message is about that item, so questions always reach the item's detail view.
+  const aboutNodes = async (about: string[]) => {
+    const named = await nodesForIds(useCaseId, about.map((a) => a.replace(/^(backlog|move):/, "")));
+    const items = named.filter((n) => /^(backlog|move):/.test(n));
+    if (items.length) return [...new Set(items)];
+    const turn = currentItems(useCaseId);
+    return turn.length && turn.filter((n) => n.startsWith("backlog:")).length <= 1 && turn.filter((n) => n.startsWith("move:")).length <= 1 ? turn : [];
+  };
   const capKey = async (c: string) => {
     if (!c) return "";
     const caps = await prisma.capability.findMany({ where: { useCaseId } });
@@ -97,19 +110,19 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
       tool(
         "say",
         "Show a message to the owner in the conversation, in Socra's voice. The only way the owner sees anything you write. Plain product language, one or two questions at most, never jargon (no epics, stories or agent names unless they ask).",
-        { text: z.string().min(1), capability: z.string().default("").describe("The capability this is about (key or label), if any") },
-        async ({ text, capability }) => {
+        { text: z.string().min(1), capability: z.string().default("").describe("The capability this is about (key or label), if any"), about: ABOUT },
+        async ({ text, capability, about }) => {
           tally.spoke++;
-          await prisma.message.create({ data: { useCaseId, role: "muse", agent: speaker === "Socra" ? "Socra · Product physician" : speaker, content: text, accent: await capKey(capability) } });
+          await prisma.message.create({ data: { useCaseId, role: "muse", agent: speaker === "Socra" ? "Socra · Product physician" : speaker, content: text, accent: await capKey(capability), about: await aboutNodes(about), turnId: currentTurnId(useCaseId) } });
           return ok();
         },
       ),
       tool(
         "signal",
         "Show a quiet signal card in the conversation (for example \"Decision captured\", \"Added to product truth\", \"Parked for later\") with one plain sentence. Use it when the product truth changed in a way the owner should notice.",
-        { label: z.string().min(2).max(60), text: z.string().min(2), capability: z.string().default("") },
-        async ({ label, text, capability }) => {
-          await prisma.message.create({ data: { useCaseId, role: "signal", agent: label, content: text, accent: await capKey(capability) } });
+        { label: z.string().min(2).max(60), text: z.string().min(2), capability: z.string().default(""), about: ABOUT },
+        async ({ label, text, capability, about }) => {
+          await prisma.message.create({ data: { useCaseId, role: "signal", agent: label, content: text, accent: await capKey(capability), about: await aboutNodes(about), turnId: currentTurnId(useCaseId) } });
           return ok();
         },
       ),
@@ -121,11 +134,12 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
           title: z.string().max(60).default(""),
           text: z.string().min(2),
           capability: z.string().default(""),
+          about: ABOUT,
         },
-        async ({ specialist, title, text, capability }) => {
+        async ({ specialist, title, text, capability, about }) => {
           const s = specialistByKey(specialist)!;
           const name = specialist === "domain" && title.trim() ? title.trim() : s.name;
-          await prisma.message.create({ data: { useCaseId, role: "agent", agent: `${name} · Specialist`, addressed: specialist, content: text, accent: await capKey(capability) } });
+          await prisma.message.create({ data: { useCaseId, role: "agent", agent: `${name} · Specialist`, addressed: specialist, content: text, accent: await capKey(capability), about: await aboutNodes(about), turnId: currentTurnId(useCaseId) } });
           return ok();
         },
       ),

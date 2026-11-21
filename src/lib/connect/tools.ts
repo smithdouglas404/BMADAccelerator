@@ -2,7 +2,8 @@ import { prisma } from "@/lib/db";
 import { brand, ASSISTANT_NAME } from "@/lib/brand";
 import { isAffirmative, pickedNumbers } from "@/lib/studio/core";
 import { changeImpact } from "@/lib/studio/impact";
-import { truthView } from "@/lib/studio/truthlog";
+import { nodesForIds, truthView } from "@/lib/studio/truthlog";
+import { itemTrace } from "@/lib/studio/itemTrace";
 import { BOARD_LABEL, type BoardStatus } from "@/lib/studio/board";
 import { agentsView } from "@/lib/agentService";
 import { LEVEL_LABEL, ROLE_RULES, TOOLS, TOOL_NAMES, effectiveLevel, gate, inScope, needsConfirm, type ToolName } from "./catalog";
@@ -181,6 +182,26 @@ async function socraAsks(ids: string[], names: Map<string, string>) {
   return out;
 }
 
+/** Socra's open questions about backlog items and Board cards (from each item's own record). */
+async function itemAsks(ids: string[], names: Map<string, string>) {
+  const out: { use_case_id: string; use_case?: string; item_id: string; item: string; question_id: string; question: string; options: string[]; asked: string }[] = [];
+  for (const id of ids) {
+    const recent = await prisma.message.findMany({ where: { useCaseId: id, role: { in: ["muse", "agent"] }, NOT: { about: { isEmpty: true } }, createdAt: { gt: new Date(Date.now() - 30 * 86_400_000) } }, orderBy: { createdAt: "desc" }, take: 60, select: { about: true } });
+    const seen = new Set<string>();
+    for (const node of recent.flatMap((m) => m.about)) {
+      const t = await itemTrace(id, node);
+      if (t.nodes.some((n) => seen.has(n))) continue;
+      t.nodes.forEach((n) => seen.add(n));
+      if (!t.question) continue;
+      const [kind, itemId] = node.split(":");
+      const title = kind === "backlog" ? (await prisma.backlogItem.findUnique({ where: { id: itemId }, select: { title: true } }))?.title : (await prisma.move.findUnique({ where: { id: itemId }, select: { title: true } }))?.title;
+      const q = questionOf(brand(t.question.text));
+      out.push({ use_case_id: id, use_case: names.get(id), item_id: node, item: title ?? node, question_id: t.question.messageId, question: q.question, options: q.options, asked: day(new Date(t.question.at)) });
+    }
+  }
+  return out;
+}
+
 async function lastSocra(ucId: string) {
   const m = await prisma.message.findFirst({ where: { useCaseId: ucId, role: { in: ["muse", "agent"] } }, orderBy: { createdAt: "desc" } });
   return m ? brand(m.content).slice(0, 1500) : "";
@@ -212,6 +233,7 @@ async function run(tool: ToolName, input: Record<string, unknown>, uc: Awaited<R
         decisions: w.open.map((d) => ({ use_case_id: d.useCaseId, use_case: names.get(d.useCaseId), decision_id: d.id, question: brand(d.text), from: brand(d.agent), options: d.options, since: day(d.createdAt) })),
         to_review: w.review.map((m) => ({ use_case_id: m.useCaseId, use_case: names.get(m.useCaseId), card_id: m.id, card: m.title, why: m.moveReason })),
         socra_asks: await socraAsks(rows.map((r) => r.id), names),
+        item_questions: await itemAsks(rows.map((r) => r.id), names),
         builds_running: rows.filter((r) => r.generateBusy).map((r) => ({ use_case_id: r.id, use_case: names.get(r.id), status: r.generateStatus })),
       };
     }
@@ -303,8 +325,10 @@ async function run(tool: ToolName, input: Record<string, unknown>, uc: Awaited<R
         note: v.note,
       };
     }
-    case "capture":
-      return call(captureRoute, { id: uc!.id }, "POST", { text: s("text"), source: by(access, client) });
+    case "capture": {
+      const item = (await call(captureRoute, { id: uc!.id }, "POST", { text: s("text"), source: by(access, client) })) as { id?: string };
+      return { held: true, item_id: item.id ? `backlog:${item.id}` : undefined, next: `${ASSISTANT_NAME} is having the right specialist look at it and will ask what is missing. Read the questions in a minute with whats_waiting (item_questions) and answer with answer (item_id, question_id).` };
+    }
     case "add_evidence":
       return call(observationRoute, { id: uc!.id }, "POST", { kind: s("kind") ?? "observation", text: s("text") });
     case "start_use_case": {
@@ -318,8 +342,23 @@ async function run(tool: ToolName, input: Record<string, unknown>, uc: Awaited<R
       });
       return { use_case_id: created.id, name: created.name, next: `${ASSISTANT_NAME} is opening it with one question. Ask for the brief in a minute.` };
     }
+    case "item_trace": {
+      const raw = s("item_id") ?? "";
+      const node = /^(backlog|move):/.test(raw) ? raw : (await nodesForIds(uc!.id, [raw]))[0];
+      if (!node || !/^(backlog|move):/.test(node)) throw new ToolError("No such backlog item or card in this use case.");
+      const t = await itemTrace(uc!.id, node);
+      return {
+        item_id: node,
+        open_question: t.question ? { question_id: t.question.messageId, from: t.question.who, ...questionOf(brand(t.question.text)) } : null,
+        working_on_it: t.working,
+        counts: t.counts,
+        timeline: t.entries.map((e) => ({ at: e.at, what: e.kind, who: e.who, text: brand(e.text).slice(0, 1500), ...(e.detail?.loaded ? { skills_loaded: e.detail.loaded, skills_used: e.detail.skills, specialists_sent: e.detail.agents, studio_actions: e.detail.tools, status: e.detail.status } : {}) })),
+      };
+    }
     case "answer": {
-      await call(messageRoute, { id: uc!.id }, "POST", { content: s("text"), source: client.slice(0, 80), ...(input.to ? { to: s("to") } : {}), author: { name: access.person || "", role: access.role } });
+      const item = s("item_id");
+      const about = item ? (/^(backlog|move):/.test(item) ? [item] : await nodesForIds(uc!.id, [item])) : [];
+      await call(messageRoute, { id: uc!.id }, "POST", { content: s("text"), source: client.slice(0, 80), ...(input.to ? { to: s("to") } : {}), ...(about.length ? { about } : {}), ...(input.question_id ? { replyTo: s("question_id") } : {}), author: { name: access.person || "", role: access.role } });
       return { said: s("text"), next: `${ASSISTANT_NAME} is answering. Ask for the brief to read the reply.` };
     }
     case "decide": {

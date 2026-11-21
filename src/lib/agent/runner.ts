@@ -1,10 +1,10 @@
 import { STUDIO_TEAM } from "./team";
-import { coreInstructions } from "./instructions";
+import { coreInstructions, CORE_SKILLS } from "./instructions";
 import path from "path";
 import { query, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { prisma } from "@/lib/db";
 import { workspacePath } from "@/lib/workspace";
-import { setTurnCauses } from "@/lib/studio/truthlog";
+import { currentItems, currentTurnId, setTurnCauses, setTurnId } from "@/lib/studio/truthlog";
 import { provisionWorkspace, shadcnLookupDir, syncStudioSkills, writeIntake, STUDIO_SKILLS_DIR } from "@/lib/provision";
 import { agentModel } from "@/lib/docAgent";
 import { mcpServersFor, mcpSummary } from "@/lib/studio/mcp";
@@ -69,11 +69,19 @@ export async function kick(useCaseId: string) {
         data: { agentBusy: true, agentStatus: "Thinking", agentError: "" },
       });
       let ok = true;
-      setTurnCauses(useCaseId, events.map((e) => e.cause).filter(Boolean));
+      // An event's cause may name several nodes ("msg:… backlog:…"): the message and the item it filed.
+      const causes = [...new Set(events.flatMap((e) => e.cause.split(/\s+/)).filter(Boolean))];
+      setTurnCauses(useCaseId, causes);
+      // The turn as it really runs: what caused it, the core skills loaded, and what it used (Traceability).
+      const turn = await prisma.agentTurn.create({ data: { useCaseId, causes, loaded: [...CORE_SKILLS] } }).catch(() => null);
+      const used = { skills: new Set<string>(), agents: new Set<string>(), tools: new Set<string>() };
+      if (turn) setTurnId(useCaseId, turn.id);
+      let failure = "";
       try {
-        await runTurn(useCaseId, events.map(framed).join("\n\n---\n\n"));
+        await runTurn(useCaseId, events.map(framed).join("\n\n---\n\n"), (name, input) => noteTool(used, name, input));
       } catch (e) {
         ok = false;
+        failure = e instanceof Error ? e.message.slice(0, 500) : String(e);
         console.error("agent turn failed", e);
         await prisma.useCase.update({
           where: { id: useCaseId },
@@ -81,11 +89,31 @@ export async function kick(useCaseId: string) {
         });
       }
       setTurnCauses(useCaseId, []);
+      setTurnId(useCaseId, "");
+      if (turn)
+        await prisma.agentTurn
+          .update({ where: { id: turn.id }, data: { status: ok ? "done" : "failed", error: failure, skills: [...used.skills], agents: [...used.agents], tools: [...used.tools], endedAt: new Date() } })
+          .catch(() => undefined);
       await prisma.agentEvent.updateMany({ where: { id: { in: ids } }, data: { status: ok ? "done" : "failed" } });
     }
   } finally {
     running.delete(useCaseId);
     await prisma.useCase.update({ where: { id: useCaseId }, data: { agentBusy: false, agentStatus: "" } }).catch(() => {});
+  }
+}
+
+/** What a turn used, from its tool calls: a Skill names a skill, an Agent/Task names a specialist, mcp__studio__x is a Studio tool. */
+export function noteTool(used: { skills: Set<string>; agents: Set<string>; tools: Set<string> }, name: string, input: Record<string, unknown>) {
+  if (name === "Skill") {
+    const skill = String(input.skill ?? input.command ?? "").trim();
+    if (skill) used.skills.add(skill);
+  } else if (name === "Agent" || name === "Task") {
+    const agent = String(input.subagent_type ?? "").trim();
+    if (agent) used.agents.add(agent);
+  } else if (name.startsWith("mcp__studio__")) used.tools.add(name.slice("mcp__studio__".length));
+  else if (name === "Read" && /\.claude\/skills\/([^/]+)\/SKILL\.md$/.test(String(input.file_path ?? ""))) {
+    // A specialist reading a skill file (for example studio-reimagine) counts as using that skill.
+    used.skills.add(String(input.file_path).match(/\.claude\/skills\/([^/]+)\/SKILL\.md$/)![1]);
   }
 }
 
@@ -262,7 +290,7 @@ async function runSdkTurnOnce(opts: {
   return { texts, sessionId, stalled };
 }
 
-async function runTurn(useCaseId: string, prompt: string) {
+async function runTurn(useCaseId: string, prompt: string, onTool?: (name: string, input: Record<string, unknown>) => void) {
   const uc = await prisma.useCase.findUniqueOrThrow({ where: { id: useCaseId } });
   if (!uc.provisioned) {
     await prisma.useCase.update({ where: { id: useCaseId }, data: { agentStatus: "Setting up the workspace" } });
@@ -287,7 +315,7 @@ async function runTurn(useCaseId: string, prompt: string) {
   await prisma.useCase.update({ where: { id: useCaseId }, data: { agentStatus: "Thinking" } });
 
   if (process.env.BACC_FAKE_AGENT === "1" && !claudeConfigured()) {
-    await fakeAgentTurn(fresh, prompt, tally);
+    await fakeAgentTurn(fresh, prompt, tally, onTool);
   } else {
     const connectorNote = await mcpSummary(useCaseId).catch(() => "");
     const { texts } = await runSdkTurn({
@@ -298,6 +326,7 @@ async function runTurn(useCaseId: string, prompt: string) {
       freshPrompt,
       appendSystem: `${await museInstructions()}${connectorNote ? `\n\n${connectorNote}` : ""}`,
       tally,
+      onTool,
       onSession: async (id) => {
         if (id !== fresh.claudeSessionId) {
           await prisma.useCase.update({ where: { id: useCaseId }, data: { claudeSessionId: id } });
@@ -309,7 +338,9 @@ async function runTurn(useCaseId: string, prompt: string) {
     });
     // Safety net: if Socra wrote to the owner without using `say`, show its last words.
     if (!tally.spoke && texts.length) {
-      await prisma.message.create({ data: { useCaseId, role: "muse", agent: "Socra · Product physician", content: texts[texts.length - 1] } });
+      const items = currentItems(useCaseId);
+      const one = items.filter((n) => n.startsWith("backlog:")).length <= 1 && items.filter((n) => n.startsWith("move:")).length <= 1;
+      await prisma.message.create({ data: { useCaseId, role: "muse", agent: "Socra · Product physician", content: texts[texts.length - 1], about: one ? items : [], turnId: currentTurnId(useCaseId) } });
     }
   }
 }

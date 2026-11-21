@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { moveCard, BOARD, BOARD_LABEL } from "@/lib/studio/board";
 import { recordChange } from "@/lib/studio/truthlog";
 import { agentsEnabled, enqueue } from "@/lib/agent/runner";
+import { itemAsk, type Stage } from "@/lib/studio/itemAsk";
 
 type Ctx = { params: Promise<{ id: string; mid: string }> };
 
@@ -59,7 +60,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
       after: Object.entries(edits).map(([f, v]) => `${FIELD_LABEL[f as (typeof FIELDS)[number]]}: ${v}`).join("\n"),
       by,
     });
-    notes.push(`${by} edited the card “${edits.title ?? before.title}” on the Board (${Object.entries(edits).map(([f, v]) => `${FIELD_LABEL[f as (typeof FIELDS)[number]]} now: “${String(v).slice(0, 400)}”`).join("; ")}). Carry what changed into the spec and acceptance criteria, and check the Story map links still hold.`);
+    notes.push(`${by} edited the card “${edits.title ?? before.title}” on the Board (${Object.entries(edits).map(([f, v]) => `${FIELD_LABEL[f as (typeof FIELDS)[number]]} now: “${String(v).slice(0, 400)}”`).join("; ")}). Carry what changed into the spec and acceptance criteria, and check the Story map links still hold. Say in one line what it changed, with say about ["move:${mid}"]; if the new wording leaves something a builder needs unclear, ask about it the same way (numbered options, your suggestion marked).`);
   }
 
   if (b.status && b.status !== before.status) {
@@ -67,18 +68,21 @@ export async function PATCH(req: Request, { params }: Ctx) {
     await moveCard(id, mid, b.status, by, why);
     const back = BOARD.indexOf(b.status) < BOARD.indexOf(before.status as (typeof BOARD)[number]);
     const title = edits.title ?? before.title;
-    const thin = (edits.prompt ?? before.prompt).trim().length < 80;
-    // Moving a card is an action, not just a move: each column asks Socra for the next thing it needs.
-    const ask: Record<string, string> = {
-      ready: `It is now Ready to shape: ask ${by} the two or three questions that would give it enough detail to build (who uses it, what "done" looks like, the rules and edge cases), with numbered options and your suggestion marked, and write what they answer into the card's acceptance criteria.`,
-      building: thin
-        ? `It is now Being made real but has almost no detail yet: before anyone presses Generate, ask ${by} for its acceptance criteria (numbered options, your suggestion marked).`
-        : `It is now Being made real: check its acceptance criteria are enough to build from and tell ${by} in one line when to press Generate the prototype.`,
-      review: `It is now in Human review: ask ${by} to try it in Try & mark up and say yes, or mark what is wrong.`,
-      done: `It is Done: confirm in one line that it does what the card promised, and name what it unlocks next.`,
-      queued: "",
+    const prompt = edits.prompt ?? before.prompt;
+    // Every move by hand is an action: the specialist for the new column looks at the card, and Socra asks
+    // what is missing for that stage, tied to the card (no fixed questions on screen: Socra's own words).
+    const stage: Stage = back ? "back" : (b.status as Stage);
+    const need: Record<string, string> = {
+      back: "It went back: ask what isn't right yet, with your suggestion, and carry the answer into the spec.",
+      queued: "It went back to Backlog: ask what isn't right yet, with your suggestion.",
+      ready: "It is now Ready to shape: get it to enough detail to build (who uses it and when, what done looks like, the rules and edge cases) and write the answers into the card's acceptance criteria.",
+      building: "It is now Being made real: check its acceptance criteria are enough to build from. If they are, tell them in one line to press Generate the prototype; if not, ask for what is missing before anyone builds.",
+      review: "It is now in Human review: ask them to try it in Try & mark up, and ask the one or two things to check that its acceptance criteria name.",
+      done: "It is Done: check it does what the card promised (name any acceptance criterion not shown working yet, as a question), and name what it unlocks next.",
     };
-    notes.push(`${by} moved the card “${title}” from ${BOARD_LABEL[before.status as keyof typeof BOARD_LABEL] ?? before.status} to ${BOARD_LABEL[b.status]} (${why}). ${back ? "It went back: ask in one line what isn't right yet, with your suggestion, and carry the answer into the spec." : ask[b.status] || "Carry it into the product truth if it changes anything."}`);
+    const origin = await prisma.truthChange.findFirst({ where: { useCaseId: id, node: `move:${mid}`, kind: "added" }, select: { causes: true } });
+    const fromItem = origin?.causes.filter((c) => c.startsWith("backlog:")) ?? [];
+    notes.push(`${by} moved the card “${title}” (move:${mid}) from ${BOARD_LABEL[before.status as keyof typeof BOARD_LABEL] ?? before.status} to ${BOARD_LABEL[b.status]} (${why}). ${need[stage] ?? need.back}\n${itemAsk({ node: `move:${mid}`, extraNodes: fromItem, title, text: prompt, stage, by })}`);
   }
 
   if (notes.length) await prisma.useCase.update({ where: { id }, data: { updatedAt: new Date() } });
