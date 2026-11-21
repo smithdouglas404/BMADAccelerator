@@ -16,8 +16,10 @@ import { ItemQuestions, ItemTraceability, useItemTrace } from './itemtrace'
 
 type Status = 'queued' | 'ready' | 'building' | 'review' | 'done'
 const COLUMNS: { id: Status; label: string; description: string }[] = [
+  // Ready to shape comes first (Doug, Nov 21): what arrives (from Muse, Socra, a mark-up) waits there to be
+  // shaped, then goes to Backlog to hold or straight on to Being made real.
+  { id: 'ready', label: 'Ready to shape', description: 'New: shape it, then hold or make it real' },
   { id: 'queued', label: 'Backlog', description: 'Worth holding' },
-  { id: 'ready', label: 'Ready to shape', description: 'Promise is clear' },
   { id: 'building', label: 'Being made real', description: 'Agent + human in motion' },
   { id: 'review', label: 'Human review', description: 'Decide what ships' },
   { id: 'done', label: 'Done', description: 'Shipped, still traceable' },
@@ -118,15 +120,24 @@ export function BoardView({ live, me, buildNow, changeView, setToast, children, 
       <div className="intro-actions"><button className="button button-primary" type="button" onClick={() => buildNow()} disabled={live.generateBusy}><Play size={15} /> {live.generateBusy ? 'Building…' : 'Stage pilot build'}</button><button className="button button-quiet" type="button" onClick={() => setAdding(true)}><Plus size={15} /> Add a card</button><span><Network size={14} /> {cards.length} cards · {cards.filter((c) => c.status === 'done').length} done</span></div></div>
 
     <div className="kanban-board studio-board">{COLUMNS.map((col) => {
-      const items = cards.filter((c) => c.status === col.id)
+      // Newest first (Doug, Nov 21): cards arrive in the order they were made, so the latest goes on top.
+      const items = cards.filter((c) => c.status === col.id).sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
+      // Ready to shape holds new items and cards together, in one newest-first list.
+      const rows: ({ at: string; triage: (typeof fresh)[number] } | { at: string; card: (typeof items)[number] })[] = [
+        ...(col.id === 'ready' ? fresh.map((b) => ({ at: b.createdAt, triage: b })) : []),
+        ...items.map((c) => ({ at: c.createdAt ?? '', card: c })),
+      ].sort((a, b) => b.at.localeCompare(a.at))
       return <section key={col.id} className={`kanban-column ${col.id} ${over === col.id ? 'is-drop' : ''}`}
         onDragOver={(e) => { if (dragging) { e.preventDefault(); setOver(col.id) } }}
         onDragLeave={() => setOver((o) => (o === col.id ? '' : o))}
         onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('text/plain') || dragging; setOver(''); setDragging(''); if (id) void move(id, col.id, 'dragged on the Board') }}>
-        <div className="kanban-column-header"><div><strong>{col.label}</strong><small>{col.description}</small></div><span>{items.length}</span></div>
+        <div className="kanban-column-header"><div><strong>{col.label}</strong><small>{col.description}</small></div><span title={col.id === 'ready' && fresh.length ? `${items.length} ${items.length === 1 ? 'card' : 'cards'} and ${fresh.length} new ${fresh.length === 1 ? 'item' : 'items'}` : undefined}>{rows.length}</span></div>
         <div className="kanban-cards">
-          {col.id === 'queued' && waiting > 0 && <p className="studio-triage-head"><span className="studio-red-dot" /> {waiting} new · needs you</p>}
-          {col.id === 'queued' && fresh.map((b) => {
+          {col.id === 'ready' && waiting > 0 && <p className="studio-triage-head"><span className="studio-red-dot" /> {waiting} new · needs you</p>}
+          {col.id === 'ready' && adding && <div className="build-card studio-board-new"><input autoFocus value={newTitle} onChange={(e) => setNewTitle(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void add(); if (e.key === 'Escape') setAdding(false) }} placeholder="What should the product do?" /><div><button className="button button-primary button-small" type="button" onClick={() => void add()} disabled={!newTitle.trim()}><Check size={12} /> Add</button><button className="button button-quiet button-small" type="button" onClick={() => setAdding(false)}>Cancel</button></div></div>}
+          {rows.map((row) => {
+            if ('triage' in row) { const b = row.triage
+
             const from = b.state === 'suggested' || b.state === 'probing' ? `${ASSISTANT_NAME} suggests` : b.annotationId || /mark/i.test(b.source) ? 'From a mark-up' : /Socra|Muse/i.test(b.source) ? `From ${ASSISTANT_NAME}` : 'You said'
             const later = deferredUntil(b); const back = b.triage === 'deferred' && !later
             return <article key={b.id} className={`build-card studio-board-card ${later ? 'studio-deferred-card' : needsTriage(b) ? 'studio-triage-card' : ''}`} aria-label={`Open ${b.title} to decide`} tabIndex={0} role="button"
@@ -136,30 +147,31 @@ export function BoardView({ live, me, buildNow, changeView, setToast, children, 
               {b.note && <p className="studio-moved-by">{b.note.slice(0, 160)}</p>}
               {!later && <p className="studio-triage-open">Open it to accept, defer or reject <ArrowRight size={12} /></p>}
             </article>
-          })}
-          {col.id === 'queued' && adding && <div className="build-card studio-board-new"><input autoFocus value={newTitle} onChange={(e) => setNewTitle(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void add(); if (e.key === 'Escape') setAdding(false) }} placeholder="What should the product do?" /><div><button className="button button-primary button-small" type="button" onClick={() => void add()} disabled={!newTitle.trim()}><Check size={12} /> Add</button><button className="button button-quiet button-small" type="button" onClick={() => setAdding(false)}>Cancel</button></div></div>}
-          {items.map((item) => <article key={item.id} className={`build-card studio-board-card ${dragging === item.id ? 'is-dragging' : ''}`} draggable
+            }
+            const item = row.card
+            return <article key={item.id} className={`build-card studio-board-card ${dragging === item.id ? 'is-dragging' : ''}`} draggable
             onDragStart={(e) => { e.dataTransfer.setData('text/plain', item.id); e.dataTransfer.effectAllowed = 'move'; setDragging(item.id) }}
             onDragEnd={() => { setDragging(''); setOver('') }}
             onClick={() => setOpen(item.id)} onDoubleClick={() => setOpen(item.id)}
             onKeyDown={(e) => { if (e.key === 'Enter') setOpen(item.id) }} tabIndex={0} role="button" aria-label={`Open ${item.title}`}>
-            <div className="build-card-top"><span className={`status-pill ${item.status === 'done' ? 'review' : item.status}`}>{item.signal || LABEL[item.status].toUpperCase()}</span>{item.hidden && item.hidden !== 'story' && <small className="studio-board-kind">{item.hidden}</small>}</div>
+            <div className="build-card-top"><span className={`status-pill ${item.status === 'done' ? 'review' : item.status}`}>{item.signal || LABEL[item.status].toUpperCase()}</span><small className="studio-board-kind">{[item.hidden && item.hidden !== 'story' ? item.hidden : '', item.createdAt ? ago(item.createdAt) : ''].filter(Boolean).join(' · ')}</small></div>
             <h3>{item.title}</h3>
             {(item.capability || item.decision) && <div className="build-trace">{item.capability && <span><Target size={13} /> {item.capability}</span>}{item.decision && <span><Check size={13} /> “{item.decision}”</span>}</div>}
             {item.moveReason && <p className="studio-moved-by"><History size={11} /> {item.movedBy || 'Moved'}: {item.moveReason}</p>}
             <div className="build-card-footer"><span className="owner-avatar">{ownerMark(item.owner)}</span><small>{item.owner}</small>
               <span className="studio-board-arrows">
-                <button className="card-next" type="button" disabled={item.status === 'queued'} aria-label="Move back" title={item.status === 'queued' ? '' : `Back to ${LABEL[ORDER[ORDER.indexOf(item.status) - 1]]}`} onClick={(e) => { e.stopPropagation(); step(item.id, -1) }}><ArrowLeft size={14} /></button>
+                <button className="card-next" type="button" disabled={item.status === ORDER[0]} aria-label="Move back" title={item.status === ORDER[0] ? '' : `Back to ${LABEL[ORDER[ORDER.indexOf(item.status) - 1]]}`} onClick={(e) => { e.stopPropagation(); step(item.id, -1) }}><ArrowLeft size={14} /></button>
                 <button className="card-next" type="button" disabled={item.status === 'done'} aria-label="Move forward" title={item.status === 'done' ? '' : `On to ${LABEL[ORDER[ORDER.indexOf(item.status) + 1]]}`} onClick={(e) => { e.stopPropagation(); step(item.id, 1) }}><ArrowRight size={14} /></button>
               </span></div>
-          </article>)}
-          {items.length === 0 && !(col.id === 'queued' && (adding || fresh.length > 0)) && <div className="empty-column">{dragging ? 'Drop it here.' : <>Nothing here yet.<br />That’s okay — the shape is still moving.</>}</div>}
+          </article>
+          })}
+          {items.length === 0 && !(col.id === 'ready' && (adding || fresh.length > 0)) && <div className="empty-column">{dragging ? 'Drop it here.' : <>Nothing here yet.<br />That’s okay — the shape is still moving.</>}</div>}
         </div>
       </section>
     })}</div>
 
     {children}
-    <div className="pilot-footer"><div><span className="live-pulse" /> {live.agentBusy ? `${ASSISTANT_NAME}: ${live.agentStatus || 'working'}` : fresh.filter((b) => !b.triage).length ? `${fresh.filter((b) => !b.triage).length} new ${fresh.filter((b) => !b.triage).length === 1 ? 'item waits' : 'items wait'} on you` : `${cards.filter((c) => c.status !== 'done').length} cards in motion, ${cards.filter((c) => c.status === 'done').length} done`}</div><button className="text-button" type="button" onClick={() => changeView('storymap')}>See how the stories connect <ArrowRight size={14} /></button></div>
+    <div className="pilot-footer"><div><span className="live-pulse" /> {live.agentBusy ? `${ASSISTANT_NAME}: ${live.agentStatus || 'working'}` : waiting ? `${waiting} new ${waiting === 1 ? 'item waits' : 'items wait'} on you` : `${cards.filter((c) => c.status !== 'done').length} cards in motion, ${cards.filter((c) => c.status === 'done').length} done`}</div><button className="text-button" type="button" onClick={() => changeView('storymap')}>See how the stories connect <ArrowRight size={14} /></button></div>
     {(() => { const b = fresh.find((x) => x.id === pick); if (!b) return null; const close = () => { setPick(''); setConfirm(false); setDeferring(false) }; const busy = triaging === b.id; const later = deferredUntil(b)
       return <div className="studio-card-overlay" onClick={(e) => { if (e.detail < 2) close() }}><aside className="studio-card-panel" onClick={(e) => e.stopPropagation()} aria-label="Backlog item details">
         <div className="studio-card-head"><p className="eyebrow">{later ? `Deferred · ${later.getFullYear() > 9000 ? 'no date set' : `back on ${dayLabel(later)}`}` : 'New on the Board · needs you'}</p><button className="icon-button subtle" type="button" onClick={close} aria-label="Close"><X size={16} /></button></div>
@@ -210,6 +222,8 @@ function CardPanel({ live, me, id, by, guide, start = false, onClose, onMove, se
 
   const m = d?.move
   const val = <K extends keyof CardDetail['move']>(k: K) => (draft[k] ?? m?.[k] ?? '') as CardDetail['move'][K]
+  // Criteria written as one run ("1. Given… 2. Given…") show one per line; the text itself is unchanged until someone edits it.
+  const promptShown = draft.prompt ?? oneCriterionPerLine(m?.prompt ?? '')
   const dirty = m ? (Object.keys(draft) as (keyof CardDetail['move'])[]).some((k) => draft[k] !== m[k]) : false
   const save = async () => {
     if (!m || !dirty) return
@@ -260,7 +274,7 @@ function CardPanel({ live, me, id, by, guide, start = false, onClose, onMove, se
           <label><span>Tag</span><input value={val('signal')} onChange={(e) => setDraft({ ...draft, signal: e.target.value })} placeholder="e.g. THIN SLICE" /></label>
         </div>
         <label className="studio-card-field"><span>Decision it traces to</span><textarea rows={2} value={val('decision')} onChange={(e) => setDraft({ ...draft, decision: e.target.value })} placeholder="The decision or promise this card delivers" /></label>
-        <label className="studio-card-field"><span>Details and acceptance criteria</span><textarea ref={details} rows={8} value={val('prompt')} onChange={(e) => setDraft({ ...draft, prompt: e.target.value })} placeholder="What it does, for whom, and how we'll know it works" /></label>
+        <label className="studio-card-field"><span>Details and acceptance criteria</span><textarea ref={details} rows={8} value={promptShown} onChange={(e) => setDraft({ ...draft, prompt: e.target.value })} placeholder="What it does, for whom, and how we'll know it works" /></label>
         <div className="studio-card-actions"><button className="button button-primary button-small" type="button" disabled={!dirty || saving} onClick={() => void save()}><Check size={13} /> {saving ? 'Saving…' : 'Save changes'}</button>{dirty && <button className="button button-quiet button-small" type="button" onClick={() => setDraft({})}>Undo edits</button>}</div>
 
         <section className="studio-card-section"><div className="studio-card-section-head"><span className="eyebrow"><Paperclip size={11} /> Files · {d!.files.length}</span><button className="text-button" type="button" disabled={uploading} onClick={() => fileInput.current?.click()}><Upload size={12} /> {uploading ? 'Attaching…' : 'Attach files'}</button><input ref={fileInput} type="file" multiple hidden onChange={(e) => void attach(e.target.files)} /></div>
@@ -308,4 +322,21 @@ export function DeferAsk({ until, setUntil, busy, onDefer, onCancel }: { until: 
     <label className="studio-defer-date">Or pick a date <input type="date" className="studio-input" value={until} min={inDays(1)} onChange={(e) => setUntil(e.target.value)} /></label>
     <span><button type="button" className="button button-primary button-small" disabled={busy || !until} onClick={onDefer}>Defer until {until ? dayLabel(`${until}T00:00:00`) : '…'}</button><button type="button" className="button button-quiet button-small" disabled={busy} onClick={onCancel}>Cancel</button></span>
   </div>
+}
+
+/** Numbered items run together on one line ("1. Given… 2. Given…") are split onto their own lines, in sequence only. */
+export function oneCriterionPerLine(text: string): string {
+  let out = text
+  let from = 0
+  for (let n = 1; n < 40; n++) {
+    const re = new RegExp(`(^|\\S)[ \\t]+(${n}[.)][ \\t]+\\S)`, 'g')
+    re.lastIndex = from
+    const hit = re.exec(out)
+    if (!hit) { if (n === 1 && /^1[.)][ \t]/.test(out)) { from = 1; continue } break }
+    if (n === 1 && !new RegExp(`[ \\t]2[.)][ \\t]+\\S`).test(out.slice(hit.index))) break
+    const at = hit.index + hit[1].length
+    out = `${out.slice(0, at)}\n${out.slice(at).replace(/^[ \t]+/, '')}`
+    from = at + 1
+  }
+  return out
 }

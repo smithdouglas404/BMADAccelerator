@@ -2,22 +2,48 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { SPEC_DEFS, PRD_SECTIONS, TRD_SECTIONS, cleanTrace, explainReadiness, specDiff, specMarkdown, tabCompleteness } from "../src/lib/studio/spec.ts";
+import { specDefsFrom, specSectionsFrom, specWalkFrom, cleanTrace, explainReadiness, specDiff, specMarkdown, tabCompleteness } from "../src/lib/studio/spec.ts";
 import { SESSION_EDGES, clip58 } from "../src/lib/studio/edges.ts";
 import { assemblePackage, inspectPackage, PACKAGE_FILES } from "../src/lib/studio/package.ts";
 import { project, specChanges } from "../src/lib/studio/projection.ts";
 
+// The sections come from the studio-prd and studio-trd skills (Doug, Nov 21: no section list in code).
+const skillText = (name) => readFileSync(new URL(`../studio-skills/${name}/SKILL.md`, import.meta.url), "utf8");
+const PRD_SKILL = skillText("studio-prd");
+const TRD_SKILL = skillText("studio-trd");
+const PRD_SECTIONS = specSectionsFrom(PRD_SKILL, "prd");
+const TRD_SECTIONS = specSectionsFrom(TRD_SKILL, "trd");
+const SPEC_DEFS = specDefsFrom(PRD_SKILL, TRD_SKILL);
 const fixture = (f) => JSON.parse(readFileSync(new URL(`./fixtures/export-v6/${f}`, import.meta.url), "utf8"));
 const SAMPLE = "Let people save a voice note while walking, then have Socra transcribe it and ask one clarifying question before it becomes a backlog item.";
 
-test("the living spec has 16 PRD and 21 TRD sections with stable refs", () => {
+test("the PRD and TRD sections come from their skills, with plain refs", () => {
   assert.equal(PRD_SECTIONS.length, 16);
   assert.equal(TRD_SECTIONS.length, 21);
-  assert.equal(SPEC_DEFS.find((d) => d.key === "prd-problem").ref, "PR-001");
-  assert.equal(SPEC_DEFS.find((d) => d.key === "trd-hardening").ref, "TR-021");
+  assert.equal(SPEC_DEFS.find((d) => d.key === "prd-problem").ref, "PRD 1");
+  assert.equal(SPEC_DEFS.find((d) => d.key === "trd-hardening").ref, "TRD 21");
   assert.equal(new Set(SPEC_DEFS.map((d) => d.key)).size, 37);
   // The design team's section names where the two overlap.
   for (const t of ["Validated use case", "Primary customer flow", "Acceptance criteria", "System context", "Data and state transitions"]) assert.ok(SPEC_DEFS.some((d) => d.title === t), t);
+});
+
+test("each walkthrough question names a real section, a real specialist, a bar, and real sections it informs", () => {
+  const specialists = ["business-analyst", "architect", "engineer", "ux", "domain"];
+  for (const [skill, tab] of [[PRD_SKILL, "prd"], [TRD_SKILL, "trd"]]) {
+    const keys = new Set(SPEC_DEFS.filter((d) => d.tab === tab).map((d) => d.key));
+    const walk = specWalkFrom(skill);
+    assert.ok(walk.length >= 6, `${tab} has a walkthrough`);
+    for (const w of walk) {
+      assert.ok(keys.has(w.key), `${tab} ${w.key} is a section`);
+      assert.ok(specialists.includes(w.asker), `${w.key} asked by a known specialist`);
+      assert.ok(w.ask.endsWith("?") && w.bar.length > 20, `${w.key} has a question and a bar`);
+      for (const k of w.informs) assert.ok(keys.has(k) && k !== w.key, `${w.key} informs ${k}`);
+    }
+  }
+  // The TRD walkthrough asks like a product engineer: a day in the life, people in the loop, other systems and when.
+  const trd = specWalkFrom(TRD_SKILL).map((w) => w.ask).join(" ");
+  for (const p of [/day in the life/i, /say yes or no/i, /other systems/i, /when\?/i]) assert.match(trd, p);
+  assert.match(specWalkFrom(PRD_SKILL).map((w) => w.ask).join(" "), /how many/i);
 });
 
 test("trace steps are cleaned and keep the newest", () => {
@@ -122,4 +148,14 @@ test("projection: backlog and spec diffs, idempotent on re-sync", () => {
   assert.equal(again.updated, 4);
   assert.ok(again.idempotent);
   assert.equal(again.gitRecords, first.gitRecords);
+});
+
+test("the Studio's PRFAQ, PRD, TRD and specialist skills are in ECC's format with the sections ECC skills carry", () => {
+  for (const name of ["studio-prfaq", "studio-prd", "studio-trd", "studio-business-analyst", "studio-solution-architect", "studio-ux-designer", "studio-product-engineer", "studio-domain-expert", "studio-research-numbers", "studio-sample-data", "studio-competitor-teardown", "studio-acceptance-tests", "studio-pilot-metrics"]) {
+    const md = skillText(name);
+    assert.match(md, /^---\nname: /, `${name} frontmatter`);
+    assert.match(md, new RegExp(`^name: ${name}$`, "m"));
+    assert.match(md, /^origin: Working Backwards Studio$/m, `${name} origin`);
+    for (const h of ["When to Activate", "Inputs", "Output Format", "Examples", "Good Outcomes", "Integration"]) assert.match(md, new RegExp(`^## ${h}$`, "m"), `${name} has ${h}`);
+  }
 });

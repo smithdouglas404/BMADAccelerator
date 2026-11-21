@@ -12,7 +12,7 @@ const Body = z.object({
   title: z.string().trim().min(1).max(200),
   capability: z.string().max(120).default(""),
   prompt: z.string().max(8000).default(""),
-  status: z.enum(BOARD).default("queued"),
+  status: z.enum(BOARD).default("ready"),
   by: z.string().max(80).default(""),
 });
 

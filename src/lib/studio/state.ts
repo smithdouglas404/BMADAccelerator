@@ -1,3 +1,4 @@
+import { teamCoverage } from "@/lib/studio/coverage";
 import { agentConfig } from "@/lib/agentService";
 import { brand } from "@/lib/brand";
 import { promises as fs } from "fs";
@@ -7,10 +8,12 @@ import { workspacePath } from "@/lib/workspace";
 import { syncPreviewState } from "@/lib/preview";
 import { ROUTE_AGENTS, overallReadiness, validationScore, type Validation } from "./core";
 import { assemblePackage, type PackageInput } from "./package";
+import { prfaqMarkers, prfaqWithFootnotes, type Source } from "./prfaqDraft";
 import { truthExport } from "./truthlog";
 import { readInterpretation } from "./truth";
 import { truthGraphSchema } from "@/studio/graph";
-import { SPEC_DEFS, explainReadiness, specDiff, type SpecSnapshot } from "./spec";
+import { explainReadiness, specDiff, type SpecSnapshot } from "./spec";
+import { SPEC_DEFS } from "./specDefs";
 import { withDocuments } from "./evidenceDocs";
 
 /** The four routes exist for every product, in order. */
@@ -24,11 +27,12 @@ export async function ensureRoutes(useCaseId: string) {
 
 /** Every PRD and TRD section exists for every product from the start, as "Not yet researched". */
 export async function ensureSpec(useCaseId: string) {
-  const rows = await prisma.specSection.findMany({ where: { useCaseId }, select: { id: true, key: true, title: true } });
-  // Section names follow the current definitions (a renamed section keeps its content and trace).
+  const rows = await prisma.specSection.findMany({ where: { useCaseId }, select: { id: true, key: true, title: true, kicker: true, ref: true, position: true } });
+  // Section names, labels and order follow the studio-prd / studio-trd skills (a renamed section keeps its content and trace).
   for (const r of rows) {
     const def = SPEC_DEFS.find((d) => d.key === r.key);
-    if (def && def.title !== r.title) await prisma.specSection.update({ where: { id: r.id }, data: { title: def.title, kicker: def.kicker } });
+    if (def && (def.title !== r.title || def.kicker !== r.kicker || def.ref !== r.ref || def.position !== r.position))
+      await prisma.specSection.update({ where: { id: r.id }, data: { title: def.title, kicker: def.kicker, ref: def.ref, position: def.position } });
   }
   const have = new Set(rows.map((s) => s.key));
   const missing = SPEC_DEFS.filter((d) => !have.has(d.key));
@@ -60,7 +64,8 @@ export async function studioState(id: string) {
     },
   });
   if (!uc) return null;
-  if (uc.spec.length < SPEC_DEFS.length) {
+  const stale = uc.spec.some((r) => { const d = SPEC_DEFS.find((x) => x.key === r.key); return !!d && (d.ref !== r.ref || d.title !== r.title || d.kicker !== r.kicker || d.position !== r.position) });
+  if (uc.spec.length < SPEC_DEFS.length || stale) {
     await ensureSpec(id);
     return studioState(id);
   }
@@ -80,6 +85,8 @@ export async function studioState(id: string) {
     decisions: uc.decisions.map((d) => ({ ...d, agent: b(d.agent), text: d.agent ? b(d.text) : d.text })),
     backlog: uc.backlog.map((x) => ({ ...x, group: b(x.group), source: b(x.source), ...(x.recKind ? { title: b(x.title), note: b(x.note) } : {}) })),
     routes: uc.routes.map((r) => ({ ...r, agent: b(r.agent), detail: b(r.detail) })),
+    // Each specialist's question areas (from its skill) and what has been answered: the team list's hover.
+    coverage: await teamCoverage(id),
     moves: uc.moves.map((m) => ({ ...m, movedBy: b(m.movedBy), moveReason: b(m.moveReason) })),
     // Each evidence card points at the stored document it came from, wherever that can be found.
     evidence: withDocuments(uc.evidence, uc.documents),
@@ -150,7 +157,7 @@ export async function packageInput(useCaseId: string, opts: { frames?: boolean; 
     validationScore: validationScore((uc.validation ?? {}) as Validation),
     repositoryUrl: uc.repoUrl,
     gitBranch: uc.gitBranch,
-    prfaq: uc.prfaq,
+    prfaq: await prfaqForPackage(uc.id, uc.prfaq, uc.prfaqSources),
     capabilities: uc.capabilities.map((c) => ({ key: c.key, label: c.label, readiness: c.readiness, description: c.description, items: (c.items ?? []) as { id: string; text: string; state: string }[] })),
     decisions: uc.decisions.map((d) => ({ id: d.id, text: d.text, status: d.status, capability: d.capability, words: d.words, agent: d.agent, answer: d.answer })),
     backlog: uc.backlog.map((b) => ({ id: b.id, title: b.title, note: b.note, kind: b.kind, group: b.group, source: b.source, recKind: b.recKind, state: b.state, hidden: b.hidden, includeInBuild: b.includeInBuild })),
@@ -174,6 +181,7 @@ export async function packageInput(useCaseId: string, opts: { frames?: boolean; 
     specVersion: uc.specRevisions[0]?.version ?? 0,
     specDiff: uc.specRevisions[0]?.diff ?? "",
     truthGraph: { schema: truthGraphSchema, ...(await truthExport(useCaseId)) },
+    coverage: (await teamCoverage(useCaseId)).map((c) => ({ name: c.name, areas: c.areas.map((a) => ({ label: a.label, status: a.status, note: a.note })) })),
     vibeLoop: uc.feedback.map((f) => {
       const it = readInterpretation(f.interpretation);
       const changes = [...(it.prd ?? []), ...(it.trd ?? [])];
@@ -217,4 +225,12 @@ export async function writePackage(useCaseId: string) {
   await fs.mkdir(dir, { recursive: true });
   for (const [name, content] of Object.entries(files)) await fs.writeFile(path.join(dir, name), content);
   return { iteration: uc.packageCount, version: rev.version, dir, files };
+}
+
+/** The PRFAQ for the package: its line markers become footnotes with the words each line rests on. */
+async function prfaqForPackage(useCaseId: string, prfaq: string, meta: unknown) {
+  const sources = ((meta && typeof meta === "object" ? (meta as { sources?: Record<string, Source> }).sources : undefined) ?? {});
+  const ids = prfaqMarkers(prfaq).filter((k) => k.startsWith("m:")).map((k) => k.slice(2));
+  const answers = ids.length ? await prisma.message.findMany({ where: { useCaseId, id: { in: ids } }, select: { id: true, content: true } }) : [];
+  return prfaqWithFootnotes(prfaq, sources, Object.fromEntries(answers.map((a) => [a.id, a.content])));
 }

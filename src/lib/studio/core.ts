@@ -47,8 +47,8 @@ export const ROUTE_AGENTS = [
 ] as const;
 
 export const BOARD_COLUMNS = [
+  { status: "ready", title: "Ready to shape", hint: "New: shape it, then hold or make it real" },
   { status: "queued", title: "Backlog", hint: "Worth holding" },
-  { status: "ready", title: "Ready to shape", hint: "Promise is clear" },
   { status: "building", title: "Being made real", hint: "Agent + human in motion" },
   { status: "review", title: "Human review", hint: "Decide what ships" },
 ] as const;
@@ -153,6 +153,17 @@ export function bumpReadiness(current: number, approved: boolean): number {
   return Math.max(0, Math.min(100, current + (approved ? 4 : 1)));
 }
 
+/**
+ * How far one of the product's areas really is (Doug, Nov 21: "merge into one progress view"), counted from the
+ * records, never guessed: its must-haves the people agreed ([confirmed]) out of all that are in ([out] is not),
+ * the rest inferred and waiting, and the questions only a person can answer that are still open for it.
+ */
+export function areaProgress(items: { state: string }[], openQuestions = 0) {
+  const inScope = items.filter((i) => i.state !== "out");
+  const agreed = inScope.filter((i) => i.state === "confirmed").length;
+  return { agreed, total: inScope.length, inferred: inScope.length - agreed, open: openQuestions, pct: inScope.length ? Math.round((agreed * 100) / inScope.length) : 0 };
+}
+
 export function overallReadiness(caps: { readiness: number }[]): number {
   if (!caps.length) return 0;
   return Math.round(caps.reduce((s, c) => s + c.readiness, 0) / caps.length);
@@ -209,16 +220,17 @@ export const PERSONA_VOICE: Record<Persona, string> = {
 export const personaVoice = (role: string) => `How to talk to them: ${PERSONA_VOICE[personaOf(role)]}`;
 
 /**
- * Socra's specialists. Socra leads; it brings these in visibly, and anyone on the product can
- * address one directly. `agent` is the team member that does the work (src/lib/agent/team.ts).
+ * Socra's specialists. Socra leads; every specialist listens to every conversation and joins in when what is
+ * said touches its open question areas; anyone can answer one with Reply. `agent` is the team member that
+ * does the work (src/lib/agent/team.ts); `skill` is its own skill of questions (studio-skills/).
  * The domain expert is named for the product's field ("Claims expert") by Socra.
  */
 export const SPECIALISTS = [
-  { key: "business-analyst", name: "Business analyst", agent: "business-analyst", focus: "requirements, flows, rules and acceptance" },
-  { key: "architect", name: "Solution architect", agent: "solution-architect", focus: "system shape, data, integrations, security and scale" },
-  { key: "engineer", name: "Product engineer", agent: "product-engineer", focus: "the pilot boundary, build moves, workflows and human checkpoints" },
-  { key: "ux", name: "UX/UI designer", agent: "ux-component-mapper", focus: "screens, components, layout and the feel" },
-  { key: "domain", name: "Domain expert", agent: "domain-expert", focus: "the industry's rules, practice and risks" },
+  { key: "business-analyst", name: "Business analyst", agent: "business-analyst", skill: "studio-business-analyst", focus: "requirements, flows, rules and acceptance" },
+  { key: "architect", name: "Solution architect", agent: "solution-architect", skill: "studio-solution-architect", focus: "system shape, data, integrations, security and scale" },
+  { key: "engineer", name: "Product engineer", agent: "product-engineer", skill: "studio-product-engineer", focus: "the pilot boundary, build moves, workflows and human checkpoints" },
+  { key: "ux", name: "UX/UI designer", agent: "ux-component-mapper", skill: "studio-ux-designer", focus: "screens, components, layout and the feel" },
+  { key: "domain", name: "Domain expert", agent: "domain-expert", skill: "studio-domain-expert", focus: "the industry's rules, practice and risks" },
 ] as const;
 export type SpecialistKey = (typeof SPECIALISTS)[number]["key"];
 export const specialistByKey = (k: string) => SPECIALISTS.find((s) => s.key === k);

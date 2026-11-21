@@ -3,8 +3,9 @@
 # vendor/. The Studio copies what each product needs into its workspace.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-ECC_REPO="https://github.com/affaan-m/everything-claude-code"
-ECC_SHA="${ECC_SHA:-d2ef2680594f9a17526a6e1a2e18b3d242c5d17b}"
+# Where ECC comes from is one setting: scripts/ecc-source.sh (repository and pinned commit).
+# ECC_REPO / ECC_SHA in the environment override it for one run.
+source "scripts/ecc-source.sh"
 # Anthropic's official skills (Apache 2.0): Generate uses frontend-design.
 ANTHROPIC_SKILLS_REPO="https://github.com/anthropics/skills"
 ANTHROPIC_SKILLS_SHA="${ANTHROPIC_SKILLS_SHA:-1780c5e5a552fd4d1c9d6a7b0cab26b0c2bef064}"
@@ -26,6 +27,7 @@ fetch() { # repo sha dest
 }
 
 fetch "$ECC_REPO" "$ECC_SHA" vendor/ecc
+node scripts/ecc-catalog.mjs "$ECC_REPO" "$ECC_SHA"
 fetch "$ANTHROPIC_SKILLS_REPO" "$ANTHROPIC_SKILLS_SHA" vendor/anthropic
 fetch "$AGENTKIT_REPO" "$AGENTKIT_SHA" vendor/agentkit
 echo "vendor ready: ECC ${ECC_SHA:0:7}, Anthropic skills ${ANTHROPIC_SKILLS_SHA:0:7}, AgentKit ${AGENTKIT_SHA:0:7}"

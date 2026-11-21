@@ -13,8 +13,9 @@ type Status = { providers: (KeyStatus & { id: string; models: string[] })[]; oth
 type Connector = { id: string; name: string; label: string; transport: string; url: string; command: string; args: string[]; secretNames: string[]; hasSecrets: boolean; enabled: boolean; allProducts: boolean; useCases: string[] }
 type Product = { id: string; name: string }
 
-type LibSkill = { id: string; name: string; description: string; source: 'studio' | 'ecc' | 'yours'; origin: string; alwaysOn: boolean; core: boolean; allProducts: boolean; useCases: string[]; valid: boolean; report: string }
-const SOURCES = [['all', 'All'], ['studio', 'Studio'], ['ecc', 'ECC'], ['yours', 'Yours']] as const
+type LibSkill = { id: string; name: string; description: string; source: 'studio' | 'ecc' | 'yours'; origin: string; alwaysOn: boolean; core: boolean; allProducts: boolean; useCases: string[]; valid: boolean; report: string; usedBy?: string }
+const SOURCES = [['studio', 'Ours'], ['ecc', 'ECC'], ['yours', 'Uploaded'], ['all', 'All']] as const
+type Home = { folder: string; link: string; ecc?: { repo: string; sha: string; version: string; license: string; skills: number; link: string } }
 const PAGE = 40
 
 export function SettingsPage() {
@@ -147,13 +148,16 @@ function Connectors({ setToast }: { setToast: (s: string) => void }) {
 function Skills({ setToast }: { setToast: (s: string) => void }) {
   const [rows, setRows] = useState<LibSkill[]>([])
   const [products, setProducts] = useState<Product[]>([])
-  const [source, setSource] = useState<(typeof SOURCES)[number][0]>('all')
+  const [source, setSource] = useState<(typeof SOURCES)[number][0]>('studio')
+  const [home, setHome] = useState<Home | null>(null)
+  const [reading, setReading] = useState<{ id: string; markdown: string } | null>(null)
   const [q, setQ] = useState('')
   const [onOnly, setOnOnly] = useState(false)
   const [open, setOpen] = useState<string | null>(null)
   const [shown, setShown] = useState(PAGE)
   const load = () => void api<LibSkill[]>('/api/skills/library', { cache: 'no-store' }).then(setRows).catch(() => setRows([]))
-  useEffect(() => { load(); void api<Product[]>('/api/use-cases', { cache: 'no-store' }).then(setProducts).catch(() => setProducts([])) }, [])
+  useEffect(() => { load(); void api<Product[]>('/api/use-cases', { cache: 'no-store' }).then(setProducts).catch(() => setProducts([])); void api<Home>('/api/skills/library?home=1', { cache: 'no-store' }).then(setHome).catch(() => setHome(null)) }, [])
+  const read = (s: LibSkill) => reading?.id === s.id ? setReading(null) : void api<{ id: string; markdown: string }>(`/api/skills/library?read=${encodeURIComponent(s.id)}`, { cache: 'no-store' }).then(setReading).catch((e: Error) => setToast(e.message))
   const upload = async (file: File) => {
     const form = new FormData()
     form.append('file', file)
@@ -177,6 +181,8 @@ function Skills({ setToast }: { setToast: (s: string) => void }) {
       <section className="studio-card">
         <div className="stack-header"><div><p className="eyebrow">Skill library · {rows.length}</p><h3>ECC, the Studio’s skills and yours, in one place</h3></div><Wrench size={16} /></div>
         <p className="studio-muted">ECC (Everything Claude Code) is the open-source skills library, MIT licensed, pinned in the Studio. The Studio’s own skills are written in the same format. Switched on, a skill goes into each product’s workspace, where Socra, its specialists and Claude Code use it.</p>
+        {source === 'studio' && <p className="studio-library-ours">Ours: {count('studio')} skills written for the Studio in ECC’s format (origin “Working Backwards Studio”), kept separate from ECC’s and never sent to it. All are always on. They live in the <code>{home?.folder || 'studio-skills'}</code> folder{home?.link ? <> · <a href={home.link} target="_blank" rel="noreferrer">open the folder on GitHub</a></> : null}. Press Read on any one to see it in full.</p>}
+        {source === 'ecc' && home?.ecc && <p className="studio-library-ours">ECC: {home.ecc.skills} skills imported from <code>{home.ecc.repo.replace(/^https:\/\/github\.com\//, '')}</code>, version {home.ecc.version}, pinned at commit <code>{home.ecc.sha.slice(0, 7)}</code> ({home.ecc.license}, its license kept with the copy) · <a href={home.ecc.link} target="_blank" rel="noreferrer">open that version on GitHub</a>. Off until you switch one on; ours sit beside them, never inside.</p>}
         <div className="studio-library-tools">
           <div className="studio-tabs" style={{ marginTop: 0 }}>{SOURCES.map(([k, l]) => <button key={k} type="button" className={source === k ? 'is-active' : ''} onClick={() => { setSource(k); setShown(PAGE) }}>{l} · {count(k)}</button>)}</div>
           <input className="studio-library-search" type="search" value={q} onChange={(e) => { setQ(e.target.value); setShown(PAGE) }} placeholder="Search skills, e.g. security, postgres, accessibility" aria-label="Search the skill library" />
@@ -185,14 +191,16 @@ function Skills({ setToast }: { setToast: (s: string) => void }) {
         </div>
         <div className="studio-list">{list.slice(0, shown).map((s) => (
           <div key={s.id} className="studio-list-row studio-library-row">
-            <div className="studio-row-main"><strong>{s.name} <span className={`studio-source is-${s.source}`}>{s.source === 'ecc' ? 'ECC' : s.source === 'studio' ? 'Studio' : 'Yours'}</span></strong><small>{s.description || 'No description'}{s.source === 'yours' && !s.valid ? ' · did not pass the check' : ''}</small></div>
+            <div className="studio-row-main"><strong>{s.name} <span className={`studio-source is-${s.source}`}>{s.source === 'ecc' ? 'ECC' : s.source === 'studio' ? 'Ours' : 'Uploaded'}</span></strong><small>{s.usedBy ? <span className="studio-library-used">Used by {s.usedBy} · </span> : null}{s.description || 'No description'}{s.source === 'yours' && !s.valid ? ' · did not pass the check' : ''}</small></div>
             <span className={isOn(s) ? 'studio-ok studio-where' : 'studio-muted studio-where'}>{where(s)}</span>
             <div className="studio-review-actions">
+              {s.source !== 'yours' && <button type="button" className="button button-quiet" onClick={() => read(s)}>{reading?.id === s.id ? 'Close' : 'Read'}</button>}
               {s.source === 'ecc' && !s.alwaysOn && <button type="button" className="button button-quiet" onClick={() => setOpen(open === s.id ? null : s.id)}>{open === s.id ? 'Done' : 'Switch on…'}</button>}
               {s.source === 'yours' && <label className="studio-toggle"><input type="checkbox" disabled={!s.valid} checked={s.allProducts} onChange={(e) => void api(`/api/skills/${s.id.slice(6)}`, { method: 'PATCH', json: { enabled: e.target.checked } }).then(load).catch((er: Error) => setToast(er.message))} /> on</label>}
               {s.source === 'yours' && s.report && <details><summary className="studio-muted" style={{ marginTop: 0 }}>Check report</summary><pre className="studio-diff">{s.report}</pre></details>}
               {s.source === 'yours' && <button type="button" className="icon-button subtle" aria-label="Delete skill" onClick={() => void api(`/api/skills/${s.id.slice(6)}`, { method: 'DELETE' }).then(load)}><Trash2 size={13} /></button>}
             </div>
+            {reading?.id === s.id && <pre className="studio-diff studio-library-read">{reading.markdown}</pre>}
             {open === s.id && <div className="studio-library-scope">
               <label className="studio-toggle"><input type="radio" name={`scope-${s.id}`} checked={!s.allProducts && !s.useCases.length} onChange={() => scope(s, false, [])} /> Off</label>
               <label className="studio-toggle"><input type="radio" name={`scope-${s.id}`} checked={s.allProducts} onChange={() => scope(s, true, [])} /> Every product</label>

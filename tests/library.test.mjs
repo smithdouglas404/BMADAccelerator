@@ -45,7 +45,7 @@ test("the ECC catalog lists skills by folder name, and the pinned copy has them 
 test("Settings lists one library with ECC, Studio and your skills, and products get switched-on ECC skills", async () => {
   const settings = await fs.readFile(path.join(process.cwd(), "src/studio/settings.tsx"), "utf8");
   assert.match(settings, /\/api\/skills\/library/);
-  assert.match(settings, /\['studio', 'Studio'\], \['ecc', 'ECC'\], \['yours', 'Yours'\]/);
+  assert.match(settings, /\['studio', 'Ours'\], \['ecc', 'ECC'\], \['yours', 'Uploaded'\]/);
   const provision = await fs.readFile(path.join(process.cwd(), "src/lib/provision.ts"), "utf8");
   assert.match(provision, /eccSkillsFor\(useCaseId\)/);
 });
@@ -61,4 +61,30 @@ test("TypeSafe's Jev skill is in the library with its license, and its key stays
   assert.match(auth, /"TYPESAFE_API_KEY"\]\) delete env\[k\]/, "Claude Code runs never get the key");
   const preview = await fs.readFile(path.join(process.cwd(), "src/lib/preview.ts"), "utf8");
   assert.doesNotMatch(preview, /TYPESAFE/, "generated apps never get the Studio's key");
+});
+
+test("the Skills screen opens on our own skills, each readable, with a link to their folder (Doug, Nov 21)", async () => {
+  const ui = await fs.readFile(path.join(process.cwd(), "src/studio/settings.tsx"), "utf8");
+  assert.match(ui, /SOURCES = \[\['studio', 'Ours'\]/, "Ours is the first tab");
+  assert.match(ui, /useState<\(typeof SOURCES\)\[number\]\[0\]>\('studio'\)/, "and the one it opens on");
+  assert.match(ui, /open the folder on GitHub/);
+  const pkg = JSON.parse(await fs.readFile(path.join(process.cwd(), "package.json"), "utf8"));
+  assert.match(pkg.repository, /^https:\/\/github\.com\/[^/]+\/[^/]+$/, "the folder link comes from package.json");
+  const lib = await fs.readFile(path.join(process.cwd(), "src/lib/skillLibrary.ts"), "utf8");
+  assert.match(lib, /\[a-z0-9\]\[a-z0-9-\]\{0,99\}/, "Read only opens a skill by a safe name");
+});
+
+test("ECC is the open-source project, pinned; the list on screen is rebuilt from that exact copy (Doug, Nov 21)", async () => {
+  const pin = JSON.parse(await fs.readFile(path.join(process.cwd(), "src/data/ecc-pin.json"), "utf8"));
+  const catalog = JSON.parse(await fs.readFile(path.join(process.cwd(), "src/data/ecc-skills.json"), "utf8"));
+  const fetch = await fs.readFile(path.join(process.cwd(), "scripts/fetch-vendor.sh"), "utf8");
+  const source = await fs.readFile(path.join(process.cwd(), "scripts/ecc-source.sh"), "utf8");
+  assert.match(fetch, /source "scripts\/ecc-source\.sh"/, "where ECC comes from is one setting");
+  assert.doesNotMatch(fetch, /github\.com\/[^/]+\/everything-claude-code/, "and not written into the fetch script");
+  assert.equal(pin.repo, source.match(/ECC_REPO="\$\{ECC_REPO:-([^}]+)\}"/)[1], "the pin names the repository fetched");
+  assert.equal(pin.sha, source.match(/ECC_SHA="\$\{ECC_SHA:-([0-9a-f]{40})\}"/)[1], "and the commit fetched");
+  assert.match(pin.license, /^MIT/);
+  assert.equal(pin.skills, catalog.length);
+  assert.match(fetch, /node scripts\/ecc-catalog\.mjs "\$ECC_REPO" "\$ECC_SHA"/, "every fetch rebuilds the list");
+  assert.ok(catalog.every((s) => s.description.length > 20), "every ECC skill has its description");
 });

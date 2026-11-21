@@ -1,9 +1,10 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { prisma } from "@/lib/db";
-import { ECC_SKILLS } from "@/lib/skills";
+import { ECC_PIN, ECC_SKILLS } from "@/lib/skills";
 import { STUDIO_SKILLS_DIR, VENDOR_DIR } from "@/lib/provision";
 import { CORE_SKILLS } from "@/lib/agent/instructions";
+import { SPECIALISTS } from "@/lib/studio/core";
 
 // One skill library: the open-source ECC library (Everything Claude Code, MIT, pinned in vendor/ecc), the
 // Studio's own skills (written in ECC's skill format, origin "Working Backwards Studio") and the skills
@@ -22,6 +23,7 @@ export type LibrarySkill = {
   useCases: string[];
   valid: boolean;
   report: string;
+  usedBy: string; // for the Studio's own: "Socra, every turn", the specialist whose skill it is, or ""
 };
 
 // ECC skills every build reads, whatever is switched on.
@@ -29,7 +31,8 @@ export const ECC_ALWAYS = ["frontend-design-direction"];
 
 export function frontmatterOf(md: string) {
   const m = md.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-  const get = (k: string) => m?.[1].match(new RegExp(`^${k}:\\s*['"]?(.*?)['"]?\\s*$`, "m"))?.[1] ?? "";
+  // ECC writes origin under "metadata:" (indented); the Studio's skills may use either.
+  const get = (k: string) => m?.[1].match(new RegExp(`^\\s*${k}:\\s*['"]?(.*?)['"]?\\s*$`, "m"))?.[1] ?? "";
   return { name: get("name"), description: get("description"), origin: get("origin") };
 }
 
@@ -64,15 +67,16 @@ export async function librarySkills(): Promise<LibrarySkill[]> {
       id: `studio:${s.name}`, name: s.name, description: s.description, source: "studio" as const,
       origin: s.origin || "Working Backwards Studio", alwaysOn: true,
       core: (CORE_SKILLS as readonly string[]).includes(s.name), allProducts: true, useCases: [], valid: true, report: "",
+      usedBy: (CORE_SKILLS as readonly string[]).includes(s.name) ? "Socra, every turn" : SPECIALISTS.find((x) => x.skill === s.name)?.name ?? "",
     })),
     ...ECC_SKILLS.map((s) => ({
       id: `ecc:${s.id}`, name: s.id, description: s.description, source: "ecc" as const, origin: "ECC",
       alwaysOn: ECC_ALWAYS.includes(s.id), core: false, allProducts: ECC_ALWAYS.includes(s.id) || all.has(s.id),
-      useCases: byProduct.get(s.id) ?? [], valid: true, report: "",
+      useCases: byProduct.get(s.id) ?? [], valid: true, report: "", usedBy: "",
     })),
     ...custom.map((c) => ({
       id: `yours:${c.id}`, name: c.name, description: c.description, source: "yours" as const, origin: "Yours",
-      alwaysOn: false, core: false, allProducts: c.enabled && c.valid, useCases: [], valid: c.valid, report: c.report,
+      alwaysOn: false, core: false, allProducts: c.enabled && c.valid, useCases: [], valid: c.valid, report: c.report, usedBy: "",
     })),
   ];
 }
@@ -105,4 +109,27 @@ export async function eccSkillsFor(useCaseId: string) {
     if (await fs.access(path.join(dir, "SKILL.md")).then(() => true, () => false)) out.push({ name: id, dir });
   }
   return out;
+}
+
+// Where the Studio's own skills live: the folder in the image, and its page on GitHub when the
+// repository is configured (package.json "repository", branch STUDIO_SKILLS_BRANCH, default mac-studio).
+export async function studioSkillsHome() {
+  const pkg = JSON.parse(await fs.readFile(path.join(process.cwd(), "package.json"), "utf8").catch(() => "{}")) as { repository?: string | { url?: string } };
+  const repo = (typeof pkg.repository === "string" ? pkg.repository : pkg.repository?.url ?? "").replace(/^git\+/, "").replace(/\.git$/, "");
+  const branch = process.env.STUDIO_SKILLS_BRANCH || "mac-studio";
+  return {
+    folder: "studio-skills",
+    link: /^https:\/\/github\.com\//.test(repo) ? `${repo}/tree/${branch}/studio-skills` : "",
+    ecc: { ...ECC_PIN, link: `${ECC_PIN.repo}/tree/${ECC_PIN.sha}` },
+  };
+}
+
+// The full SKILL.md of one Studio or ECC skill, to read on the Skills screen.
+export async function readLibrarySkill(id: string) {
+  const [source, name] = id.split(":");
+  if (!/^[a-z0-9][a-z0-9-]{0,99}$/.test(name ?? "")) return null;
+  const dir = source === "studio" ? STUDIO_SKILLS_DIR : source === "ecc" ? path.join(VENDOR_DIR, "ecc", "skills") : "";
+  if (!dir) return null;
+  const md = await fs.readFile(path.join(dir, name, "SKILL.md"), "utf8").catch(() => "");
+  return md ? { id, markdown: md } : null;
 }

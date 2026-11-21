@@ -32,6 +32,11 @@ model UseCase {
   // The living PRFAQ (Markdown): press release, customer FAQs, internal FAQs.
   prfaq             String    @default("")
   prfaqUpdatedAt    DateTime?
+  // Generate PRFAQ (Doug, Nov 21): { sources: { s1: { quote, from, name } }, docs: [document ids picked],
+  // versions: [{ at, how, by, markdown, sources }] (newest first, so a Generate new or Reformat can be undone) }.
+  prfaqSources      Json      @default("{}")
+  // The guided PRD and TRD walkthroughs (Doug, Nov 21): { prd: { on, step, status, rounds }, trd: {...} }.
+  specWalk          Json      @default("{}")
   // The validated use case and its signals (problem, customer, evidence, proof, thinSlice).
   validatedUseCase  String    @default("")
   validation        Json      @default("{}")
@@ -89,9 +94,30 @@ model UseCase {
   members       Member[]
   truthChanges  TruthChange[]
   appAgents     AppAgent[]
+  coverage      Coverage[]
   // The shared agent service's app token and callback secret for this product (encrypted).
   agentToken    String         @default("")
   agentSecret   String         @default("")
+}
+
+// How much of each specialist's question areas the people on the product have answered (Doug, Nov 21:
+// "an agent plus a skill... enough questions in order to say, hey, this is kind of complete"). The areas of
+// the business analyst, architect, UX/UI designer and product engineer come from their skills; the domain
+// expert derives its own for the field. A row exists only once a specialist recorded something real.
+model Coverage {
+  id         String   @id @default(cuid())
+  useCaseId  String
+  specialist String // business-analyst | architect | engineer | ux | domain
+  area       String // the area's key in the skill (or the domain expert's own)
+  label      String   @default("")
+  status     String   @default("open") // open | partly | covered | assumed
+  note       String   @default("") // what settled it, in their words, or the assumed default
+  evidence   String[] @default([]) // msg:<id>, decision:<id> ...
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  useCase    UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+
+  @@unique([useCaseId, specialist, area])
 }
 
 // The "why did this change?" timeline of the Product Truth Graph: one row per real change to a node,
@@ -224,6 +250,8 @@ model Move {
   // Who or what last moved the card, and why (the Muse, a build, a person's answer). People never have to.
   movedBy    String   @default("")
   moveReason String   @default("")
+  // When the card was made: the Board lists newest first (Doug, Nov 21).
+  createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   useCase    UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
 }
@@ -339,6 +367,8 @@ model Message {
   about      String[] @default([])
   // The Socra turn that wrote it (AgentTurn id), so its skills and specialists can be shown beside it.
   turnId     String   @default("")
+  // The statement this message replies to (Reply on a message in the conversation; Doug, Nov 21).
+  replyTo    String   @default("")
   createdAt  DateTime @default(now())
   useCase    UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
 }
@@ -349,6 +379,8 @@ model Recording {
   useCaseId  String
   purpose    String   @default("describe")
   transcript String   @default("")
+  // The words as spoken, when the transcript was cleaned up from voice.
+  raw        String   @default("")
   status     String   @default("draft") // draft | submitted
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

@@ -36,3 +36,20 @@ test("one message carries every waiting item, its options and a link", () => {
   assert.equal(subjectFor(items), "2 things are waiting on you in the Studio");
   assert.match(subjectFor(items.slice(0, 1)), /^Acme Insurance · ClaimSnap: Should the clock pause/);
 });
+
+// Doug (Nov 21): Socra's EV question had no "?"; it is still a question, and the ask is the line leading into
+// the options, not the opening recap.
+test("A numbered question without a question mark is a question, asked by its lead-in line", () => {
+  const ev = `Welcome back. Where things stand: version 3 is in your preview.
+
+On your new EV card, the business analyst is looking at how EV claims differ. So the first thing to settle is how far ClaimSnap goes with EVs:
+1. Add EV items to the auto checklist and flag possible battery damage (suggested)
+2. Only flag EV claims for a person
+3. Keep EV claims out of the pilot for now
+
+A number is enough.`;
+  assert.ok(asksSomething(ev));
+  const q = questionOf(ev);
+  assert.match(q.question, /how far ClaimSnap goes with EVs:$/);
+  assert.equal(q.options.length, 3);
+});

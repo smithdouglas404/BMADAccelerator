@@ -43,7 +43,7 @@ export const effectiveLevel = (access: { scope: string; role: string }): Level =
 
 const id = z.string().trim().min(10).max(40);
 const confirm = z.boolean().optional().describe("Leave out first to see what would happen. Send true only after the person has said yes to that exact action.");
-const BOARD_COLUMNS = ["queued", "ready", "building", "review", "done"] as const;
+const BOARD_COLUMNS = ["ready", "queued", "building", "review", "done"] as const;
 const SPEC_STATUS = ["draft", "exploring", "evidence-backed", "owner-approved", "engineer-reviewed", "ready-prototype", "ready-pilot", "production-ready"] as const;
 const LINK_KINDS = ["depends_on", "split_from", "related"] as const;
 
@@ -120,10 +120,10 @@ export const TOOLS = {
 
   // ---- Change ----
   capture: tool({
-    title: "Capture a thought",
-    description: "Hold a thought in the use case's backlog in the person's own words. Socra curates it, has the right specialist look at it and asks what is missing; nothing becomes a requirement silently. Read the questions a minute later with whats_waiting (item_questions) and answer them with answer (item_id, question_id).",
+    title: "Add to the backlog",
+    description: "Add a requirement, idea or need to the use case's backlog in the person's own words. Use this whenever the person asks to add to or create a backlog, or describes something the product should do: call it once per separate need, never as one Board card. Socra has the right specialist look at it and asks what is missing; nothing becomes a requirement silently. The call waits for Socra's questions and returns them (questions, with item_id and question_id): put them to the person right away and send their reply with answer (item_id, question_id).",
     need: "write",
-    input: z.object({ use_case_id: id, text: z.string().trim().min(1).max(4000) }),
+    input: z.object({ use_case_id: id, text: z.string().trim().min(1).max(4000), wait_seconds: z.number().int().min(0).max(110).optional().describe("How long to wait for Socra's questions before answering (default 50 seconds; 0 answers at once).") }),
   }),
   add_evidence: tool({
     title: "Add evidence",
@@ -163,7 +163,7 @@ export const TOOLS = {
   }),
   answer: tool({
     title: "Answer Socra",
-    description: "Say something to Socra in the person's name: an answer, a new thought, or a number from Socra's numbered options. Address a specialist with `to`. A bare yes or a number approves what Socra proposed, so it needs confirm.",
+    description: "Say something to Socra in the person's name: an answer, a new thought, or a number from Socra's numbered options. Address a specialist with `to`. A bare yes or a number approves what Socra proposed, so it needs confirm. The call waits for Socra's reply and returns it, with any new questions: put them to the person right away.",
     need: "write",
     input: z.object({
       use_case_id: id,
@@ -171,6 +171,7 @@ export const TOOLS = {
       to: z.string().max(40).optional().describe("A specialist's key to address directly (ba, architect, engineer, ux, domain)."),
       item_id: z.string().max(60).optional().describe('When answering a question about a backlog item or card: its item_id from whats_waiting ("backlog:<id>" or "move:<id>"). The answer goes onto that item.'),
       question_id: z.string().max(40).optional().describe("The question_id being answered, so a number picks from that question's options."),
+      wait_seconds: z.number().int().min(0).max(110).optional().describe("How long to wait for Socra's questions before answering (default 50 seconds; 0 answers at once)."),
       confirm,
     }),
   }),
@@ -198,7 +199,7 @@ export const TOOLS = {
   board_card: tool({
     title: "Add, edit or move a Board card",
     description:
-      "Work the Board. create: a new card (title, optional details and column). edit: change a card's title, capability, decision, build prompt or owner. move: move it to another column (queued = Backlog, ready = Ready to shape, building = Being made real, review = Human review, done = Done) with a reason; moving to done needs confirm. attach: attach a small file (text, or base64) as evidence on the card.",
+      "Work the Board. Only when the person asks for a Board card by name: a new requirement or a backlog goes in with capture instead. create: a new card (title, optional details and column). edit: change a card's title, capability, decision, build prompt or owner. move: move it to another column (ready = Ready to shape, the first column; queued = Backlog; building = Being made real, review = Human review, done = Done) with a reason; moving to done needs confirm. Create and move wait for Socra's questions about the card and return them: put them to the person right away. attach: attach a small file (text, or base64) as evidence on the card.",
     need: "write",
     input: z.object({
       use_case_id: id,
@@ -213,6 +214,7 @@ export const TOOLS = {
       why: z.string().max(400).optional(),
       file_name: z.string().trim().min(1).max(120).optional(),
       file_text: z.string().max(600000).optional().describe("For attach: the file's text."),
+      wait_seconds: z.number().int().min(0).max(110).optional().describe("How long to wait for Socra's questions before answering (default 50 seconds; 0 answers at once)."),
       file_base64: z.string().max(800000).optional().describe("For attach: the file's bytes in base64 (up to about 600 KB)."),
       confirm,
     }),

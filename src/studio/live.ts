@@ -2,7 +2,8 @@
 // The Studio's live data: the server state for one product, polled, and adapters that turn it into the
 // shapes the design team's screens already use (data.ts and spec.ts types), so their components stay as
 // they are and show real products instead of the sample.
-import { ownerBacklogState } from '@/lib/studio/core'
+import type { TeamMemberCoverage } from '@/lib/studio/coverageCore'
+import { areaProgress, ownerBacklogState } from '@/lib/studio/core'
 import { needsTriage } from '@/lib/studio/journey'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BacklogItem, Capability, ConversationMessage, EvidenceItem, ExecutionItem, RecommendationItem } from './data'
@@ -16,9 +17,9 @@ export type LiveSpec = {
 }
 export type LiveDecision = { id: string; text: string; status: 'approved' | 'assumed' | 'open' | 'rejected'; capability: string; words: string; agent: string; options: unknown; answer: string; includeInBuild: boolean; builtInVersion: number; createdAt: string }
 export type LiveBacklog = { id: string; title: string; note: string; kind: BacklogItem['kind']; group: string; source: string; recKind: string; probe: string; state: string; hidden: string; includeInBuild: boolean; builtInVersion: number; createdAt: string; trackerUrl: string; annotationId?: string; triage?: string; deferUntil?: string | null }
-export type LiveMove = { id: string; title: string; capability: string; decision: string; status: string; owner: string; signal: string; hidden: string; components: string[]; routes: string[]; trackerUrl: string; movedBy?: string; moveReason?: string; prompt?: string }
+export type LiveMove = { id: string; title: string; capability: string; decision: string; status: string; owner: string; signal: string; hidden: string; components: string[]; routes: string[]; trackerUrl: string; movedBy?: string; moveReason?: string; prompt?: string; createdAt?: string }
 export type LiveCapability = { id: string; key: string; label: string; kicker: string; description: string; readiness: number; delta: string; signal: string; color: string; items: { id: string; text: string; state: string }[] }
-export type LiveMessage = { id: string; role: string; agent: string; content: string; accent: string; createdAt: string; author: string; authorRole: string; addressed: string; raw: string; ref: string }
+export type LiveMessage = { id: string; role: string; agent: string; content: string; accent: string; createdAt: string; author: string; authorRole: string; addressed: string; raw: string; ref: string; replyTo?: string }
 export type LiveMember = { id: string; name: string; role: string }
 export type LiveEvidence = { id: string; source: string; type: string; insight: string; confidence: string; trace: string; createdAt: string; documentId: string }
 export type LiveDocument = { id: string; fileName: string; mimeType: string; sizeBytes: number; kind: string; summary: string; description: string; origin: string; moveId: string; status: string; createdAt: string; exists?: boolean }
@@ -38,7 +39,7 @@ export type Live = {
   lastGeneratedAt: string | null; updatedAt: string; pending: number; agentsEnabled: boolean; connections: { linear: boolean; github: boolean; voice: boolean }
   preview: { hasApp: boolean; port: number | null; running: boolean; starting: boolean }
   packageFiles: string[]
-  capabilities: LiveCapability[]; decisions: LiveDecision[]; backlog: LiveBacklog[]; evidence: LiveEvidence[]; moves: LiveMove[]; routes: LiveRoute[]
+  capabilities: LiveCapability[]; decisions: LiveDecision[]; backlog: LiveBacklog[]; evidence: LiveEvidence[]; moves: LiveMove[]; routes: LiveRoute[]; coverage?: TeamMemberCoverage[]
   messages: LiveMessage[]; members: LiveMember[]; documents: LiveDocument[]; feedback: LiveFeedback[]; spec: LiveSpec[]; specRevisions: LiveRevision[]
 }
 
@@ -84,7 +85,13 @@ export function ago(iso: string | null | undefined): string {
 export const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('') || '·'
 
 export function toCapabilities(d: Live): Capability[] {
-  return d.capabilities.map((c) => ({ id: c.key, label: c.label, kicker: c.kicker, readiness: c.readiness, delta: c.delta || 'new', description: c.description, signal: c.signal, color: c.color }))
+  // Readiness is counted from the records (agreed must-haves out of all in scope), not Socra's guess (Doug, Nov 21).
+  return d.capabilities.map((c) => ({ id: c.key, label: c.label, kicker: c.kicker, readiness: areaProgress(c.items ?? []).pct, delta: c.delta || 'new', description: c.description, signal: c.signal, color: c.color }))
+}
+
+/** Each area's counts: must-haves agreed, inferred and waiting, and open questions only a person can answer. */
+export function areaCounts(d: Live) {
+  return Object.fromEntries(d.capabilities.map((c) => [c.key, areaProgress(c.items ?? [], d.decisions.filter((x) => x.status === 'open' && (x.capability === c.label || x.capability === c.key)).length)]))
 }
 
 export function colorOf(d: Live, accent: string): string | undefined {
@@ -94,13 +101,17 @@ export function colorOf(d: Live, accent: string): string | undefined {
 }
 
 /** A conversation message with what the team's type doesn't carry: who spoke, a specialist, an undo. */
-export type StudioMessage = ConversationMessage & { specialist?: string; author?: string; authorRole?: string; addressed?: string; raw?: string; ref?: string }
+export type StudioMessage = ConversationMessage & { specialist?: string; author?: string; authorRole?: string; addressed?: string; raw?: string; ref?: string; replyTo?: string }
 
 export function toMessages(d: Live, me?: { name?: string }): StudioMessage[] {
+  // Who "you" are: the name this browser was given; without one, the only named person in the conversation
+  // (their words reached the Studio with their name, for example through Muse). Two named people stay apart.
+  const named = [...new Set(d.messages.filter((m) => m.role === 'user' && m.author).map((m) => m.author))]
+  const self = me?.name || (named.length === 1 ? named[0] : '')
   return d.messages.map((m) => ({
     id: m.id,
     role: m.role === 'user' ? 'user' : m.role === 'signal' ? 'signal' : 'muse',
-    label: m.role === 'user' ? (m.author && m.author !== me?.name ? `${m.author} · ${m.authorRole || 'Product owner'}` : 'You') : m.agent || (m.role === 'signal' ? 'Signal' : 'Socra · Product physician'),
+    label: m.role === 'user' ? (m.author && m.author !== self ? `${m.author} · ${m.authorRole || 'Product owner'}` : 'You') : m.agent || (m.role === 'signal' ? 'Signal' : 'Socra · Product physician'),
     text: m.content,
     time: ago(m.createdAt),
     accent: colorOf(d, m.accent),
@@ -110,6 +121,7 @@ export function toMessages(d: Live, me?: { name?: string }): StudioMessage[] {
     addressed: m.role === 'user' ? m.addressed || undefined : undefined,
     raw: m.raw || undefined,
     ref: m.ref || undefined,
+    replyTo: m.replyTo || undefined,
   }))
 }
 

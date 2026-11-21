@@ -1,5 +1,6 @@
 {
   "name": "working-backwards-studio",
+  "repository": "https://github.com/smithdouglas404/BMADAccelerator",
   "version": "0.1.0",
   "private": true,
   "scripts": {

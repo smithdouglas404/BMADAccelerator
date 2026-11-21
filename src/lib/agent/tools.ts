@@ -5,16 +5,19 @@ import { tool, createSdkMcpServer } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 
 /** The backlog items or Board cards a message is about, so it shows in each item's detail view and Traceability. */
-const ABOUT = z.array(z.string()).max(10).default([]).describe('The backlog items or Board cards this is about: "backlog:<id>" or "move:<id>" (the prompt names them as "Item: ..."). Always set it when you ask or answer about an item.');
+const ABOUT = z.array(z.string()).max(10).default([]).describe('The backlog items or Board cards this is about: "backlog:<id>" or "move:<id>", or "prfaq" for the PRFAQ (the prompt names them as "Item: ..."). Always set it when you ask or answer about an item.');
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { workspacePath } from "@/lib/workspace";
 import { formatHits, letta, rememberAnswer, rememberDecision, rememberLesson, searchMemory } from "@/lib/memory";
 import { ROLES } from "@/lib/memory/lettaCore";
 import { IMAGE_LIMIT, imagesConfigured, makeImage } from "@/lib/images";
-import { SPEC_BASIS, SPEC_DEFS, SPEC_STATUSES, TRACE_TYPES, cleanTrace } from "@/lib/studio/spec";
+import { SPEC_BASIS, SPEC_STATUSES, TRACE_TYPES, cleanTrace } from "@/lib/studio/spec";
+import { SPEC_DEFS } from "@/lib/studio/specDefs";
 import { ensureSpec } from "@/lib/studio/state";
 import { currentCauses, currentItems, currentTurnId, nodesForIds, recordChange } from "@/lib/studio/truthlog";
+import { teamCoverage } from "@/lib/studio/coverage";
+import { COVERAGE_STATUSES } from "@/lib/studio/coverageCore";
 import { VALIDATION_SIGNALS, colorFor, numberItems, overallReadiness, slugify, specialistByKey, validationScore, workingName, type Validation } from "@/lib/studio/core";
 
 const ROLE_KEYS = ROLES.map((r) => r.key) as [string, ...string[]];
@@ -41,10 +44,18 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
   // the message is about that item, so questions always reach the item's detail view.
   const aboutNodes = async (about: string[]) => {
     const named = await nodesForIds(useCaseId, about.map((a) => a.replace(/^(backlog|move):/, "")));
-    const items = named.filter((n) => /^(backlog|move):/.test(n));
+    const items = [...named.filter((n) => /^(backlog|move):/.test(n)), ...(about.includes("prfaq") ? ["prfaq"] : [])];
     if (items.length) return [...new Set(items)];
     const turn = currentItems(useCaseId);
     return turn.length && turn.filter((n) => n.startsWith("backlog:")).length <= 1 && turn.filter((n) => n.startsWith("move:")).length <= 1 ? turn : [];
+  };
+  // A turn that answers a reply (Reply on a statement) threads its messages under that reply, so the
+  // acknowledgement and follow-up show with it (Doug, Nov 21). Only when the turn answers exactly one reply.
+  const replyThread = async () => {
+    const ids = currentCauses(useCaseId).filter((c) => c.startsWith("msg:")).map((c) => c.slice(4));
+    if (!ids.length) return "";
+    const replies = await prisma.message.findMany({ where: { useCaseId, id: { in: ids }, role: "user", NOT: { replyTo: "" } }, select: { id: true } });
+    return replies.length === 1 ? replies[0].id : "";
   };
   const capKey = async (c: string) => {
     if (!c) return "";
@@ -103,6 +114,8 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
             people: s.members.map((p) => `${p.name} (${p.role})`),
             spec: s.spec.map((x) => ({ key: x.key, ref: x.ref, tab: x.tab, title: x.title, basis: x.basis, status: x.status, completeness: x.completeness, review: x.review, reviewNote: x.reviewNote, content: x.content.slice(0, 600) })),
             build: { versions: s.generateCount, packageIterations: s.packageCount, building: s.generateBusy },
+            // Each specialist's question areas (from its skill) and what the people have answered so far.
+            coverage: (await teamCoverage(useCaseId)).map((c) => ({ specialist: c.key, skill: c.skill, answered: `${c.done} of ${c.total}`, areas: c.areas.map((a) => ({ area: a.key, label: a.label, status: a.status, enough: a.enough, note: a.note })) })),
           };
           return ok(JSON.stringify(out, null, 1));
         },
@@ -113,7 +126,7 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
         { text: z.string().min(1), capability: z.string().default("").describe("The capability this is about (key or label), if any"), about: ABOUT },
         async ({ text, capability, about }) => {
           tally.spoke++;
-          await prisma.message.create({ data: { useCaseId, role: "muse", agent: speaker === "Socra" ? "Socra · Product physician" : speaker, content: text, accent: await capKey(capability), about: await aboutNodes(about), turnId: currentTurnId(useCaseId) } });
+          await prisma.message.create({ data: { useCaseId, role: "muse", agent: speaker === "Socra" ? "Socra · Product physician" : speaker, content: text, accent: await capKey(capability), about: await aboutNodes(about), turnId: currentTurnId(useCaseId), replyTo: await replyThread() } });
           return ok();
         },
       ),
@@ -128,7 +141,7 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
       ),
       tool(
         "share_finding",
-        "A specialist speaks in the conversation, visibly, in their own name: what they found or recommend, in two to four plain sentences, and at most one question (with a suggested answer) for the people on the product. Use it when a specialist finishes (Socra may share for a research specialist), or to answer someone who addressed a specialist directly. Numbered options are fine when there are real choices. specialist: business-analyst, architect, engineer, ux or domain; for domain give the field's name in 'title' (for example \"Claims expert\").",
+        "A specialist speaks in the conversation, visibly, in their own name: what they found or recommend, in two to four plain sentences, then one or two questions from its own skill's open areas, each with numbered options and one marked \"(suggested)\". Use it when a specialist finishes (Socra may share for a research specialist), or to answer someone who replied to a specialist. specialist: business-analyst, architect, engineer, ux or domain; for domain give the field's name in 'title' (for example \"Claims expert\").",
         {
           specialist: z.enum(["business-analyst", "architect", "engineer", "ux", "domain"]),
           title: z.string().max(60).default(""),
@@ -139,8 +152,32 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
         async ({ specialist, title, text, capability, about }) => {
           const s = specialistByKey(specialist)!;
           const name = specialist === "domain" && title.trim() ? title.trim() : s.name;
-          await prisma.message.create({ data: { useCaseId, role: "agent", agent: `${name} · Specialist`, addressed: specialist, content: text, accent: await capKey(capability), about: await aboutNodes(about), turnId: currentTurnId(useCaseId) } });
+          await prisma.message.create({ data: { useCaseId, role: "agent", agent: `${name} · Specialist`, addressed: specialist, content: text, accent: await capKey(capability), about: await aboutNodes(about), turnId: currentTurnId(useCaseId), replyTo: await replyThread() } });
           return ok();
+        },
+      ),
+      tool(
+        "record_coverage",
+        `A specialist records how far one of its question areas is answered, from what the people on the product actually said (never from a guess). Areas are the ones under "Question areas" in the specialist's own skill; the domain expert records its own field's areas here first (status open, with what "enough" means and the source in the note). status: ${COVERAGE_STATUSES.join(", ")} (assumed = they said enough or don't know, and the note holds the suggested default). note: what settled it, quoting their words. When every area of a specialist is covered or assumed, it stops asking.`,
+        {
+          specialist: z.enum(["business-analyst", "architect", "engineer", "ux", "domain"]),
+          area: z.string().min(1).max(40).regex(/^[a-z0-9-]+$/),
+          label: z.string().max(80).default(""),
+          status: z.enum(COVERAGE_STATUSES as [string, ...string[]]),
+          note: z.string().max(1200).default(""),
+        },
+        async ({ specialist, area, label, status, note }) => {
+          const before = await prisma.coverage.findUnique({ where: { useCaseId_specialist_area: { useCaseId, specialist, area } } });
+          const evidence = [...new Set([...(before?.evidence ?? []), ...currentCauses(useCaseId).filter((c) => /^(msg|decision|backlog|move):/.test(c))])].slice(-20);
+          await prisma.coverage.upsert({
+            where: { useCaseId_specialist_area: { useCaseId, specialist, area } },
+            update: { status, note: note || before?.note || "", ...(label ? { label } : {}), evidence },
+            create: { useCaseId, specialist, area, label, status, note, evidence },
+          });
+          const s = specialistByKey(specialist)!;
+          if (before?.status !== status) await recordChange(useCaseId, { node: `coverage:${specialist}:${area}`, kind: before ? "changed" : "added", summary: `${s.name}: ${label || before?.label || area} is ${status}${note ? ` (${note.slice(0, 200)})` : ""}`, before: before?.status ?? "", after: status, by: s.name, fromTurn: true });
+          const left = (await teamCoverage(useCaseId)).find((c) => c.key === specialist);
+          return ok(left ? `${left.done} of ${left.total} of the ${s.name.toLowerCase()}'s areas answered${left.complete ? ": all answered, stop asking unless something changes them." : "."}` : "ok");
         },
       ),
       tool(
@@ -154,13 +191,14 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
           stageLabel: z.string().default(""),
           customerQuote: z.string().default(""),
           validatedUseCase: z.string().default(""),
+          owner_asked: z.boolean().default(false).describe("True only when a person asked for this name in their own words (for example a reply 'call it X'): then it replaces the name they chose before."),
         },
-        async (a) => {
+        async ({ owner_asked, ...a }) => {
           const data = Object.fromEntries(Object.entries(a).filter(([, v]) => v.trim())) as Prisma.UseCaseUpdateInput;
           // The name is yours to give only while it is a working name from the first words. A name the owner typed
           // (or one already chosen) is theirs: it changes only when they rename it.
           let kept = "";
-          if (data.name) {
+          if (data.name && !owner_asked) {
             const uc = await prisma.useCase.findUnique({ where: { id: useCaseId }, select: { name: true, description: true } });
             if (uc && uc.name !== workingName(uc.description)) { delete data.name; kept = ` The product's name stays "${uc.name}": the owner chose it.`; }
           }
@@ -170,10 +208,12 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
       ),
       tool(
         "update_prfaq",
-        "Replace the living PRFAQ (Markdown). Shape: '# <headline>' then a one-line kicker '_FOR <who>_', a summary paragraph, '## Why customers care' (problem, solution, a customer quote as a '> ' line), '## How to get started', '## Customer FAQs' (Q/A), '## Internal & engineering FAQs' (data, auth, integrations, risks). Keep the owner's own words where they said them. It is the product's dream of the future, written as if launched.",
+        "Replace the living PRFAQ (Markdown), in the Amazon format the studio-prfaq skill sets out (its sections in order, '# <headline>', the subheading in italics, '## <Section>', quotes as '> ' lines, FAQs as **Q:**/**A:** lines). Keep the owner's own words where they said them. It is the product's dream of the future, written as if launched. If it carries source markers ([^s3], [^m:<id>]) or '> **Missing:**' lines, keep every marker on its line; a Missing line goes only when a person's words answer it, and the new line ends with [^m:<that message id>].",
         { markdown: z.string().min(40) },
         async ({ markdown }) => {
+          const before = (await uc()).prfaq;
           await prisma.useCase.update({ where: { id: useCaseId }, data: { prfaq: markdown, prfaqUpdatedAt: new Date() } });
+          await recordChange(useCaseId, { node: "prfaq", kind: "changed", summary: `${speaker} updated the PRFAQ`, before, after: markdown, by: speaker, fromTurn: true });
           return ok("PRFAQ updated.");
         },
       ),
@@ -288,7 +328,7 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
       ),
       tool(
         "record_decision",
-        "Record a decision in the human-in-the-loop register. status 'approved' when the owner agreed (a yes is an approval: never ask 'do you want to approve this?'), 'assumed' when you assumed it for them (they can correct it), 'open' when only the owner can decide it (options: two to four choices, the first being your suggestion). Keep their original words in 'words'. An approved decision goes into the next build. When it changes an earlier decision or assumption (a new answer, a correction), name the earlier ones' ids in 'replaces': they are closed as replaced, so nothing left contradicts it.",
+        "Record a decision in the human-in-the-loop register. status 'approved' when the owner agreed (a yes is an approval: never ask 'do you want to approve this?'), 'assumed' when you assumed it for them (they can correct it), 'open' when only the owner can decide it (options: two to four choices, the first being your suggestion; write its text as the question they answer, ending in '?', and don't also ask the same thing in words). Keep their original words in 'words'. An approved decision goes into the next build. When it changes an earlier decision or assumption (a new answer, a correction), name the earlier ones' ids in 'replaces': they are closed as replaced, so nothing left contradicts it.",
         {
           text: z.string().min(3),
           status: z.enum(["approved", "assumed", "open"]),
@@ -315,7 +355,7 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
       ),
       tool(
         "move_card",
-        "Move a card on the Board, so nobody has to: to 'ready' once its acceptance criteria are agreed, back to 'queued' when a mark on the prototype or a person's no reopens it, to 'done' when a person said yes to it on the live preview. Builds move cards into and out of 'building' themselves. 'why' is one plain line the owner sees on the card (\"you approved it on version 4\").",
+        "Move a card on the Board, so nobody has to. 'ready' (Ready to shape) is the first column, where new cards are shaped: to 'queued' (Backlog) when it is shaped but held for later, to 'building' once its acceptance criteria are agreed and it should be built, back to 'ready' when a mark on the prototype or a person's no reopens it, to 'done' when a person said yes to it on the live preview. Builds move cards into and out of 'building' themselves. 'why' is one plain line the owner sees on the card (\"you approved it on version 4\").",
         { id: z.string(), status: z.enum(["queued", "ready", "building", "review", "done"]), why: z.string().min(5).max(300), causes: z.array(z.string()).default([]) },
         async ({ id, status, why, causes }) => {
           const { moveCard } = await import("@/lib/studio/board");
@@ -513,13 +553,13 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
       ),
       tool(
         "upsert_move",
-        "Create or update a build move on the Board. Every move traces to a capability and a decision. status: queued (Backlog), ready (Ready to shape), building (Being made real), review (Human review), done. owner: the agent or 'Product owner'. signal: a short tag (OPEN QUESTION, TRACEABLE, THIN SLICE, HUMAN REVIEW). hidden: capability | epic | story | task | workflow.",
+        "Create or update a build move on the Board. Every move traces to a capability and a decision. New cards start in Ready to shape (the first column). status: ready (Ready to shape), queued (Backlog: held for later), building (Being made real), review (Human review), done. owner: the agent or 'Product owner'. signal: a short tag (OPEN QUESTION, TRACEABLE, THIN SLICE, HUMAN REVIEW). hidden: capability | epic | story | task | workflow.",
         {
           id: z.string().default(""),
           title: z.string().min(3),
           capability: z.string().default(""),
           decision: z.string().default(""),
-          status: z.enum(["queued", "ready", "building", "review", "done"]).default("queued"),
+          status: z.enum(["queued", "ready", "building", "review", "done"]).default("ready"),
           owner: z.string().default("Product Engineer"),
           signal: z.string().default(""),
           hidden: z.string().default("story"),

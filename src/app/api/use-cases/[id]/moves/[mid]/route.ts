@@ -74,7 +74,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
     const stage: Stage = back ? "back" : (b.status as Stage);
     const need: Record<string, string> = {
       back: "It went back: ask what isn't right yet, with your suggestion, and carry the answer into the spec.",
-      queued: "It went back to Backlog: ask what isn't right yet, with your suggestion.",
+      queued: "It went to Backlog, held for later: say in one line what it is waiting for, and ask only what it still lacks before it can be made real.",
       ready: "It is now Ready to shape: get it to enough detail to build (who uses it and when, what done looks like, the rules and edge cases) and write the answers into the card's acceptance criteria.",
       building: "It is now Being made real: check its acceptance criteria are enough to build from. If they are, tell them in one line to press Generate the prototype; if not, ask for what is missing before anyone builds.",
       review: "It is now in Human review: ask them to try it in Try & mark up, and ask the one or two things to check that its acceptance criteria name.",

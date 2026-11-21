@@ -8,7 +8,7 @@ import { ArrowRight, Check, Compass, Layers3, PenTool, Scale, ShieldCheck, Undo2
 import { ROLES, SPECIALISTS, numberedOptions, personaOf, type Persona } from '@/lib/studio/core'
 import type { ViewId } from './data'
 import { api, initials, type Live, type StudioMessage } from './live'
-import { journey, needsTriage, hasDetail } from '@/lib/studio/journey'
+import { journey, needsTriage, hasDetail, questionTally } from '@/lib/studio/journey'
 
 type Act = (fn: () => Promise<unknown>, ok?: string) => Promise<void>
 
@@ -27,10 +27,10 @@ export const NAV_GROUPS: { title: string; about: string; items: NavItem[] }[] = 
     items: [
       { id: 'product', label: '1 · Product story (PRFAQ)', hint: 'Start here: the promise', tip: 'Start here. Write the story first: the press release and FAQ that say what the customer gets and why it matters, before anything is built.' },
       { id: 'conversation', label: '2 · Talk to Socra', hint: 'Talk it through', tip: 'Type or speak what you need in your own words. Socra and its specialists ask questions, and every answer becomes requirements in the PRD.' },
-      { id: 'spec', label: '3 · Requirements doc (PRD)', hint: 'What it must do', tip: 'This helps you with the product requirements document (PRD): who it is for, what it must do, acceptance criteria. Keep, revise or remove what Socra inferred.' },
-      { id: 'trd', label: '4 · Technical design (TRD)', hint: 'How it will be built', tip: 'This helps with the technical requirements document (TRD): architecture, data, integrations, security and scale, written by the solution architect.' },
+      { id: 'spec', label: '3 · Requirements doc (PRD)', hint: 'What it must do', tip: 'The product requirements document (PRD): who it is for and how many, a day in their life, what it must do and how you will know it worked. The business analyst walks you through it and checks each answer; add documents to any section.' },
+      { id: 'trd', label: '4 · Technical design (TRD)', hint: 'How it will be built', tip: 'The technical requirements document (TRD), its own screen: the product engineer and solution architect ask how the work really happens (who decides, what runs on its own, which systems it talks to and when) and infer the architecture. Add technical documents to any section.' },
       { id: 'pilot', label: '5 · Board (Kanban)', hint: 'Every requirement, and what’s next', tip: 'The Kanban board: everything you or Socra captured. New items are marked red until you deal with them. Pick one to work on it and it moves to Ready to shape. Moving a card asks Socra for the next step.' },
-      { id: 'brief', label: '6 · Generate the prototype', hint: 'Build it with Claude Code', tip: 'Press Generate to have Claude Code build a working prototype from your PRD and TRD. You can also download the package as a ZIP.' },
+      { id: 'brief', label: '6 · Build the prototype', hint: 'Build it with Claude Code', tip: 'Press Build and Claude Code builds a working prototype. Your PRFAQ, PRD, TRD, evidence and decisions go to it automatically; nothing to package by hand. You can also download it as a ZIP.' },
       { id: 'review', label: '7 · Try & mark up', hint: 'Click through it, mark changes', tip: 'Use the prototype and mark anything that should change. Each mark becomes a new backlog item for you to accept.' },
       { id: 'readiness', label: '8 · Ready to pilot?', hint: 'What still holds it back', tip: 'How ready each capability is for a thin-slice pilot with real people, and what is holding it back.' },
       { id: 'connections', label: '9 · Ship: repository & Linear', hint: 'Where the code and work go', tip: 'Connect the Git repository the builds push to, and optionally sync the backlog to Linear.' },
@@ -83,6 +83,9 @@ export function journeyOf(live: Live) {
     builds: live.generateCount,
     markups: live.feedback.length,
     validationScore: live.validationScore,
+    ...(() => { const q = questionTally(live.messages); return { questionsAsked: q.asked, questionsAnswered: q.answered } })(),
+    resolvedDecisions: live.decisions.filter((d) => d.status === 'approved' || d.status === 'rejected').length,
+    triagedItems: live.backlog.filter((b) => !needsTriage(b) && !!b.triage).length,
   })
 }
 
@@ -166,7 +169,7 @@ export function NextMove({ live, changeView }: { live: Live; changeView: (v: Stu
         <button type="button" className="studio-journey-steps-toggle" onClick={() => setOpen(!open)} aria-expanded={open}>{open ? 'Hide steps' : 'All steps'}</button>
         <button type="button" onClick={() => changeView(j.next!.view)}>{j.next.cta} <ArrowRight size={13} /></button>
       </div>
-      {open && <ol className="studio-journey-steps">{j.steps.map((s) => <li key={s.key} className={s.done ? 'is-done' : s === j.next ? 'is-next' : ''}><button type="button" onClick={() => changeView(s.view)}>{s.done ? <Check size={12} /> : <span className="studio-journey-dot" />}<span>{s.label}</span><small>{s.done ? 'done' : `+${s.weight}%`}</small></button></li>)}</ol>}
+      {open && <ol className="studio-journey-steps">{j.steps.map((s) => <li key={s.key} className={s.done ? 'is-done' : s === j.next ? 'is-next' : ''}><button type="button" onClick={() => changeView(s.view)}>{s.done ? <Check size={12} /> : <span className="studio-journey-dot" />}<span>{s.label}</span><small>{s.done ? 'done' : s.progress ? `${s.progress.done} of ${s.progress.total} ${s.progress.noun} · ${Math.round((100 * s.progress.done) / s.progress.total)}%` : `+${s.weight}%`}</small></button></li>)}</ol>}
     </div>
   )
 }
@@ -176,31 +179,46 @@ const SPECIALIST_ROUTE: Record<string, string> = { 'business-analyst': 'Business
 export const specialistIcon = (key?: string) => SPECIALIST_ICON[key ?? ''] ?? <UserRound size={13} />
 
 /** Socra and its specialists, what each is doing, and who you are talking to. */
-export function TeamPanel({ live, to, setTo }: { live: Live; to: string; setTo: (k: string) => void }) {
+/**
+ * Socra's team, for information only (Doug, Nov 21: "here's what those agents do. And that's all I would
+ * actually show"). Nobody picks who a message goes to: every specialist listens to every conversation and
+ * joins in when the words touch its open question areas. Hover (or focus) shows what it does, its skill and
+ * what it still needs answered, all from the records.
+ */
+export function TeamPanel({ live }: { live: Live }) {
   const domainName = useMemo(() => [...live.messages].reverse().find((m) => m.role === 'agent' && m.addressed === 'domain')?.agent.replace(/ · Specialist$/, ''), [live.messages])
   const state = (key: string) => live.routes.find((r) => r.agent === SPECIALIST_ROUTE[key])
   return (
     <div className="aside-block studio-team">
       <div className="aside-block-header"><span className="eyebrow">Socra’s team</span><Users size={15} /></div>
-      <div className="lens-list">
-        <button type="button" className={to === '' ? 'is-active' : ''} onClick={() => setTo('')}><span className="message-avatar muse"><Waves size={12} /></span><span><strong>Socra</strong><small>leads the conversation</small></span>{to === '' ? <Check size={13} /> : <ArrowRight size={13} />}</button>
+      <p className="studio-team-help">Everyone listens to the whole conversation. Each joins in with its own questions when what you say touches its part. Hover to see what each one does.</p>
+      <ul className="studio-team-list">
+        <li className="studio-team-member" tabIndex={0}><span className="message-avatar muse"><Waves size={12} /></span><span><strong>Socra</strong><small>leads the conversation</small></span>
+          <div className="studio-team-tip" role="tooltip"><strong>Socra</strong><p>Leads the conversation, keeps the product truth and brings in the team when what you say touches their part.</p></div>
+        </li>
         {SPECIALISTS.map((s) => {
           const r = state(s.key)
-          return <button type="button" key={s.key} className={to === s.key ? 'is-active' : ''} onClick={() => setTo(s.key)} title={`Ask the ${s.name.toLowerCase()}: ${s.focus}`}><span className="message-avatar signal">{SPECIALIST_ICON[s.key]}</span><span><strong>{s.key === 'domain' && domainName ? domainName : s.name}</strong><small>{r?.state === 'active' ? r.detail || 'working now' : r?.state === 'complete' ? 'shared findings' : s.focus}</small></span>{to === s.key ? <Check size={13} /> : <ArrowRight size={13} />}</button>
+          const c = live.coverage?.find((x) => x.key === s.key)
+          const name = s.key === 'domain' && domainName ? domainName : s.name
+          const status = r?.state === 'active' ? r.detail || 'working now' : c && c.total ? (c.complete ? 'all its questions answered' : `${c.done} of ${c.total} areas answered`) : s.focus
+          const open = c ? c.areas.filter((a) => a.status !== 'covered' && a.status !== 'assumed') : []
+          return (
+            <li key={s.key} className="studio-team-member" tabIndex={0}>
+              <span className="message-avatar signal">{SPECIALIST_ICON[s.key]}</span><span><strong>{name}</strong><small>{status}</small></span>
+              <div className="studio-team-tip" role="tooltip">
+                <strong>{name}</strong>
+                <p>Asks about {s.focus}, for any kind of product{s.key === 'domain' ? ', with the questions a professional in this field would ask' : ''}.</p>
+                <p className="studio-team-skill">Skill: {s.skill}</p>
+                {c && c.total > 0
+                  ? <><p>{c.done} of {c.total} areas answered{c.complete ? '. It asks again only if something changes them.' : '.'}</p>{open.length > 0 && <p className="studio-team-open">Still open: {open.map((a) => a.status === 'partly' ? `${a.label} (partly)` : a.label).join(', ')}</p>}</>
+                  : <p>{s.key === 'domain' ? 'Works out this field’s areas the first time it joins in.' : 'Nothing answered yet.'}</p>}
+              </div>
+            </li>
+          )
         })}
-      </div>
+      </ul>
     </div>
   )
-}
-
-export const talkingTo = (key: string, live: Live) => {
-  if (!key) return 'Socra'
-  const s = SPECIALISTS.find((x) => x.key === key)
-  if (key === 'domain') {
-    const n = [...live.messages].reverse().find((m) => m.role === 'agent' && m.addressed === 'domain')?.agent.replace(/ · Specialist$/, '')
-    if (n) return `the ${n.toLowerCase()}`
-  }
-  return `the ${s?.name.toLowerCase() ?? 'Socra'}`
 }
 
 /** The numbered choices in the latest Socra or specialist message, as chips that answer with their number. */
@@ -217,7 +235,7 @@ export function optionsFrom(messages: StudioMessage[]) {
 
 /** Open checkpoints: what only the people on the product can decide, with Approve, Reject and a comment. */
 export function Checkpoints({ live, me, act }: { live: Live; me: Me; act: Act }) {
-  const open = live.decisions.filter((d) => d.status === 'open')
+  const open = live.decisions.filter((d) => d.status === 'open').reverse() // newest first (Doug, Nov 21)
   const [notes, setNotes] = useState<Record<string, string>>({})
   if (!open.length) return null
   const by = me.name ? `${me.name} (${me.role})` : `The ${me.role.toLowerCase()}`

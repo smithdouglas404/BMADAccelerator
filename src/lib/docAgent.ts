@@ -168,3 +168,33 @@ export async function cleanSpeech(raw: string): Promise<string> {
   }
   return floor;
 }
+
+/**
+ * One structured answer from the low-cost model (plan first, then the key), or null when Claude isn't signed
+ * in or every way failed. Used by small single-shot jobs such as the PRFAQ writer.
+ */
+export async function lowCostAnswer<T>(prompt: string, schema: z.ZodType<T>, maxTokens = 12000): Promise<T | null> {
+  for (const auth of authOrder()) {
+    try {
+      if (auth === "plan") {
+        const q = query({
+          prompt,
+          options: { model: docModel(), tools: [], maxTurns: 3, effort: "low", persistSession: false, settingSources: [], outputFormat: { type: "json_schema", schema: z.toJSONSchema(schema, { target: "draft-7" }) as Record<string, unknown> }, env: authEnv(auth) },
+        });
+        for await (const m of q as AsyncIterable<SDKMessage>) {
+          if (m.type === "result") {
+            if (m.subtype !== "success") throw new Error(`low-cost answer stopped: ${m.subtype}`);
+            const r = schema.safeParse(m.structured_output);
+            if (r.success) return r.data;
+          }
+        }
+      } else {
+        const response = await new Anthropic().messages.parse({ model: docModel(), max_tokens: maxTokens, output_config: { effort: "low", format: zodOutputFormat(schema) }, messages: [{ role: "user", content: prompt }] });
+        if (response.stop_reason !== "refusal" && response.parsed_output) return response.parsed_output as T;
+      }
+    } catch (e) {
+      console.error(`low-cost answer (${auth})`, e);
+    }
+  }
+  return null;
+}
