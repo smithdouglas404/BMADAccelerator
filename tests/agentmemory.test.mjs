@@ -57,3 +57,35 @@ test("a product agent's use is counted from the service's run steps", () => {
   assert.equal(u.recordsRead, 3);
   assert.equal(u.writes, 1);
 });
+
+import { appendPlaybookLine, customerSlug, customerTag, keepPassages, playbookLabel, gateMessage } from "../src/lib/memory/lettaCore.ts";
+
+test("a customer's playbook keeps newest first, drops repeats and stays inside its limit", () => {
+  let v = "none yet";
+  v = appendPlaybookLine(v, "ClaimSnap: photo required");
+  v = appendPlaybookLine(v, "ClaimSnap: supervisors approve payouts");
+  v = appendPlaybookLine(v, "ClaimSnap: photo required");
+  assert.deepEqual(v.split("\n"), ["ClaimSnap: photo required", "ClaimSnap: supervisors approve payouts"]);
+  const big = appendPlaybookLine("a ".repeat(10), "x".repeat(300), 200);
+  assert.ok(big.length <= 200);
+  assert.equal(appendPlaybookLine("keep", "   "), "keep");
+});
+
+test("customers never share playbooks or archive notes", () => {
+  assert.equal(customerSlug("Acme Insurance"), "acme-insurance");
+  assert.equal(customerSlug(""), "workspace");
+  assert.notEqual(playbookLabel("Acme"), playbookLabel("Globex"));
+  const notes = [
+    { text: "acme rule", tags: [customerTag("Acme")] },
+    { text: "globex rule", tags: [customerTag("Globex")] },
+    { text: "untagged", tags: [] },
+    { text: "no tags at all" },
+  ];
+  assert.deepEqual(keepPassages(notes, "Acme").map((n) => n.text), ["acme rule"]);
+  assert.deepEqual(keepPassages(notes, "Nobody"), []);
+});
+
+test("a gate message names who decided so the role can note how they decide", () => {
+  assert.match(gateMessage("ClaimSnap", "Photo required", "x", "yes", "Dana"), /Decided by: Dana/);
+  assert.doesNotMatch(gateMessage("ClaimSnap", "g", "x", "yes"), /Decided by/);
+});

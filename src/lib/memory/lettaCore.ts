@@ -44,6 +44,7 @@ const COMMON_RULES = [
   "Facts from the Mem0 archive arrive inside <retrieved_context>. Search it with search_memory (a focused query; role and kind narrow it) before answering about earlier use cases, decisions or answers. If you need facts you were not given and the search finds nothing, end your reply with one line per need: NEED_CONTEXT: <search query>. Never invent a requirement or a past decision; quote what you rely on and name the use case it came from.",
   "One client's details are private to that use case. Lessons you save must be general (\"retail pilots: ask about payment provider and currency early\"), never one client's prices, names or plans.",
   "Keep your status block current with your memory tools: CURRENT_USE_CASE, CURRENT_TASK, OPEN_QUESTIONS.",
+  "Your human block holds what you learn about the people you work with (their role, how they like to decide, what they care about). When a message names a person and shows how they decide, add one short line with core_memory_append. Your archive holds longer notes the app saves for you: search it with archival_memory_search before you answer, and keep a detailed playbook there with archival_memory_insert.",
   "The top_lessons block is written by the app from your saved lessons. Do not edit it; save lessons with save_lesson.",
   "A message starting [GATE PASSED] or [APP GENERATED] reports progress in a use case. Decide whether there is a lesson that would help a future, similar use case. If there is, save it with save_lesson (one lesson per call, with a confidence from 0 to 1). Then reply in two or three sentences. Do not call ask_role for these.",
   "When you need something another role knows, ask it with ask_role (role keys: muse, validator, ux, engineer, analyst, architect, domain; pass your own key as from_role). A message starting [QUESTION from the ...] is another role or the app asking you: answer it directly from your memory and never call ask_role while answering.",
@@ -160,14 +161,15 @@ export function upsertPortfolio(rows: PortfolioRow[], row: PortfolioRow): Portfo
   return [r, ...rows.filter((x) => x.useCaseId !== row.useCaseId)].slice(0, 40);
 }
 
-export function gateMessage(useCaseTitle: string, gate: string, summary: string, clientSaid: string): string {
+export function gateMessage(useCaseTitle: string, gate: string, summary: string, clientSaid: string, by = ""): string {
   return [
     `[GATE PASSED] Use case "${useCaseTitle}"`,
     `Gate: ${gate}`,
     `What was approved: ${summary || "(no summary)"}`,
     `The client said: ${clientSaid || "approved"}`,
+    ...(by ? [`Decided by: ${by}`] : []),
     "",
-    "Update your status block. Save any lesson a future, similar use case should learn with save_lesson, then reply briefly.",
+    "Update your status block. If this shows how the person decides, add one line to your human block. Save any lesson a future, similar use case should learn with save_lesson, then reply briefly.",
   ].join("\n");
 }
 
@@ -436,4 +438,41 @@ export const ASK_TOOL_SOURCE = `def ask_role(role: str, question: str, from_role
 
 export function toolSources(): string[] {
   return [SEARCH_TOOL_SOURCE, LESSON_TOOL_SOURCE, ASK_TOOL_SOURCE];
+}
+
+
+/**
+ * Letta features beyond the persona (Doug, Nov 21: use the maximum): archival notes an agent keeps in its own
+ * archive, one standalone memory block per customer that holds that customer's decisions (a playbook the Studio
+ * reads each turn, never attached to the cross-customer role agents), and a "human" block per role.
+ */
+export const HUMAN_BLOCK_LABEL = "human";
+export const PLAYBOOK_LIMIT = 5000;
+
+export const customerSlug = (customer?: string) => (customer ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "workspace";
+export const playbookLabel = (customer?: string) => `playbook-${customerSlug(customer)}`;
+export const customerTag = (customer?: string) => `customer:${customerSlug(customer)}`;
+
+/** Adds one line to a playbook, newest first, dropping the oldest lines past the limit and exact repeats. */
+export function appendPlaybookLine(value: string, line: string, limit = PLAYBOOK_LIMIT): string {
+  const clean = line.replace(/\s+/g, " ").trim().slice(0, 400);
+  if (!clean) return value;
+  const old = value.split("\n").map((l) => l.trim()).filter((l) => l && l !== "none yet");
+  const lines = [clean, ...old.filter((l) => l !== clean)];
+  const out: string[] = [];
+  let n = 0;
+  for (const l of lines) {
+    if (n + l.length + 1 > limit) break;
+    out.push(l);
+    n += l.length + 1;
+  }
+  return out.join("\n");
+}
+
+export type ArchivePassage = { id?: string; text: string; tags?: string[] | null; created_at?: string | null };
+
+/** Only this customer's archive notes: a passage with no matching customer tag is never offered to another customer. */
+export function keepPassages(passages: ArchivePassage[], customer?: string, limit = 3): ArchivePassage[] {
+  const tag = customerTag(customer);
+  return passages.filter((p) => (p.tags ?? []).includes(tag) && p.text.trim()).slice(0, limit);
 }

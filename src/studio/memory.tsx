@@ -22,7 +22,7 @@ type Narr = { id: string; headline: string; sentences: { text: string; cites: st
 type Detail = {
   searched?: string
   ref: string; agentName: string; agentTitle: string; scopeNote: string
-  usage: Usage | null; usageNote: string; verdict: Verdict | null; recent: { at: string; kind: string; store: string; count: number; source: string; detail: string }[]
+  usage: Usage | null; usageNote: string; verdict: Verdict | null; recent: { at: string; kind: string; store: string; count: number; source: string; detail: string }[]; sleeptime: 'on' | 'unsupported' | 'unknown' | null
   config: { purpose: string; status: string; personaOn: boolean; factsOn: boolean; personaText: string } | null
   minds: Mind[]; facts: Fact[]; records: Rec[]; notes: string[]; narrative: Narr | null; narrativeStale: boolean
 }
@@ -48,6 +48,7 @@ export function AgentMemory() {
   const [person, setPerson] = useState(0)
   const [writing, setWriting] = useState(false)
   const [flash, setFlash] = useState('')
+  const [hist, setHist] = useState<Record<string, { at?: string; old?: string; now?: string; event?: string }[] | string>>({})
   const [closed, setClosed] = useState('')
 
   useEffect(() => {
@@ -73,6 +74,13 @@ export function AgentMemory() {
       setDetail((d) => (d ? { ...d, narrative: n, narrativeStale: false } : d))
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
     setWriting(false)
+  }
+  const showHistory = async (id: string) => {
+    if (hist[id]) { setHist((h) => { const c = { ...h }; delete c[id]; return c }); return }
+    try {
+      const r = await api<{ history: Record<string, unknown>[] }>(`/api/memory/fact-history?id=${encodeURIComponent(id)}`, { cache: 'no-store' })
+      setHist((h) => ({ ...h, [id]: r.history.map((x) => ({ at: String(x.created_at ?? x.updated_at ?? ''), old: x.old_memory ? String(x.old_memory) : '', now: x.new_memory ? String(x.new_memory) : '', event: String(x.event ?? '') })) }))
+    } catch (e) { setHist((h) => ({ ...h, [id]: e instanceof Error ? e.message : String(e) })) }
   }
   const jump = (n: Narr, cite: string) => {
     const r = n.records.find((x) => x.cite === cite)
@@ -149,6 +157,7 @@ export function AgentMemory() {
                 <div><dt>Last used</dt><dd className="mem-usage-when">{detail.usage.lastUsed ? when(detail.usage.lastUsed) : 'never'}</dd></div>
               </dl>
               {detail.usageNote && <p className="mem-trace">{detail.usageNote}</p>}
+              {detail.sleeptime && <p className="mem-trace">Letta background reflection (sleep-time agent): {detail.sleeptime === 'on' ? 'on, it reviews recent conversations between turns' : detail.sleeptime === 'unsupported' ? 'this Letta server refused it, so it is off' : 'not tried yet in this server run'}.</p>}
               {detail.recent.length > 0 && <ul className="mem-recent">{detail.recent.map((r, i) => <li key={i}><small>{when(r.at)}</small> {EVENT[r.kind] ?? r.kind} · {r.store === 'letta' ? 'Letta' : 'Mem0'}{r.count > 1 ? ` · ${r.count} records` : ''}{r.source ? ` · ${r.source}` : ''}{r.detail ? ` · ${r.detail}` : ''}</li>)}</ul>}
             </div>}
 
@@ -187,6 +196,9 @@ export function AgentMemory() {
               <div className="mem-facts">{facts.map((f) => <article key={f.id} id={anchor(f.id)} className={`mem-fact${flash === f.id ? ' is-flash' : ''}`}>
                 <div className="mem-block-top"><span className="mem-cite is-static">{citeOf.get(f.id)}</span>{meta(f, 'kind') && <span className="studio-agent-tag">{meta(f, 'kind')}</span>}<small>{[meta(f, 'use_case_title'), meta(f, 'source') || meta(f, 'app_id'), when(f.updated_at ?? f.created_at)].filter(Boolean).join(' · ')}</small></div>
                 <p>{f.memory}</p>
+                <button type="button" className="text-button" onClick={() => void showHistory(f.id)}>{hist[f.id] ? 'Hide history' : 'History'}</button>
+                {typeof hist[f.id] === 'string' && <p className="studio-warn">{hist[f.id] as string}</p>}
+                {Array.isArray(hist[f.id]) && ((hist[f.id] as { at?: string; old?: string; now?: string; event?: string }[]).length === 0 ? <p className="studio-muted">Mem0 has no earlier version of this record.</p> : <ul className="mem-recent">{(hist[f.id] as { at?: string; old?: string; now?: string; event?: string }[]).map((h, i) => <li key={i}><small>{when(h.at)}</small> {h.event?.toLowerCase()}{h.old ? <> · was “{h.old}”</> : null}{h.now ? <> · now “{h.now}”</> : null}</li>)}</ul>)}
               </article>)}</div>
             </div>
           </>}

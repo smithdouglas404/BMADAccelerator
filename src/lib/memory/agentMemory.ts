@@ -142,8 +142,6 @@ export class AgentMemory {
     try {
       const res = await this.client.search(query, {
         filters,
-        rerank: true,
-        latest_only: true,
         top_k: opts.limit ?? 8,
         ...(opts.threshold !== undefined ? { threshold: opts.threshold } : {}),
       });

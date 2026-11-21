@@ -91,10 +91,21 @@ function save(agent: string, uc: UseCaseRef, kind: MemoryKind, text: string, sou
     });
 }
 
+/** One line in the customer's Letta playbook block (what was decided for this customer, newest first), counted as a write. */
+function playbook(uc: UseCaseRef, role: string, line: string, detail: string) {
+  void letta.playbookAppend(uc.customer ?? "", line).then((ok) => ok && logMemoryEvent({ role, kind: "write", store: "letta", useCaseId: uc.id, source: "playbook", detail }));
+}
+
 /** A specialist spoke in the conversation (share_finding): its own memory keeps what it said, so it can build on it later. */
 export function rememberFinding(uc: UseCaseRef, roleKey: string, who: string, text: string) {
-  void letta.ensureRole(roleKey).catch(() => false);
-  save(roleKey, uc, "discussion", `[${who} said | use case "${uc.name}"]\n${clip(text)}`, "studio:finding");
+  const note = `[${who} said | use case "${uc.name}"${uc.customer ? ` | customer ${uc.customer}` : ""}]\n${clip(text)}`;
+  save(roleKey, uc, "discussion", note, "studio:finding");
+  // Also the role's own Letta archive, searched by meaning on later turns of this customer's products.
+  void letta
+    .ensureRole(roleKey)
+    .then((ok) => (ok ? letta.archiveWrite(roleKey, note, { customer: uc.customer, useCaseId: uc.id, source: "finding" }) : false))
+    .then((ok) => ok && logMemoryEvent({ role: roleKey, kind: "write", store: "letta", useCaseId: uc.id, source: "archive", detail: "finding saved in its archive" }))
+    .catch(() => undefined);
 }
 
 /** A specialist's area was settled by what the people said (record_coverage). */
@@ -106,11 +117,13 @@ export function rememberCoverage(uc: UseCaseRef, roleKey: string, who: string, a
 export function rememberAnswer(uc: UseCaseRef, agent: string, question: string, answer: string) {
   if (!question.trim() || !answer.trim()) return;
   save(agent, uc, "qa", `[Q&A | ${nameOf(agent)} | use case "${uc.name}"]\nQ: ${clip(question)}\nA: ${clip(answer)}`, "accelerator:question");
+  playbook(uc, ownerKey(agent), `${uc.name}: asked "${clip(question, 160)}" and was told "${clip(answer, 200)}"`, "answer");
 }
 
 /** The client approved or declined something (a document, a review item). */
 export function rememberDecision(uc: UseCaseRef, agent: string, text: string, source: string) {
   save(agent, uc, "decision", `[Decision | ${nameOf(agent)} | use case "${uc.name}"]\n${clip(text)}`, source);
+  playbook(uc, ownerKey(agent), `${uc.name}: ${text}`, "decision");
 }
 
 /** Screen feedback the client gave on a generated app: a requirement change. */
@@ -184,6 +197,27 @@ export async function recallForTurn(uc: UseCaseRef & { description?: string }, p
   } catch (e) {
     console.warn("memory recall failed", e);
   }
+  // This customer's playbook block (Letta): what was decided for them, newest first.
+  try {
+    const book = await letta.playbookRead(uc.customer ?? "");
+    if (book && book !== "none yet") {
+      logMemoryEvent({ role: "muse", kind: "recall", store: "letta", useCaseId: uc.id, source: "playbook", detail: "customer playbook put into the prompt" });
+      parts.push(`What has been decided for this customer so far (Letta playbook, newest first):\n${book.slice(0, 2500)}`);
+    }
+  } catch (e) {
+    console.warn("letta playbook failed", e);
+  }
+  // Each role's own archive notes for this customer, found by meaning.
+  try {
+    const query = `${uc.name}. ${uc.description ?? ""}\n${prompt}`.slice(0, 500);
+    const roleKeys = [...ROLES.map((r) => r.key), ...(await domainKeys())];
+    const found = await Promise.all(roleKeys.map(async (k) => ({ k, notes: await letta.archiveSearch(k, query, uc.customer ?? "", 2) })));
+    const notes = found.filter((f) => f.notes.length);
+    for (const f of notes) logMemoryEvent({ role: f.k, kind: "recall", store: "letta", useCaseId: uc.id, count: f.notes.length, source: "archive", detail: "archive notes put into the prompt" });
+    if (notes.length) parts.push(`Notes the team kept in its own archives for this customer (Letta):\n${notes.map((f) => `${roleFor(f.k)?.name ?? f.k}:\n${f.notes.map((n) => `- ${clip(n.text, 800)}`).join("\n")}`).join("\n\n")}`);
+  } catch (e) {
+    console.warn("letta archive failed", e);
+  }
   try {
     const lessons = await letta.topLessons();
     for (const l of lessons) logMemoryEvent({ role: l.role.key, kind: "recall", store: "letta", useCaseId: uc.id, source: "turn", detail: "top lessons put into the prompt" });
@@ -221,7 +255,7 @@ async function reflect(roleKey: string, message: string) {
 }
 
 /** A sign-off gate passed: remember the decision, update the shared block, let the role learn. */
-export function onGatePassed(uc: UseCaseRef & { stage?: string }, gate: string, summary: string, clientSaid: string, agent?: string) {
+export function onGatePassed(uc: UseCaseRef & { stage?: string }, gate: string, summary: string, clientSaid: string, agent?: string, by = "") {
   const roleKey = agent && roleFor(agent) ? agent : roleForGate(gate);
   rememberDecision(uc, roleKey, `Gate passed: ${gate}\nWhat was approved: ${summary}\nThe client said: ${clientSaid || "approved"}`, "accelerator:gate");
   void (async () => {
@@ -239,7 +273,7 @@ export function onGatePassed(uc: UseCaseRef & { stage?: string }, gate: string, 
     } catch (e) {
       console.warn("letta portfolio update failed", e instanceof Error ? e.message : e);
     }
-    await reflect(roleKey, gateMessage(uc.name, gate, summary, clientSaid));
+    await reflect(roleKey, gateMessage(uc.name, gate, summary, clientSaid, by));
   })();
 }
 

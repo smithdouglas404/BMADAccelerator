@@ -45,7 +45,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
     const uc = await prisma.useCase.findUniqueOrThrow({ where: { id } });
     rememberDecision(uc, "muse", `Decision ${after.status}: ${after.text}${after.answer ? ` (answer: ${after.answer})` : ""}`, "studio:decision");
     // An approved sign-off is a gate: the role that owns it records it and reflects (Letta persona learns, lessons refresh).
-    if (status === "approved" && before.status !== "approved") onGatePassed(uc, after.text.slice(0, 160), after.text.slice(0, 600), after.answer || "approved");
+    if (status === "approved" && before.status !== "approved") onGatePassed(uc, after.text.slice(0, 160), after.text.slice(0, 600), after.answer || "approved", undefined, by || "");
     const kind = status === "rejected" ? "rejected" : status === "approved" && before.status !== "approved" ? "approved" : "changed";
     await recordChange(id, { node: `decision:${did}`, kind, summary: `${by || "The owner"} ${kind === "changed" ? "changed" : kind} the decision${after.answer ? `: “${after.answer}”` : ""}`, before: `${before.text} (${before.status})`, after: `${after.text} (${after.status})`, by: by || "Owner" });
     const impact = await changeImpact(id, { decisionId: did });

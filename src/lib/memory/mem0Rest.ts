@@ -90,6 +90,11 @@ export class Mem0RestClient implements MemoryClient {
     return this.call("GET", `/memories?${q}`);
   }
 
+  /** How one record changed over time (Mem0's own history), for the memory page. */
+  async history(id: string): Promise<unknown> {
+    return this.call("GET", `/memories/${encodeURIComponent(id)}/history`);
+  }
+
   async health(): Promise<boolean> {
     try {
       await this.call("GET", "/configure");

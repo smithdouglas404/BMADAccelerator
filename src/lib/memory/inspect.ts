@@ -172,7 +172,8 @@ export async function readAgentMemory(ref: AgentRef, f: Filter, q = "") {
     }
   }
   const verdict = usage ? verdictFor(usage, { facts: facts.length, blocks: minds.reduce((n, m) => n + m.blocks.length, 0) }) : null;
-  return { ref: refString(ref), usage, usageNote, verdict, recent, agentName, agentTitle, scopeNote, useCase, config, minds, facts, records, fingerprint: recordsFingerprint(records), notes };
+  const sleeptime = ref.kind === "studio" ? letta.sleeptimeState() : null;
+  return { ref: refString(ref), usage, usageNote, verdict, recent, sleeptime, agentName, agentTitle, scopeNote, useCase, config, minds, facts, records, fingerprint: recordsFingerprint(records), notes };
 }
 
 const scopeKey = (f: Filter) => (f.useCaseId ? `uc:${f.useCaseId}` : f.customer ? `customer:${f.customer.trim().toLowerCase()}` : "");

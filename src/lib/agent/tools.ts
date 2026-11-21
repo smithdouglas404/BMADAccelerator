@@ -695,7 +695,12 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
         { query: z.string().min(3), role: RoleParam.optional().describe(`Whose memory to search: ${ROLE_HELP}. Leave out to search everyone's.`) },
         async ({ query, role }) => {
           const hits = await searchMemory(query, { role, excludeUseCase: useCaseId, limit: 8 }).catch(() => []);
-          return ok(hits.length ? formatHits(hits) : "Nothing relevant remembered.");
+          // The role's own Letta archive for this customer, by meaning.
+          const customer = (await uc()).customer;
+          const notes = role ? await letta.archiveSearch(role, query, customer, 3).catch(() => []) : [];
+          if (role && notes.length) logMemoryEvent({ role, kind: "recall", store: "letta", useCaseId, count: notes.length, source: "archive", detail: "search_memory" });
+          const archive = notes.length ? `\n\nFrom its own archive (Letta):\n${notes.map((n) => `- ${n.text.slice(0, 800)}`).join("\n")}` : "";
+          return ok(hits.length || notes.length ? `${formatHits(hits)}${archive}`.trim() : "Nothing relevant remembered.");
         },
       ),
       tool(
