@@ -618,3 +618,15 @@ a.studio-home-brand { color: inherit; text-decoration: none; padding-bottom: 12p
 .studio-trace-turn p { margin: 0; font-size: 12px; line-height: 1.6; color: var(--muted); overflow-wrap: anywhere; }
 .studio-trace-turn span { display: inline-block; min-width: 116px; color: var(--faint); }
 .studio-trace-delta { display: flex; align-items: center; gap: 4px; margin: 0; font-size: 12px; color: var(--faint); }
+/* Deferred to a day: keeps its place, greyed, until that day (Doug, Nov 21). */
+.studio-deferred-card, .studio-deferred-item { opacity: .55; cursor: pointer; }
+.studio-deferred-card:hover, .studio-deferred-item:hover { opacity: .85; }
+.studio-deferred-note { display: block; margin-top: 4px; font-size: 12px; color: var(--muted); }
+.studio-defer-quick { display: flex; gap: 6px; flex-wrap: wrap; }
+.studio-defer-date { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.studio-defer-date input { max-width: 180px; }
+.studio-start-here { display: grid; gap: 10px; padding: 12px; border: 1px solid rgba(var(--acid-rgb), .35); border-radius: 8px; background: rgba(var(--acid-rgb), .05); }
+.studio-start-here p { margin: 0; }
+/* Long card panels scroll; nothing inside them is squeezed (the title box used to collapse). */
+.studio-card-panel > * { flex-shrink: 0; }
+.studio-deferred-card .studio-triage-tag { color: var(--muted); }

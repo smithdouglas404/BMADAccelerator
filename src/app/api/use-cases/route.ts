@@ -14,7 +14,7 @@ export async function GET(req: Request) {
   const rows = await prisma.useCase.findMany({
     where: withArchived ? {} : { archivedAt: null },
     orderBy: { updatedAt: "desc" },
-    include: { capabilities: { select: { readiness: true } }, spec: true, decisions: { select: { status: true, includeInBuild: true } }, moves: { select: { status: true, prompt: true } }, backlog: { select: { triage: true, state: true, kind: true } }, _count: { select: { backlog: true, decisions: true, evidence: true, feedback: true, messages: { where: { role: "user" } } } } },
+    include: { capabilities: { select: { readiness: true } }, spec: true, decisions: { select: { status: true, includeInBuild: true } }, moves: { select: { status: true, prompt: true } }, backlog: { select: { triage: true, state: true, kind: true, deferUntil: true } }, _count: { select: { backlog: true, decisions: true, evidence: true, feedback: true, messages: { where: { role: "user" } } } } },
   });
   return NextResponse.json(
     rows.map((u) => ({
@@ -42,7 +42,7 @@ export async function GET(req: Request) {
           userMessages: u._count.messages,
           openDecisions: u.decisions.filter((d) => d.status === "open").length,
           approvedDecisions: u.decisions.filter((d) => d.status === "approved").length,
-          needsYou: u.backlog.filter(needsTriage).length,
+          needsYou: u.backlog.filter((b) => needsTriage(b)).length,
           reviewedSections: u.spec.filter((x) => (x.basis === "inferred" || x.basis === "recommended") && x.review).length,
           unreviewedSections: u.spec.filter((x) => (x.basis === "inferred" || x.basis === "recommended") && !x.review).length,
           detailedCards: u.moves.filter((m) => m.status !== "queued" && hasDetail(m.prompt)).length,
@@ -50,7 +50,7 @@ export async function GET(req: Request) {
           markups: u._count.feedback,
           validationScore: validationScore((u.validation ?? {}) as Validation),
         });
-        return { progress: j.percent, nextStep: j.next ? { label: j.next.label, view: j.next.view, gain: j.next.weight } : null, needsYou: u.backlog.filter(needsTriage).length + u.decisions.filter((d) => d.status === "open").length, idleDays: idleDays(u.updatedAt) };
+        return { progress: j.percent, nextStep: j.next ? { label: j.next.label, view: j.next.view, gain: j.next.weight } : null, needsYou: u.backlog.filter((b) => needsTriage(b)).length + u.decisions.filter((d) => d.status === "open").length, idleDays: idleDays(u.updatedAt) };
       })(),
       versions: u.generateCount,
       thoughts: u._count.backlog,

@@ -40,9 +40,22 @@ export function journey(j: JourneyInput): { percent: number; steps: JourneyStep[
 }
 
 /** A backlog item a person still has to deal with: new, not built, not parked, not already handled. */
-export function needsTriage(b: { triage?: string; state: string; kind: string }) {
-  return !b.triage && b.state !== 'built' && b.kind !== 'distraction'
+export function needsTriage(b: { triage?: string; state: string; kind: string; deferUntil?: string | Date | null }) {
+  const now = new Date()
+  const back = b.triage === 'deferred' && !!b.deferUntil && new Date(b.deferUntil) <= now
+  return (!b.triage || back) && b.state !== 'built' && b.kind !== 'distraction'
 }
+
+/** A deferred item that is still waiting for its day (it keeps its place, greyed). */
+export function deferredUntil(b: { triage?: string; deferUntil?: string | Date | null }): Date | null {
+  const now = new Date()
+  if (b.triage !== 'deferred') return null
+  const d = b.deferUntil ? new Date(b.deferUntil) : null
+  return d && d > now ? d : d ? null : new Date(8.64e15)
+}
+
+/** "Mon, Dec 3" for a defer date. */
+export const dayLabel = (d: string | Date) => new Date(d).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
 
 /** A card has real detail when its details or acceptance criteria say more than a line. */
 export const hasDetail = (prompt: string) => prompt.trim().length >= 80

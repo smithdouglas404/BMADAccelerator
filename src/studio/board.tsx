@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, Check, Download, FileText, History, MessageCircleQuestion, Network, Paperclip, Play, Plus, Target, Upload, X } from 'lucide-react'
-import { hasDetail, needsTriage } from '@/lib/studio/journey'
+import { dayLabel, deferredUntil, hasDetail, needsTriage } from '@/lib/studio/journey'
 import { ASSISTANT_NAME } from '@/lib/brand'
 import { api, ago, type Live } from './live'
 import type { Me, StudioView } from './flow'
@@ -43,7 +43,7 @@ const plain = (text: string, live: Live) =>
   })
 const size = (b: number) => (b > 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`)
 
-export function BoardView({ live, me, buildNow, changeView, setToast, children }: Props) {
+export function BoardView({ live, me, buildNow, changeView, setToast, children, openNode }: Props & { openNode?: string }) {
   const by = me.name || me.role || 'A person'
   // Moves show at once on this screen, before the next refresh confirms them.
   const [local, setLocal] = useState<Record<string, Status>>({})
@@ -57,18 +57,26 @@ export function BoardView({ live, me, buildNow, changeView, setToast, children }
   const [triaging, setTriaging] = useState('')
   useEffect(() => { setLocal({}) }, [live.updatedAt])
   // New backlog items: what someone said to Socra, a mark-up, or Socra's own suggestion, until a person deals with it.
-  const fresh = live.backlog.filter((b) => needsTriage(b) || (b.triage === 'working' && b.state !== 'built' && b.kind !== 'distraction'))
+  // Deferred items keep their place, greyed, until their day; then they need a person again.
+  const fresh = live.backlog.filter((b) => needsTriage(b) || ((b.triage === 'working' || b.triage === 'deferred') && b.state !== 'built' && b.kind !== 'distraction'))
+  const waiting = fresh.filter((b) => needsTriage(b)).length
   // A new item is decided in its detail view (click it): Accept (asks "work on this now?"), Defer or Reject. Never on the card.
   const [pick, setPick] = useState('')
   const [confirm, setConfirm] = useState(false)
-  const triage = async (itemId: string, to: 'working' | 'accepted' | 'rejected' | 'deferred', now = false) => {
+  const [deferring, setDeferring] = useState(false)
+  const [startOn, setStartOn] = useState('')
+  const [until, setUntil] = useState(() => inDays(14))
+  // "Yes, work on it now" opens the new card at once; so does a link from another screen (?view=pilot&node=move:<id>).
+  useEffect(() => { const n = openNode ?? ''; if (n.startsWith('move:')) { setOpen(n.slice(5)); setStartOn(n.slice(5)) } }, [openNode])
+  const triage = async (itemId: string, to: 'working' | 'accepted' | 'rejected' | 'deferred', now = false, day = '') => {
     const item = live.backlog.find((b) => b.id === itemId)
     setTriaging(itemId)
     try {
-      await api(`/api/use-cases/${live.id}/backlog/${itemId}`, { method: 'PATCH', json: now ? { triage: to, ready: true, by } : { triage: to, by } })
-      setPick(''); setConfirm(false)
+      const res = await api<{ moveId?: string }>(`/api/use-cases/${live.id}/backlog/${itemId}`, { method: 'PATCH', json: { triage: to, by, ...(now ? { ready: true } : {}), ...(day ? { until: day } : {}) } })
+      setPick(''); setConfirm(false); setDeferring(false)
+      if (now && res?.moveId) { setOpen(res.moveId); setStartOn(res.moveId); setToast(`“${item?.title ?? 'It'}” is in Ready to shape. Fill in what you know; ${ASSISTANT_NAME}'s questions are at the top.`); return }
       if (to === 'working') { setToast(`${ASSISTANT_NAME} is opening up “${item?.title ?? 'it'}”. Answer its questions here.`); changeView('conversation') }
-      else setToast(to === 'accepted' ? (now ? `“${item?.title ?? 'It'}” is in Ready to shape, and ${ASSISTANT_NAME} is shaping it.` : `Accepted. “${item?.title ?? 'It'}” is on the Board in Backlog, and ${ASSISTANT_NAME} will shape it.`) : to === 'deferred' ? `Deferred. “${item?.title ?? 'It'}” is kept for later and off the Board.` : `Rejected. It stays in the history and out of the product.`)
+      else setToast(to === 'accepted' ? (now ? `“${item?.title ?? 'It'}” is in Ready to shape, and ${ASSISTANT_NAME} is shaping it.` : `Accepted. “${item?.title ?? 'It'}” is on the Board in Backlog, and ${ASSISTANT_NAME} will shape it.`) : to === 'deferred' ? `Deferred until ${day ? dayLabel(`${day}T00:00:00`) : 'later'}. “${item?.title ?? 'It'}” keeps its place and turns red again that day.` : `Rejected. It stays in the history and out of the product.`)
     } catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
     finally { setTriaging('') }
   }
@@ -117,15 +125,16 @@ export function BoardView({ live, me, buildNow, changeView, setToast, children }
         onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('text/plain') || dragging; setOver(''); setDragging(''); if (id) void move(id, col.id, 'dragged on the Board') }}>
         <div className="kanban-column-header"><div><strong>{col.label}</strong><small>{col.description}</small></div><span>{items.length}</span></div>
         <div className="kanban-cards">
-          {col.id === 'queued' && fresh.length > 0 && <p className="studio-triage-head"><span className="studio-red-dot" /> {fresh.filter((b) => !b.triage).length} new · needs you</p>}
+          {col.id === 'queued' && waiting > 0 && <p className="studio-triage-head"><span className="studio-red-dot" /> {waiting} new · needs you</p>}
           {col.id === 'queued' && fresh.map((b) => {
             const from = b.state === 'suggested' || b.state === 'probing' ? `${ASSISTANT_NAME} suggests` : b.annotationId || /mark/i.test(b.source) ? 'From a mark-up' : /Socra|Muse/i.test(b.source) ? `From ${ASSISTANT_NAME}` : 'You said'
-            return <article key={b.id} className={`build-card studio-board-card ${b.triage ? '' : 'studio-triage-card'}`} aria-label={`Open ${b.title} to decide`} tabIndex={0} role="button"
-              onClick={() => { setConfirm(false); setPick(b.id) }} onKeyDown={(e) => { if (e.key === 'Enter') { setConfirm(false); setPick(b.id) } }}>
-              <div className="build-card-top"><span className="studio-triage-tag">{b.triage === 'working' ? <><MessageCircleQuestion size={11} /> Working on it</> : <><span className="studio-red-dot" /> New · {from}</>}</span><small className="studio-board-kind">{ago(b.createdAt)}</small></div>
+            const later = deferredUntil(b); const back = b.triage === 'deferred' && !later
+            return <article key={b.id} className={`build-card studio-board-card ${later ? 'studio-deferred-card' : needsTriage(b) ? 'studio-triage-card' : ''}`} aria-label={`Open ${b.title} to decide`} tabIndex={0} role="button"
+              onClick={() => { setConfirm(false); setDeferring(false); setPick(b.id) }} onKeyDown={(e) => { if (e.key === 'Enter') { setConfirm(false); setDeferring(false); setPick(b.id) } }}>
+              <div className="build-card-top"><span className="studio-triage-tag">{later ? <>Deferred · {later.getFullYear() > 9000 ? 'no date' : `back ${dayLabel(later)}`}</> : back ? <><span className="studio-red-dot" /> Back from deferral</> : b.triage === 'working' ? <><MessageCircleQuestion size={11} /> Working on it</> : <><span className="studio-red-dot" /> New · {from}</>}</span><small className="studio-board-kind">{ago(b.createdAt)}</small></div>
               <h3>{b.title}</h3>
               {b.note && <p className="studio-moved-by">{b.note.slice(0, 160)}</p>}
-              <p className="studio-triage-open">Open it to accept, defer or reject <ArrowRight size={12} /></p>
+              {!later && <p className="studio-triage-open">Open it to accept, defer or reject <ArrowRight size={12} /></p>}
             </article>
           })}
           {col.id === 'queued' && adding && <div className="build-card studio-board-new"><input autoFocus value={newTitle} onChange={(e) => setNewTitle(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void add(); if (e.key === 'Escape') setAdding(false) }} placeholder="What should the product do?" /><div><button className="button button-primary button-small" type="button" onClick={() => void add()} disabled={!newTitle.trim()}><Check size={12} /> Add</button><button className="button button-quiet button-small" type="button" onClick={() => setAdding(false)}>Cancel</button></div></div>}
@@ -151,19 +160,20 @@ export function BoardView({ live, me, buildNow, changeView, setToast, children }
 
     {children}
     <div className="pilot-footer"><div><span className="live-pulse" /> {live.agentBusy ? `${ASSISTANT_NAME}: ${live.agentStatus || 'working'}` : fresh.filter((b) => !b.triage).length ? `${fresh.filter((b) => !b.triage).length} new ${fresh.filter((b) => !b.triage).length === 1 ? 'item waits' : 'items wait'} on you` : `${cards.filter((c) => c.status !== 'done').length} cards in motion, ${cards.filter((c) => c.status === 'done').length} done`}</div><button className="text-button" type="button" onClick={() => changeView('storymap')}>See how the stories connect <ArrowRight size={14} /></button></div>
-    {(() => { const b = fresh.find((x) => x.id === pick); if (!b) return null; const close = () => { setPick(''); setConfirm(false) }; const busy = triaging === b.id
+    {(() => { const b = fresh.find((x) => x.id === pick); if (!b) return null; const close = () => { setPick(''); setConfirm(false); setDeferring(false) }; const busy = triaging === b.id; const later = deferredUntil(b)
       return <div className="studio-card-overlay" onClick={(e) => { if (e.detail < 2) close() }}><aside className="studio-card-panel" onClick={(e) => e.stopPropagation()} aria-label="Backlog item details">
-        <div className="studio-card-head"><p className="eyebrow">New on the Board · needs you</p><button className="icon-button subtle" type="button" onClick={close} aria-label="Close"><X size={16} /></button></div>
-        <h3><span className="studio-red-dot" /> {b.title}</h3>
+        <div className="studio-card-head"><p className="eyebrow">{later ? `Deferred · ${later.getFullYear() > 9000 ? 'no date set' : `back on ${dayLabel(later)}`}` : 'New on the Board · needs you'}</p><button className="icon-button subtle" type="button" onClick={close} aria-label="Close"><X size={16} /></button></div>
+        <h3>{!later && <span className="studio-red-dot" />} {b.title}</h3>
         <p>{b.note || 'No more detail yet.'}</p>
         <div className="backlog-tags"><span>{b.source}</span><span>{ago(b.createdAt)}</span>{b.triage === 'working' && <span>{ASSISTANT_NAME} is asking about it</span>}</div>
         {b.annotationId && <a className="studio-markup-thumb" href={`/api/feedback/${b.annotationId}/image`} target="_blank" rel="noreferrer"><img src={`/api/feedback/${b.annotationId}/image`} alt="The marked-up screen" loading="lazy" /></a>}
-        {!confirm && <div className="studio-detail-actions"><button type="button" className="button button-primary" disabled={busy} onClick={() => setConfirm(true)}><Check size={14} /> Accept</button><button type="button" className="button button-quiet" disabled={busy} onClick={() => void triage(b.id, 'deferred')}>Defer</button><button type="button" className="button button-quiet" disabled={busy} onClick={() => void triage(b.id, 'rejected')}><X size={14} /> Reject</button></div>}
+        {!confirm && !deferring && <div className="studio-detail-actions"><button type="button" className="button button-primary" disabled={busy} onClick={() => setConfirm(true)}><Check size={14} /> Accept</button><button type="button" className="button button-quiet" disabled={busy} onClick={() => { setUntil(inDays(14)); setDeferring(true) }}>{later ? 'Change the date' : 'Defer'}</button><button type="button" className="button button-quiet" disabled={busy} onClick={() => void triage(b.id, 'rejected')}><X size={14} /> Reject</button></div>}
+        {deferring && <DeferAsk until={until} setUntil={setUntil} busy={busy} onDefer={() => void triage(b.id, 'deferred', false, until)} onCancel={() => setDeferring(false)} />}
         {confirm && <div className="studio-work-ask" role="group" aria-label="Work on this now?"><strong>Work on this now?</strong><small>Yes puts it in Ready to shape and {ASSISTANT_NAME} starts shaping it. No adds it to the Backlog column.</small><span><button type="button" className="button button-primary button-small" disabled={busy} onClick={() => void triage(b.id, 'accepted', true)}>Yes, work on it now</button><button type="button" className="button button-quiet button-small" disabled={busy} onClick={() => void triage(b.id, 'accepted')}>Not yet, add to Backlog</button></span></div>}
         {b.triage !== 'working' && <button className="text-button" type="button" disabled={busy} onClick={() => void triage(b.id, 'working')}><MessageCircleQuestion size={13} /> Not sure yet? Talk it through with {ASSISTANT_NAME}</button>}
         <ItemRecord live={live} me={me} node={`backlog:${b.id}`} setToast={setToast} />
       </aside></div> })()}
-    {open && <CardPanel key={open} live={live} me={me} id={open} by={by} guide={guide?.id === open ? guide.status : undefined} onClose={() => { setOpen(''); setGuide(null) }} onMove={(s) => void move(open, s, 'moved from the card')} setToast={setToast} buildNow={buildNow} changeView={changeView} />}
+    {open && <CardPanel key={open} live={live} me={me} id={open} by={by} guide={guide?.id === open ? guide.status : undefined} start={startOn === open} onClose={() => { setOpen(''); setGuide(null); setStartOn('') }} onMove={(s) => void move(open, s, 'moved from the card')} setToast={setToast} buildNow={buildNow} changeView={changeView} />}
   </div>
 }
 
@@ -176,7 +186,7 @@ export function ItemRecord({ live, me, node, setToast }: { live: Live; me: Me; n
   </>
 }
 
-function CardPanel({ live, me, id, by, guide, onClose, onMove, setToast, buildNow, changeView }: { live: Live; me: Me; id: string; by: string; guide?: Status; onClose: () => void; onMove: (s: Status) => void; setToast: (v: string) => void; buildNow: (opts?: { force?: boolean }) => void; changeView: (v: StudioView) => void }) {
+function CardPanel({ live, me, id, by, guide, start = false, onClose, onMove, setToast, buildNow, changeView }: { live: Live; me: Me; id: string; by: string; guide?: Status; start?: boolean; onClose: () => void; onMove: (s: Status) => void; setToast: (v: string) => void; buildNow: (opts?: { force?: boolean }) => void; changeView: (v: StudioView) => void }) {
   const details = useRef<HTMLTextAreaElement>(null)
   const [docOpen, setDocOpen] = useState('')
   const [d, setD] = useState<CardDetail | null>(null)
@@ -236,6 +246,7 @@ function CardPanel({ live, me, id, by, guide, onClose, onMove, setToast, buildNo
       <div className="studio-card-head"><p className="eyebrow">{m ? `${LABEL[m.status] ?? m.status}${m.hidden ? ` · ${m.hidden}` : ''}` : 'Card'}</p><button className="icon-button subtle" type="button" onClick={onClose} aria-label="Close"><X size={16} /></button></div>
       {!m ? <p className="studio-muted">{error || 'Opening the card…'}</p> : <>
         <textarea className="studio-card-title" rows={2} value={val('title')} onChange={(e) => setDraft({ ...draft, title: e.target.value })} aria-label="Title" />
+        {start && <div className="studio-start-here"><p><strong>You chose to work on this now.</strong> Answer {ASSISTANT_NAME}&apos;s questions below as they arrive, or write what you know straight into <button type="button" className="text-button" onClick={() => { details.current?.focus(); details.current?.scrollIntoView({ block: 'center', behavior: 'smooth' }) }}>Details and acceptance criteria</button>.</p><ItemRecord live={live} me={me} node={`move:${id}`} setToast={setToast} /></div>}
         {guide && <MoveGuide status={guide} detailed={hasDetail(String(val('prompt')))} busy={live.generateBusy} hasApp={live.preview.hasApp}
           onDetail={() => { details.current?.focus(); details.current?.scrollIntoView({ block: 'center', behavior: 'smooth' }) }}
           onSocra={() => { onClose(); changeView('conversation') }}
@@ -263,7 +274,7 @@ function CardPanel({ live, me, id, by, guide, onClose, onMove, setToast, buildNo
           {m.trackerUrl && <a className="text-button" href={m.trackerUrl} target="_blank" rel="noreferrer">Open in the tracker <ArrowRight size={12} /></a>}
         </section>}
 
-        <ItemRecord live={live} me={me} node={`move:${id}`} setToast={setToast} />
+        {!start && <ItemRecord live={live} me={me} node={`move:${id}`} setToast={setToast} />}
       </>}
     </aside>
   </div>
@@ -282,4 +293,19 @@ function MoveGuide({ status, detailed, busy, hasApp, onDetail, onSocra, onGenera
     : <div className="studio-move-guide is-warn"><strong>This card has almost no detail yet.</strong><p className="studio-muted" style={{ margin: 0 }}>If you generate now, Claude Code has nothing clear to build for it. Add what it does and how you’ll know it works, or let {ASSISTANT_NAME} ask you.</p><div className="studio-move-guide-actions"><button className="button button-primary button-small" type="button" onClick={onDetail}>Add detail here</button><button className="button button-quiet button-small" type="button" onClick={onSocra}>Let {ASSISTANT_NAME} ask me</button><button className="button button-quiet button-small" type="button" disabled={busy} onClick={onGenerate}>Generate anyway</button></div></div>
   if (status === 'review') return <div className="studio-move-guide"><strong>Your turn to review.</strong><p className="studio-muted" style={{ margin: 0 }}>Try it in the prototype. Say yes if it works, or mark what is wrong: each mark comes back as a new backlog item.</p><div className="studio-move-guide-actions"><button className="button button-primary button-small" type="button" onClick={onTry}>Try & mark up <ArrowRight size={12} /></button></div></div>
   return null
+}
+
+/** YYYY-MM-DD, n days from today (local). */
+export function inDays(n: number) { const d = new Date(); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
+
+/** Defer to a day: the item keeps its place, greyed, and turns red again on that day (Doug, Nov 21). */
+export function DeferAsk({ until, setUntil, busy, onDefer, onCancel }: { until: string; setUntil: (v: string) => void; busy: boolean; onDefer: () => void; onCancel: () => void }) {
+  const quick: [string, number][] = [['1 week', 7], ['2 weeks', 14], ['1 month', 30], ['3 months', 91]]
+  return <div className="studio-work-ask" role="group" aria-label="Defer until">
+    <strong>Bring it back on…</strong>
+    <small>It keeps its place, greyed out, and turns red again on that day so you can decide.</small>
+    <span className="studio-defer-quick">{quick.map(([label, n]) => <button key={label} type="button" className={`button button-small ${until === inDays(n) ? 'button-primary' : 'button-quiet'}`} onClick={() => setUntil(inDays(n))}>{label}</button>)}</span>
+    <label className="studio-defer-date">Or pick a date <input type="date" className="studio-input" value={until} min={inDays(1)} onChange={(e) => setUntil(e.target.value)} /></label>
+    <span><button type="button" className="button button-primary button-small" disabled={busy || !until} onClick={onDefer}>Defer until {until ? dayLabel(`${until}T00:00:00`) : '…'}</button><button type="button" className="button button-quiet button-small" disabled={busy} onClick={onCancel}>Cancel</button></span>
+  </div>
 }
