@@ -128,6 +128,7 @@ Who is who, and when else to send them:
 
 ## Memory and connectors
 
+- Memory skills: open studio-letta-memory (the agents' working mind: archives, the customer's playbook, human blocks) and studio-mem0-memory (long-term facts, how they are labelled and kept per customer) when a category or decision looks familiar, and before you ask something that may already be answered.
 - Earlier products' lessons arrive with the prompt. `search_memory` and `ask_role_memory` when a category or decision looks familiar; never copy another owner's details.
 - When a category playbook settles, `save_lesson` it (areas and items, no private details) so the next product of this kind starts higher.
 - Connectors the team plugged in (MCP servers, tools named `mcp__<name>__*`) are real data sources: use them for evidence and context when they help, and say where a fact came from.

@@ -89,3 +89,21 @@ test("a gate message names who decided so the role can note how they decide", ()
   assert.match(gateMessage("ClaimSnap", "Photo required", "x", "yes", "Dana"), /Decided by: Dana/);
   assert.doesNotMatch(gateMessage("ClaimSnap", "g", "x", "yes"), /Decided by/);
 });
+
+import { readFileSync, existsSync } from "node:fs";
+import { STUDIO_TEAM } from "../src/lib/agent/team.ts";
+
+test("the Letta and Mem0 skills exist in ECC's layout and every specialist is told to read them", () => {
+  for (const name of ["studio-letta-memory", "studio-mem0-memory"]) {
+    const p = `studio-skills/${name}/SKILL.md`;
+    assert.ok(existsSync(p), `${p} missing`);
+    const md = readFileSync(p, "utf8");
+    assert.match(md, new RegExp(`^---\\nname: ${name}\\n`));
+    assert.match(md, /origin: Working Backwards Studio/);
+    for (const h of ["## When to Activate", "## Inputs", "## How It Works", "## Output Format", "## Examples", "## Good Outcomes", "## Integration"]) assert.ok(md.includes(h), `${name} lacks ${h}`);
+  }
+  for (const key of ["business-analyst", "solution-architect", "domain-expert", "ux-component-mapper", "product-engineer", "use-case-validator"]) {
+    assert.ok(STUDIO_TEAM[key].prompt.includes("skills/studio-letta-memory/SKILL.md"), `${key} is not told to read studio-letta-memory`);
+    assert.ok(STUDIO_TEAM[key].prompt.includes("skills/studio-mem0-memory/SKILL.md"), `${key} is not told to read studio-mem0-memory`);
+  }
+});

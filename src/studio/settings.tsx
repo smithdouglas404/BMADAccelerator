@@ -8,14 +8,15 @@ import { StudioTop } from './pages'
 import { ConnectTab } from './connect'
 import { JevValue } from './jev'
 import { AgentMemory } from './memory'
+import { ECC_COPY } from '../lib/eccCopy'
 
 type KeyStatus = { env: string; name: string; source: 'saved' | 'env' | 'missing'; last4: string }
 type Status = { providers: (KeyStatus & { id: string; models: string[] })[]; other: KeyStatus[]; claudePlan: boolean; roles: { env: string; label: string; note: string; providers: string[]; current: string; saved: boolean }[] }
 type Connector = { id: string; name: string; label: string; transport: string; url: string; command: string; args: string[]; secretNames: string[]; hasSecrets: boolean; enabled: boolean; allProducts: boolean; useCases: string[] }
 type Product = { id: string; name: string }
 
-type LibSkill = { id: string; name: string; description: string; source: 'studio' | 'ecc' | 'yours'; origin: string; alwaysOn: boolean; core: boolean; allProducts: boolean; useCases: string[]; valid: boolean; report: string }
-const SOURCES = [['all', 'All'], ['studio', 'Studio'], ['ecc', 'ECC'], ['yours', 'Yours']] as const
+type LibSkill = { id: string; name: string; description: string; source: 'studio' | 'ecc' | 'yours'; origin: string; alwaysOn: boolean; core: boolean; allProducts: boolean; useCases: string[]; valid: boolean; report: string; usedBy: string[] }
+const SOURCES = [['all', 'All'], ['studio', 'Ours'], ['ecc', 'ECC'], ['yours', 'Yours']] as const
 const PAGE = 40
 
 export function SettingsPage() {
@@ -177,7 +178,7 @@ function Skills({ setToast }: { setToast: (s: string) => void }) {
     <div className="studio-library">
       <section className="studio-card">
         <div className="stack-header"><div><p className="eyebrow">Skill library · {rows.length}</p><h3>ECC, the Studio’s skills and yours, in one place</h3></div><Wrench size={16} /></div>
-        <p className="studio-muted">ECC (Everything Claude Code) is the open-source skills library, MIT licensed, pinned in the Studio. The Studio’s own skills are written in the same format. Switched on, a skill goes into each product’s workspace, where Socra, its specialists and Claude Code use it.</p>
+        <p className="studio-muted">ECC (Everything Claude Code) is the open-source skills library, MIT licensed. The Studio imports it from <a href={ECC_COPY.url} target="_blank" rel="noreferrer">our own copy</a>, kept apart from the public project, at a pinned version. <a href={ECC_COPY.studioGroupUrl} target="_blank" rel="noreferrer">Our skills</a> sit in their own group there, in the same format. Switched on, a skill goes into each product’s workspace, where Socra, its specialists and Claude Code use it.</p>
         <div className="studio-library-tools">
           <div className="studio-tabs" style={{ marginTop: 0 }}>{SOURCES.map(([k, l]) => <button key={k} type="button" className={source === k ? 'is-active' : ''} onClick={() => { setSource(k); setShown(PAGE) }}>{l} · {count(k)}</button>)}</div>
           <input className="studio-library-search" type="search" value={q} onChange={(e) => { setQ(e.target.value); setShown(PAGE) }} placeholder="Search skills, e.g. security, postgres, accessibility" aria-label="Search the skill library" />
@@ -186,7 +187,7 @@ function Skills({ setToast }: { setToast: (s: string) => void }) {
         </div>
         <div className="studio-list">{list.slice(0, shown).map((s) => (
           <div key={s.id} className="studio-list-row studio-library-row">
-            <div className="studio-row-main"><strong>{s.name} <span className={`studio-source is-${s.source}`}>{s.source === 'ecc' ? 'ECC' : s.source === 'studio' ? 'Studio' : 'Yours'}</span></strong><small>{s.description || 'No description'}{s.source === 'yours' && !s.valid ? ' · did not pass the check' : ''}</small></div>
+            <div className="studio-row-main"><strong>{s.name} <span className={`studio-source is-${s.source}`}>{s.source === 'ecc' ? 'ECC' : s.source === 'studio' ? 'Ours' : 'Yours'}</span></strong><small>{s.description || 'No description'}{s.source === 'yours' && !s.valid ? ' · did not pass the check' : ''}</small>{s.usedBy.length > 0 && <small className="studio-muted">Used by: {s.usedBy.join(', ')}</small>}</div>
             <span className={isOn(s) ? 'studio-ok studio-where' : 'studio-muted studio-where'}>{where(s)}</span>
             <div className="studio-review-actions">
               {s.source === 'ecc' && !s.alwaysOn && <button type="button" className="button button-quiet" onClick={() => setOpen(open === s.id ? null : s.id)}>{open === s.id ? 'Done' : 'Switch on…'}</button>}
