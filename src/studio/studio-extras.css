@@ -641,3 +641,21 @@ a.studio-home-brand { color: inherit; text-decoration: none; padding-bottom: 12p
 .studio-reply-to { display: flex; align-items: flex-start; gap: 6px; margin: 0 0 8px; padding: 6px 10px; border-left: 3px solid var(--acid-text); background: rgba(var(--acid-rgb), .06); color: var(--muted); font-size: 13px; line-height: 1.4; border-radius: 4px; }
 .studio-replying { display: flex; align-items: center; gap: 8px; margin: 8px 0 6px; padding: 8px 12px; border-radius: 6px; background: rgba(var(--acid-rgb), .06); border: 1px solid var(--line); font-size: 13px; color: var(--ink); }
 .studio-replying span { flex: 1; min-width: 0; }
+
+/* Conversation filter (Doug, Nov 21): pick who is talking; read it in order or by thread. */
+.studio-convo-filter { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 8px 0 12px; border-bottom: 1px solid var(--line); margin-bottom: 2px; }
+.studio-convo-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.studio-convo-chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink); font: inherit; font-size: 13px; cursor: pointer; }
+.studio-convo-chip small { font-size: 12px; color: var(--muted); }
+.studio-convo-chip:hover { border-color: var(--line-strong, var(--muted)); }
+.studio-convo-chip.is-on { background: rgba(var(--acid-rgb), .12); border-color: rgba(var(--acid-rgb), .55); color: var(--acid-text); }
+.studio-convo-chip.is-on small { color: var(--acid-text); }
+.studio-convo-tools { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+.studio-convo-tools .text-button { font-size: 12px; display: inline-flex; align-items: center; gap: 3px; }
+.studio-convo-layout { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.studio-convo-layout button { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px; border: 0; background: var(--panel); color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
+.studio-convo-layout button + button { border-left: 1px solid var(--line); }
+.studio-convo-layout button.is-on { background: rgba(var(--acid-rgb), .12); color: var(--acid-text); }
+.studio-convo-thread { display: grid; gap: 8px; padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px dashed var(--line); }
+.studio-convo-replies { display: grid; gap: 8px; margin-left: 28px; padding-left: 14px; border-left: 2px solid rgba(var(--acid-rgb), .35); }
+.studio-convo-empty { margin: 8px 0; font-size: 14px; }
