@@ -8,6 +8,7 @@
 // the explainer, questions and bars comes from the studio-prd / studio-trd skills through
 // /api/use-cases/[id]/spec-walk/[tab]; nothing here is fixed content.
 
+import { Rich } from './rich'
 import { useCallback, useEffect, useState, type ChangeEvent } from 'react'
 import { ArrowRight, Check, ChevronDown, ChevronUp, CircleAlert, Loader2, Mic, MicOff, Minus, Send, Sparkles, Upload, X } from 'lucide-react'
 import { api, type Live } from './live'
@@ -136,7 +137,7 @@ function SpecWalk({ live, me, tab, info, reload, setToast, onFocus, leave }: { l
       <span className="eyebrow">{step.title} · asked by the {step.askerName.toLowerCase() || 'team'}</span>
       <h3 className="studio-prfaq-ask">{step.ask}</h3>
       <p className="studio-prfaq-bar"><b>Good enough when:</b> {step.bar}</p>
-      {exchange.length > 0 && <div className="studio-prfaq-exchange">{exchange.map((m) => <div key={m.id} className={`studio-prfaq-turn${m.mine ? ' is-mine' : ''}`}><small>{m.who}</small><p>{m.text}</p></div>)}</div>}
+      {exchange.length > 0 && <div className="studio-prfaq-exchange">{exchange.map((m) => <div key={m.id} className={`studio-prfaq-turn${m.mine ? ' is-mine' : ''}`}><small>{m.who}</small><Rich text={m.text} lines={m.mine ? 0 : 8} /></div>)}</div>}
       {busy && <p className="studio-item-working"><Loader2 size={13} className="studio-spin" /> The {step.askerName.toLowerCase() || 'team'} is checking your answer…</p>}
       {status && <p className={`studio-prfaq-verdict is-${status.replace(' ', '-')}`}>{statusIcon(status)} {status === 'ready' ? `Ready. It goes into “${step.title}” now${informs ? `, and ${informs} related ${informs === 1 ? 'section is' : 'sections are'} inferred from it` : ''}.` : status === 'needs work' ? 'Kept as needs work. It goes in as it is; you can come back to it.' : 'Skipped for now.'}</p>}
       <div className="studio-prfaq-answer">

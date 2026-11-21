@@ -6,6 +6,7 @@
 // questions Socra asked about this item, the answers, and every move with who and why. No fixed text
 // stands in for a question: if Socra hasn't asked yet, it says so.
 
+import { Rich } from './rich'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight, Bot, CornerDownRight, GitCommitHorizontal, History, Loader2, MessageCircleQuestion, MessageSquare, Send, Sparkles, UserRound, Wrench } from 'lucide-react'
 import { ASSISTANT_NAME } from '@/lib/brand'
@@ -91,7 +92,7 @@ export function ItemQuestions({ live, me, node, trace, reload, setToast, noun = 
     <span className="eyebrow"><MessageCircleQuestion size={11} /> Questions about {noun}</span>
     {ds.map((d) => <div key={d.id} className="studio-item-question">
       <p className="studio-item-who">{d.who} · needs your decision · {ago(d.at)}</p>
-      <p className="studio-item-q">{d.text}</p>
+      <div className="studio-item-q"><Rich text={d.text} /></div>
       <div className="studio-item-options">
         {d.options.map((o, i) => {
           // Socra lists its suggestion first (record_decision); a "(suggested)" mark in the label says the same.
@@ -105,8 +106,8 @@ export function ItemQuestions({ live, me, node, trace, reload, setToast, noun = 
     {q ? <div className="studio-item-question">
       <p className="studio-item-who">{q.who} · {ago(q.at)}</p>
       {(() => { const parts = askParts(q.text); return <>
-        <p className="studio-item-q">{parts.ask}</p>
-        {parts.context.length > 0 && <details className="studio-item-context"><summary>What led to this question</summary>{parts.context.map((c, i) => <p key={i}>{c}</p>)}</details>}
+        <div className="studio-item-q"><Rich text={parts.ask} /></div>
+        {parts.context.length > 0 && <details className="studio-item-context"><summary>What led to this question</summary>{parts.context.map((c, i) => <Rich key={i} text={c} lines={4} />)}</details>}
       </> })()}
       {q.options.length > 0 && <div className="studio-item-options">{q.options.map((o) => <button key={o.n} type="button" className={`button button-small ${o.suggested ? 'button-primary' : 'button-quiet'}`} disabled={sending} onClick={() => void send(String(o.n))}><b>{o.n}</b> {cleanLabel(o.label)}{o.suggested && <em> suggested</em>}</button>)}</div>}
     </div> : trace.working || live.agentBusy ? <p className="studio-item-working"><Loader2 size={13} className="studio-spin" /> {ASSISTANT_NAME} and the specialist are looking at it. Their questions appear here and in the conversation.</p>
@@ -120,7 +121,6 @@ export function ItemQuestions({ live, me, node, trace, reload, setToast, noun = 
 
 /** Everything that happened to this item, oldest first, from the record. */
 export function ItemTraceability({ trace, error, plain }: { trace: Trace | null; error?: string; plain?: (t: string) => string }) {
-  const [open, setOpen] = useState<Record<string, boolean>>({})
   const end = useRef<HTMLOListElement>(null)
   const p = plain ?? ((t: string) => t)
   // Filter by who (Doug, Nov 21): the same speakers as the record, people and agents alike.
@@ -140,7 +140,7 @@ export function ItemTraceability({ trace, error, plain }: { trace: Trace | null;
           <span className="studio-trace-icon">{icon(e.kind)}</span>
           <div className="studio-trace-body">
             <p className="studio-trace-head"><strong>{e.who}</strong><span className="studio-trace-kind">{KIND_LABEL[e.kind]}</span><small>{ago(e.at)} · {new Date(e.at).toLocaleString()}</small></p>
-            <p className="studio-trace-text">{long && !open[e.id] ? `${p(e.text).slice(0, 220)}…` : p(e.text)}{long && <button type="button" className="text-button" onClick={() => setOpen({ ...open, [e.id]: !open[e.id] })}>{open[e.id] ? 'Less' : 'More'}</button>}</p>
+            <div className="studio-trace-text"><Rich text={p(e.text)} lines={long ? 4 : 0} /></div>
             {e.kind === 'turn' && d && <div className="studio-trace-turn">
               <p><span>Skills loaded</span> {d.loaded?.length ? d.loaded.join(', ') : 'none recorded'}</p>
               <p><span>Skills used</span> {d.skills?.length ? d.skills.join(', ') : 'none opened'}</p>

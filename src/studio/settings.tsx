@@ -1,6 +1,7 @@
 'use client'
 // Settings: models and keys, MCP connectors (for every product or chosen ones), Agent Skills, and memory.
 // Keys and connector secrets go in once, are stored encrypted, and are never shown again (last four only).
+import { Rich } from './rich'
 import { useEffect, useState } from 'react'
 import { Check, Plug, Plus, Trash2, Upload, Wrench } from 'lucide-react'
 import { api } from './live'
@@ -218,7 +219,7 @@ function Memory() {
         {!m ? <p className="studio-muted">Reading memory status…</p> : <div className="studio-list">
           <div className="studio-list-row"><div className="studio-row-main"><strong>Mem0 (long-term)</strong><small>{m.mem0.up ? 'running' : m.mem0.configured ? 'configured, not answering' : 'not configured'}</small></div><span className={m.mem0.up ? 'studio-ok' : 'studio-warn'}>{m.mem0.up ? 'up' : 'down'}</span></div>
           <div className="studio-list-row"><div className="studio-row-main"><strong>Letta (agents’ working memory)</strong><small>{m.letta.up ? 'running' : m.letta.note || 'not answering'}</small></div><span className={m.letta.up ? 'studio-ok' : 'studio-warn'}>{m.letta.up ? 'up' : 'down'}</span></div>
-          {m.roles?.filter((r) => r.lessons).map((r) => <div key={r.key} className="studio-list-row"><div className="studio-row-main"><strong>{r.name}</strong><small>{r.lessons.slice(0, 280)}</small></div></div>)}
+          {m.roles?.filter((r) => r.lessons).map((r) => <div key={r.key} className="studio-list-row"><div className="studio-row-main"><strong>{r.name}</strong><Rich text={r.lessons} lines={5} /></div></div>)}
         </div>}
       </section>
     </div>

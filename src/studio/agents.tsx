@@ -2,6 +2,7 @@
 // Ship it > Agents: every agent this product has, what it does and how, what it did, and what waits for
 // a person. Read from the Studio's records and the shared agent service. Built from the team's classes;
 // the few new ones are in studio-extras.css.
+import { Rich } from './rich'
 import { useCallback, useEffect, useState } from 'react'
 import { Bot, Check, ExternalLink, History, ShieldCheck, Sparkles, UserRound, X } from 'lucide-react'
 import { api, type Live } from './live'
@@ -59,7 +60,7 @@ export function AgentsView({ live, me, setToast }: { live: Live; me: Me; setToas
     {pending.length > 0 && <section className="truth-graph-card"><div className="truth-card-heading"><div><p className="eyebrow">Waiting for a person</p><h2>Approve or reject, with a comment</h2></div><ShieldCheck size={16} /></div>
       <div className="studio-agent-list">{pending.map((ap) => <article className="studio-agent" key={ap.id}>
         <div className="studio-agent-top"><strong>{ap.title}</strong><small>{nameOf(ap.agent)} · {when(ap.created_at)}</small></div>
-        <pre className="studio-agent-pre">{ap.detail}</pre>
+        <Rich text={ap.detail} lines={8} />
         <textarea className="studio-agent-comment" rows={2} placeholder="Comment (optional)" value={comments[ap.id] ?? ''} onChange={(e) => setComments({ ...comments, [ap.id]: e.target.value })} />
         <div className="studio-agent-actions"><button className="button button-primary button-small" type="button" onClick={() => void decide(ap, 'approve')}><Check size={13} /> Approve</button><button className="button button-quiet button-small" type="button" onClick={() => void decide(ap, 'reject')}><X size={13} /> Reject</button></div>
       </article>)}</div></section>}
@@ -87,8 +88,8 @@ export function AgentsView({ live, me, setToast }: { live: Live; me: Me; setToas
           </div>
           {open === a.key && <div className="studio-agent-runs">{runs.length ? runs.slice(0, 20).map((r) => <div className="studio-agent-run" key={r.id}>
             <div className="studio-agent-top"><span className={`studio-agent-status is-${r.status}`}>{r.status}</span>{r.demo && <span className="studio-agent-tag">demo</span>}<small>{when(r.created_at)}{r.person ? ` · ${r.person}` : ''}</small></div>
-            <p><strong>Asked</strong> {r.input}</p>{r.output && <p><strong>Answered</strong> {r.output}</p>}{r.error && <p className="studio-agent-error">{r.error}</p>}
-            {r.steps.length > 0 && <ol>{r.steps.map((s, i) => <li key={i}>{s.detail}</li>)}</ol>}
+            <div className="studio-run-block"><span className="eyebrow">Asked</span><Rich text={r.input} lines={4} /></div>{r.output && <div className="studio-run-block"><span className="eyebrow">Answered</span><Rich text={r.output} lines={6} /></div>}{r.error && <p className="studio-agent-error">{r.error}</p>}
+            {r.steps.length > 0 && <Rich text={r.steps.map((s, i) => `${i + 1}. ${s.detail}`).join('\n')} lines={5} />}
           </div>) : <p className="studio-muted">No runs yet. They appear here as the app uses this agent.</p>}</div>}
         </article>
       })}</div></section>

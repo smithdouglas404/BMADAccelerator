@@ -7,6 +7,7 @@
 // sections are written into the PRFAQ. All wording of the explainer, questions and bars comes from the
 // studio-prfaq skill through /api/use-cases/[id]/prfaq; nothing here is fixed content.
 
+import { Rich } from './rich'
 import { useState } from 'react'
 import { ArrowRight, Check, CircleAlert, Loader2, Mic, MicOff, Minus, Send, Sparkles, X } from 'lucide-react'
 import { api, type Live } from './live'
@@ -83,7 +84,7 @@ export function PrfaqWalk({ live, me, info, reload, setToast, leave }: { live: L
       <span className="eyebrow">{step.title} · {step.holds}</span>
       <h3 className="studio-prfaq-ask">{step.ask}</h3>
       <p className="studio-prfaq-bar"><b>Good enough when:</b> {step.bar}</p>
-      {exchange.length > 0 && <div className="studio-prfaq-exchange">{exchange.map((m) => <div key={m.id} className={`studio-prfaq-turn${m.mine ? ' is-mine' : ''}`}><small>{m.who}</small><p>{m.text}</p></div>)}</div>}
+      {exchange.length > 0 && <div className="studio-prfaq-exchange">{exchange.map((m) => <div key={m.id} className={`studio-prfaq-turn${m.mine ? ' is-mine' : ''}`}><small>{m.who}</small><Rich text={m.text} lines={m.mine ? 0 : 8} /></div>)}</div>}
       {busy && <p className="studio-item-working"><Loader2 size={13} className="studio-spin" /> The team is checking your answer…</p>}
       {status && <p className={`studio-prfaq-verdict is-${status.replace(' ', '-')}`}>{statusIcon(status)} {status === 'ready' ? 'Ready. It goes into the PRFAQ now.' : status === 'needs work' ? 'Kept as needs work. It goes into the PRFAQ as it is; you can come back to it.' : 'Skipped for now.'}</p>}
       <div className="studio-prfaq-answer">
