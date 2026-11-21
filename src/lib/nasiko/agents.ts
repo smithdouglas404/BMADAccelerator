@@ -105,9 +105,9 @@ export function studioBaseForNasiko() {
 export type SyncResult = { ok: boolean; created: number; updated: number; failed: { name: string; why: string }[]; total: number; note: string };
 
 /** Registers every Studio agent in Nasiko's catalog by its address; updates the ones already there. Safe to run again. */
-export async function syncToNasiko(): Promise<SyncResult> {
+export async function syncToNasiko(studioBase?: string): Promise<SyncResult> {
   const specs = await allSpecs();
-  const base = studioBaseForNasiko();
+  const base = (studioBase || studioBaseForNasiko()).replace(/\/+$/, "");
   const existing = await listAgents();
   if (!existing.ok) return { ok: false, created: 0, updated: 0, failed: [], total: specs.length, note: existing.error };
   const byName = new Map(existing.body.map((a) => [a.name, a]));

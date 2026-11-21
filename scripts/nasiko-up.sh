@@ -28,6 +28,12 @@ if [ ! -f "$dest/.pinned" ] || [ "$(cat "$dest/.pinned")" != "$NASIKO_SHA" ]; th
   echo "$NASIKO_SHA" > "$dest/.pinned"
 fi
 
+# Work networks that re-sign secure connections (Zscaler and similar): give the build the certificates in NASIKO_CA_FILE.
+if [ -n "${NASIKO_CA_FILE:-}" ] && [ -f "$NASIKO_CA_FILE" ] && ! grep -q "corp-ca.pem" "$dest/server/Dockerfile"; then
+  cp "$NASIKO_CA_FILE" "$dest/corp-ca.pem"
+  awk '{print} /^FROM /{print "COPY corp-ca.pem /etc/ssl/corp-ca.pem"; print "ENV NODE_EXTRA_CA_CERTS=/etc/ssl/corp-ca.pem SSL_CERT_FILE=/etc/ssl/corp-ca.pem CARGO_HTTP_CAINFO=/etc/ssl/corp-ca.pem REQUESTS_CA_BUNDLE=/etc/ssl/corp-ca.pem CURL_CA_BUNDLE=/etc/ssl/corp-ca.pem GIT_SSL_CAINFO=/etc/ssl/corp-ca.pem"}' "$dest/server/Dockerfile" > "$dest/server/Dockerfile.tmp" && mv "$dest/server/Dockerfile.tmp" "$dest/server/Dockerfile"
+fi
+
 if [ ! -f .env.nasiko ]; then
   umask 077
   {
@@ -58,7 +64,7 @@ if curl -fsS "$STUDIO/api/nasiko" >/dev/null 2>&1; then
   body=$(printf '{"url":"%s","username":"%s","password":"%s"}' "$FROM_STUDIO" "$NASIKO_ADMIN_USER" "$NASIKO_ADMIN_PASSWORD")
   curl -fsS -X PUT -H 'Content-Type: application/json' -d "$body" "$STUDIO/api/nasiko" | sed 's/"cipher":"[^"]*"//' | head -c 400; echo
   echo "Registering the Studio's agents in Nasiko..."
-  curl -fsS -X POST "$STUDIO/api/nasiko/sync" | head -c 600; echo
+  curl -fsS -X POST -H 'Content-Type: application/json' -d "{\"studio_base\":\"${STUDIO_FOR_NASIKO:-http://host.docker.internal:3000}\"}" "$STUDIO/api/nasiko/sync" | head -c 600; echo
 else
   echo "The Studio is not answering on $STUDIO, so it was not connected. Open Settings > Nasiko once it is running."
 fi
