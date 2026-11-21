@@ -47,8 +47,8 @@ export const ROUTE_AGENTS = [
 ] as const;
 
 export const BOARD_COLUMNS = [
+  { status: "ready", title: "Ready to shape", hint: "New: shape it, then hold or make it real" },
   { status: "queued", title: "Backlog", hint: "Worth holding" },
-  { status: "ready", title: "Ready to shape", hint: "Promise is clear" },
   { status: "building", title: "Being made real", hint: "Agent + human in motion" },
   { status: "review", title: "Human review", hint: "Decide what ships" },
 ] as const;

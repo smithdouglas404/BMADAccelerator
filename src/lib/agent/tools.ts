@@ -315,7 +315,7 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
       ),
       tool(
         "move_card",
-        "Move a card on the Board, so nobody has to: to 'ready' once its acceptance criteria are agreed, back to 'queued' when a mark on the prototype or a person's no reopens it, to 'done' when a person said yes to it on the live preview. Builds move cards into and out of 'building' themselves. 'why' is one plain line the owner sees on the card (\"you approved it on version 4\").",
+        "Move a card on the Board, so nobody has to. 'ready' (Ready to shape) is the first column, where new cards are shaped: to 'queued' (Backlog) when it is shaped but held for later, to 'building' once its acceptance criteria are agreed and it should be built, back to 'ready' when a mark on the prototype or a person's no reopens it, to 'done' when a person said yes to it on the live preview. Builds move cards into and out of 'building' themselves. 'why' is one plain line the owner sees on the card (\"you approved it on version 4\").",
         { id: z.string(), status: z.enum(["queued", "ready", "building", "review", "done"]), why: z.string().min(5).max(300), causes: z.array(z.string()).default([]) },
         async ({ id, status, why, causes }) => {
           const { moveCard } = await import("@/lib/studio/board");
@@ -513,13 +513,13 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
       ),
       tool(
         "upsert_move",
-        "Create or update a build move on the Board. Every move traces to a capability and a decision. status: queued (Backlog), ready (Ready to shape), building (Being made real), review (Human review), done. owner: the agent or 'Product owner'. signal: a short tag (OPEN QUESTION, TRACEABLE, THIN SLICE, HUMAN REVIEW). hidden: capability | epic | story | task | workflow.",
+        "Create or update a build move on the Board. Every move traces to a capability and a decision. New cards start in Ready to shape (the first column). status: ready (Ready to shape), queued (Backlog: held for later), building (Being made real), review (Human review), done. owner: the agent or 'Product owner'. signal: a short tag (OPEN QUESTION, TRACEABLE, THIN SLICE, HUMAN REVIEW). hidden: capability | epic | story | task | workflow.",
         {
           id: z.string().default(""),
           title: z.string().min(3),
           capability: z.string().default(""),
           decision: z.string().default(""),
-          status: z.enum(["queued", "ready", "building", "review", "done"]).default("queued"),
+          status: z.enum(["queued", "ready", "building", "review", "done"]).default("ready"),
           owner: z.string().default("Product Engineer"),
           signal: z.string().default(""),
           hidden: z.string().default("story"),

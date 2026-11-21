@@ -5,7 +5,8 @@ import { recordChange } from "./truthlog";
 // picks up what is ready and hands it back for review, and a person's yes or mark finishes it or sends
 // it back. Every move says who or what made it and why, and lands in "Why did this change?".
 
-export const BOARD = ["queued", "ready", "building", "review", "done"] as const;
+// Ready to shape comes before Backlog (Doug, Nov 21): new items are shaped first, then held or made real.
+export const BOARD = ["ready", "queued", "building", "review", "done"] as const;
 export type BoardStatus = (typeof BOARD)[number];
 export const BOARD_LABEL: Record<BoardStatus, string> = { queued: "Backlog", ready: "Ready to shape", building: "Being made real", review: "Human review", done: "Done" };
 

@@ -19,6 +19,7 @@ type Entry = {
 type Trace = {
   nodes: string[]; entries: Entry[]; working: boolean
   question: { messageId: string; who: string; text: string; at: string; options: { n: number; label: string; suggested: boolean }[] } | null
+  decisions?: { id: string; text: string; who: string; at: string; options: { label: string; value: string }[] }[]
   counts: { questions: number; answers: number; turns: number; moves: number }
 }
 
@@ -62,16 +63,35 @@ export function ItemQuestions({ live, me, node, trace, reload, setToast }: { liv
     } catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
     finally { setSending(false) }
   }
+  const decide = async (id: string, status: 'approved' | 'rejected', answer?: string) => {
+    setSending(true)
+    try {
+      await api(`/api/use-cases/${live.id}/decisions/${id}`, { method: 'PATCH', json: { status, ...(answer ? { answer } : {}), by: me.name ? `${me.name} (${me.role})` : me.role } })
+      setToast(status === 'approved' ? `Decided. ${ASSISTANT_NAME} carries it into the product.` : `Rejected. ${ASSISTANT_NAME} will suggest another way.`)
+      await reload()
+    } catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
+    finally { setSending(false) }
+  }
   if (!trace) return <section className="studio-card-section studio-item-ask"><span className="eyebrow"><MessageCircleQuestion size={11} /> Questions</span><p className="studio-muted">Loading…</p></section>
   const q = trace.question
+  const ds = trace.decisions ?? []
   return <section className="studio-card-section studio-item-ask" aria-label="Questions about this item">
     <span className="eyebrow"><MessageCircleQuestion size={11} /> Questions about this item</span>
+    {ds.map((d) => <div key={d.id} className="studio-item-question">
+      <p className="studio-item-who">{d.who} · needs your decision · {ago(d.at)}</p>
+      <p className="studio-item-q">{d.text}</p>
+      <div className="studio-item-options">
+        {d.options.map((o, i) => <button key={o.value + i} type="button" className="button button-small button-quiet" disabled={sending} onClick={() => void decide(d.id, 'approved', o.label)}><b>{i + 1}</b> {o.label}</button>)}
+        {d.options.length === 0 && <button type="button" className="button button-small button-primary" disabled={sending} onClick={() => void decide(d.id, 'approved')}>Approve</button>}
+        <button type="button" className="button button-small button-quiet" disabled={sending} onClick={() => void decide(d.id, 'rejected')}>Reject</button>
+      </div>
+    </div>)}
     {q ? <div className="studio-item-question">
       <p className="studio-item-who">{q.who} · {ago(q.at)}</p>
       <p className="studio-item-q">{questionText(q.text)}</p>
       {q.options.length > 0 && <div className="studio-item-options">{q.options.map((o) => <button key={o.n} type="button" className={`button button-small ${o.suggested ? 'button-primary' : 'button-quiet'}`} disabled={sending} onClick={() => void send(String(o.n))}><b>{o.n}</b> {o.label.replace(/\s*\((suggested|recommended)\)\s*$/i, '')}{o.suggested && <em> suggested</em>}</button>)}</div>}
     </div> : trace.working || live.agentBusy ? <p className="studio-item-working"><Loader2 size={13} className="studio-spin" /> {ASSISTANT_NAME} and the specialist are looking at it. Their questions appear here and in the conversation.</p>
-      : <p className="studio-muted">{trace.counts.questions ? `No question is waiting: ${trace.counts.answers} ${trace.counts.answers === 1 ? 'answer' : 'answers'} given so far.` : `${ASSISTANT_NAME} hasn't asked anything about this item yet.`}</p>}
+      : ds.length ? null : <p className="studio-muted">{trace.counts.questions ? `No question is waiting: ${trace.counts.answers} ${trace.counts.answers === 1 ? 'answer' : 'answers'} given so far.` : `${ASSISTANT_NAME} hasn't asked anything about this item yet.`}</p>}
     <div className="studio-item-reply">
       <textarea rows={2} value={reply} onChange={(e) => setReply(e.target.value)} placeholder={q ? 'Answer in your own words…' : `Add detail or ask ${ASSISTANT_NAME} about this item…`} onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void send(reply) } }} aria-label="Your answer" />
       <button type="button" className="button button-primary button-small" disabled={sending || !reply.trim()} onClick={() => void send(reply)}><Send size={13} /> {sending ? 'Sending…' : 'Send'}</button>

@@ -19,7 +19,8 @@ export type TraceEntry = {
   detail?: { loaded?: string[]; skills?: string[]; agents?: string[]; tools?: string[]; status?: string; error?: string; node?: string; before?: string; after?: string };
 };
 export type OpenQuestion = { messageId: string; who: string; text: string; at: string; options: { n: number; label: string; suggested: boolean }[] };
-export type ItemTrace = { nodes: string[]; entries: TraceEntry[]; question: OpenQuestion | null; working: boolean; counts: { questions: number; answers: number; turns: number; moves: number } };
+export type ItemDecision = { id: string; text: string; who: string; at: string; options: { label: string; value: string }[] };
+export type ItemTrace = { nodes: string[]; entries: TraceEntry[]; question: OpenQuestion | null; decisions: ItemDecision[]; working: boolean; counts: { questions: number; answers: number; turns: number; moves: number } };
 
 const SPECIALIST_NAME: Record<string, string> = {
   "business-analyst": "Business analyst",
@@ -98,10 +99,22 @@ export async function itemTrace(useCaseId: string, node: string): Promise<ItemTr
   const question = q
     ? { messageId: q.id, who: brand(q.agent), text: q.content, at: q.createdAt.toISOString(), options: numberedOptions(q.content).map((o) => ({ ...o, suggested: o.n === marked })) }
     : null;
+  // Checkpoints Socra raised while working on this item (their record names the item as a cause): still open,
+  // they are this item's questions too.
+  const decisionIds = [...new Set(caused.filter((c) => c.node.startsWith("decision:")).map((c) => c.node.slice(9)))];
+  const open = decisionIds.length ? await prisma.decision.findMany({ where: { id: { in: decisionIds }, status: "open" }, orderBy: { createdAt: "asc" } }) : [];
+  const decisions = open.map((d) => ({
+    id: d.id,
+    text: brand(d.text),
+    who: brand(d.agent),
+    at: d.createdAt.toISOString(),
+    options: (Array.isArray(d.options) ? (d.options as { label?: string; value?: string }[]) : []).filter((o) => o && o.label).map((o) => ({ label: brand(String(o.label)), value: String(o.value ?? o.label) })),
+  }));
   return {
     nodes,
     entries,
     question,
+    decisions,
     working: pending > 0,
     counts: {
       questions: entries.filter((e) => e.kind === "asked" || (e.kind === "specialist" && /\?/.test(e.text))).length,

@@ -16,8 +16,10 @@ import { ItemQuestions, ItemTraceability, useItemTrace } from './itemtrace'
 
 type Status = 'queued' | 'ready' | 'building' | 'review' | 'done'
 const COLUMNS: { id: Status; label: string; description: string }[] = [
+  // Ready to shape comes first (Doug, Nov 21): what arrives (from Muse, Socra, a mark-up) waits there to be
+  // shaped, then goes to Backlog to hold or straight on to Being made real.
+  { id: 'ready', label: 'Ready to shape', description: 'New: shape it, then hold or make it real' },
   { id: 'queued', label: 'Backlog', description: 'Worth holding' },
-  { id: 'ready', label: 'Ready to shape', description: 'Promise is clear' },
   { id: 'building', label: 'Being made real', description: 'Agent + human in motion' },
   { id: 'review', label: 'Human review', description: 'Decide what ships' },
   { id: 'done', label: 'Done', description: 'Shipped, still traceable' },
@@ -125,8 +127,8 @@ export function BoardView({ live, me, buildNow, changeView, setToast, children, 
         onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('text/plain') || dragging; setOver(''); setDragging(''); if (id) void move(id, col.id, 'dragged on the Board') }}>
         <div className="kanban-column-header"><div><strong>{col.label}</strong><small>{col.description}</small></div><span>{items.length}</span></div>
         <div className="kanban-cards">
-          {col.id === 'queued' && waiting > 0 && <p className="studio-triage-head"><span className="studio-red-dot" /> {waiting} new · needs you</p>}
-          {col.id === 'queued' && fresh.map((b) => {
+          {col.id === 'ready' && waiting > 0 && <p className="studio-triage-head"><span className="studio-red-dot" /> {waiting} new · needs you</p>}
+          {col.id === 'ready' && fresh.map((b) => {
             const from = b.state === 'suggested' || b.state === 'probing' ? `${ASSISTANT_NAME} suggests` : b.annotationId || /mark/i.test(b.source) ? 'From a mark-up' : /Socra|Muse/i.test(b.source) ? `From ${ASSISTANT_NAME}` : 'You said'
             const later = deferredUntil(b); const back = b.triage === 'deferred' && !later
             return <article key={b.id} className={`build-card studio-board-card ${later ? 'studio-deferred-card' : needsTriage(b) ? 'studio-triage-card' : ''}`} aria-label={`Open ${b.title} to decide`} tabIndex={0} role="button"
@@ -137,7 +139,7 @@ export function BoardView({ live, me, buildNow, changeView, setToast, children, 
               {!later && <p className="studio-triage-open">Open it to accept, defer or reject <ArrowRight size={12} /></p>}
             </article>
           })}
-          {col.id === 'queued' && adding && <div className="build-card studio-board-new"><input autoFocus value={newTitle} onChange={(e) => setNewTitle(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void add(); if (e.key === 'Escape') setAdding(false) }} placeholder="What should the product do?" /><div><button className="button button-primary button-small" type="button" onClick={() => void add()} disabled={!newTitle.trim()}><Check size={12} /> Add</button><button className="button button-quiet button-small" type="button" onClick={() => setAdding(false)}>Cancel</button></div></div>}
+          {col.id === 'ready' && adding && <div className="build-card studio-board-new"><input autoFocus value={newTitle} onChange={(e) => setNewTitle(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void add(); if (e.key === 'Escape') setAdding(false) }} placeholder="What should the product do?" /><div><button className="button button-primary button-small" type="button" onClick={() => void add()} disabled={!newTitle.trim()}><Check size={12} /> Add</button><button className="button button-quiet button-small" type="button" onClick={() => setAdding(false)}>Cancel</button></div></div>}
           {items.map((item) => <article key={item.id} className={`build-card studio-board-card ${dragging === item.id ? 'is-dragging' : ''}`} draggable
             onDragStart={(e) => { e.dataTransfer.setData('text/plain', item.id); e.dataTransfer.effectAllowed = 'move'; setDragging(item.id) }}
             onDragEnd={() => { setDragging(''); setOver('') }}
@@ -149,11 +151,11 @@ export function BoardView({ live, me, buildNow, changeView, setToast, children, 
             {item.moveReason && <p className="studio-moved-by"><History size={11} /> {item.movedBy || 'Moved'}: {item.moveReason}</p>}
             <div className="build-card-footer"><span className="owner-avatar">{ownerMark(item.owner)}</span><small>{item.owner}</small>
               <span className="studio-board-arrows">
-                <button className="card-next" type="button" disabled={item.status === 'queued'} aria-label="Move back" title={item.status === 'queued' ? '' : `Back to ${LABEL[ORDER[ORDER.indexOf(item.status) - 1]]}`} onClick={(e) => { e.stopPropagation(); step(item.id, -1) }}><ArrowLeft size={14} /></button>
+                <button className="card-next" type="button" disabled={item.status === ORDER[0]} aria-label="Move back" title={item.status === ORDER[0] ? '' : `Back to ${LABEL[ORDER[ORDER.indexOf(item.status) - 1]]}`} onClick={(e) => { e.stopPropagation(); step(item.id, -1) }}><ArrowLeft size={14} /></button>
                 <button className="card-next" type="button" disabled={item.status === 'done'} aria-label="Move forward" title={item.status === 'done' ? '' : `On to ${LABEL[ORDER[ORDER.indexOf(item.status) + 1]]}`} onClick={(e) => { e.stopPropagation(); step(item.id, 1) }}><ArrowRight size={14} /></button>
               </span></div>
           </article>)}
-          {items.length === 0 && !(col.id === 'queued' && (adding || fresh.length > 0)) && <div className="empty-column">{dragging ? 'Drop it here.' : <>Nothing here yet.<br />That’s okay — the shape is still moving.</>}</div>}
+          {items.length === 0 && !(col.id === 'ready' && (adding || fresh.length > 0)) && <div className="empty-column">{dragging ? 'Drop it here.' : <>Nothing here yet.<br />That’s okay — the shape is still moving.</>}</div>}
         </div>
       </section>
     })}</div>
