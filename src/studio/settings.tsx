@@ -7,6 +7,7 @@ import { api } from './live'
 import { StudioTop } from './pages'
 import { ConnectTab } from './connect'
 import { JevValue } from './jev'
+import { NasikoTab } from './nasiko'
 
 type KeyStatus = { env: string; name: string; source: 'saved' | 'env' | 'missing'; last4: string }
 type Status = { providers: (KeyStatus & { id: string; models: string[] })[]; other: KeyStatus[]; claudePlan: boolean; roles: { env: string; label: string; note: string; providers: string[]; current: string; saved: boolean }[] }
@@ -18,11 +19,11 @@ const SOURCES = [['all', 'All'], ['studio', 'Studio'], ['ecc', 'ECC'], ['yours',
 const PAGE = 40
 
 export function SettingsPage() {
-  const [tab, setTab] = useState<'models' | 'connectors' | 'connect' | 'skills' | 'memory' | 'jev'>('models')
+  const [tab, setTab] = useState<'models' | 'connectors' | 'connect' | 'skills' | 'memory' | 'jev' | 'nasiko'>('models')
   const [toast, setToast] = useState('')
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get('tab')
-    if (t === 'connectors' || t === 'connect' || t === 'skills' || t === 'memory' || t === 'jev') setTab(t)
+    if (t === 'connectors' || t === 'connect' || t === 'skills' || t === 'memory' || t === 'jev' || t === 'nasiko') setTab(t)
   }, [])
   useEffect(() => { if (toast) { const t = window.setTimeout(() => setToast(''), 5000); return () => window.clearTimeout(t) } }, [toast])
   return (
@@ -30,13 +31,14 @@ export function SettingsPage() {
       <StudioTop active="settings" />
       <div className="page-wrap">
         <div className="page-intro"><div><p className="eyebrow">Settings</p><h1>The plumbing,<br /><em>out of the way.</em></h1><p>Three places to know: AI models and keys (what runs Socra), Tools the Studio uses (outside systems Socra can call), and Connect your assistant (how Muse or Claude reaches the Studio).</p></div></div>
-        <div className="studio-tabs">{([['models', 'AI models and keys'], ['connectors', 'Tools the Studio uses'], ['connect', 'Connect your assistant (Muse, Claude)'], ['skills', 'Skills'], ['memory', 'Memory'], ['jev', 'Jev']] as const).map(([k, l]) => <button key={k} type="button" className={tab === k ? 'is-active' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
+        <div className="studio-tabs">{([['models', 'AI models and keys'], ['connectors', 'Tools the Studio uses'], ['connect', 'Connect your assistant (Muse, Claude)'], ['skills', 'Skills'], ['memory', 'Memory'], ['jev', 'Jev'], ['nasiko', 'Nasiko']] as const).map(([k, l]) => <button key={k} type="button" className={tab === k ? 'is-active' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
         {tab === 'models' && <Models setToast={setToast} />}
         {tab === 'connectors' && <Connectors setToast={setToast} />}
         {tab === 'connect' && <ConnectTab setToast={setToast} />}
         {tab === 'skills' && <Skills setToast={setToast} />}
         {tab === 'memory' && <Memory />}
         {tab === 'jev' && <JevValue />}
+        {tab === 'nasiko' && <NasikoTab setToast={setToast} />}
       </div>
       {toast && <div className="toast" role="status"><span className="toast-check"><Check size={14} /></span>{toast}</div>}
     </div>

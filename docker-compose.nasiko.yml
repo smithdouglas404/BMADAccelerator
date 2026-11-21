@@ -1,0 +1,133 @@
+# Self-hosted Nasiko (open source, Apache 2.0): an open runtime for agents with a registry, access control, cost and
+# traces. A SEPARATE Docker project beside the Studio's own, started only by scripts/nasiko-up.sh. Nothing in the
+# Studio needs it: the Settings > Nasiko card shows "not set up" until it runs, and the Studio works the same without it.
+#
+# Ports: ONE host port, 8480 (NASIKO_PORT). The Studio's 3000, 41xx, 8288 and 8300 are untouched, and Nasiko's own
+# database, cache, storage and trace backends are not published at all (the upstream file publishes 5432, 6379, 9000, 3100,
+# 3200, 4317 and 4318, which could collide with other programs on this computer).
+#
+# The server builds from the pinned upstream source in vendor/nasiko (scripts/nasiko-up.sh fetches it).
+# Passwords and keys come from .env.nasiko, generated once by the script; never commit that file.
+name: bacc-nasiko
+
+services:
+  postgres:
+    image: docker.io/pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nasiko
+      POSTGRES_PASSWORD: ${NASIKO_DB_PASSWORD:?run scripts/nasiko-up.sh}
+      POSTGRES_DB: nasiko_dev
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./vendor/nasiko/init-databases.sql:/docker-entrypoint-initdb.d/create-extra-dbs.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nasiko -d nasiko_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [nasiko]
+
+  redis:
+    image: docker.io/library/redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [nasiko]
+
+  rustfs:
+    image: docker.io/rustfs/rustfs:latest
+    restart: unless-stopped
+    command: server /data --address :9000
+    environment:
+      RUSTFS_ROOT_USER: nasiko
+      RUSTFS_ROOT_PASSWORD: ${NASIKO_S3_SECRET:?run scripts/nasiko-up.sh}
+    volumes:
+      - rustfs-data:/data
+    networks: [nasiko]
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.119.0
+    restart: unless-stopped
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./vendor/nasiko/observability/config/otel-collector.yaml:/etc/otel-collector-config.yaml
+    depends_on: [tempo, loki]
+    networks: [nasiko]
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./vendor/nasiko/observability/config/tempo.yaml:/etc/tempo.yaml
+    networks: [nasiko]
+
+  loki:
+    image: grafana/loki:3.3.2
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    networks: [nasiko]
+
+  server:
+    build:
+      context: ./vendor/nasiko
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${NASIKO_PORT:-8480}:8080"
+    environment:
+      SECRETS_ENCRYPTION_KEY: ${NASIKO_SECRETS_KEY:?run scripts/nasiko-up.sh}
+      JWT_SECRET: ${NASIKO_JWT_SECRET:?run scripts/nasiko-up.sh}
+      AGENT_JWT_SECRET: ${NASIKO_AGENT_JWT_SECRET:?run scripts/nasiko-up.sh}
+      ADMIN_USERNAME: ${NASIKO_ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${NASIKO_ADMIN_PASSWORD:?run scripts/nasiko-up.sh}
+      S3_BUCKET: nasiko
+      S3_ACCESS_KEY: nasiko
+      S3_SECRET_KEY: ${NASIKO_S3_SECRET:?run scripts/nasiko-up.sh}
+      S3_REGION: us-east-1
+      AGENT_RUNTIME: docker
+      RUST_LOG: info
+      # The Studio's agents are registered by their address, and the Studio runs on this computer (a private
+      # address), so Nasiko must be allowed to call private addresses. Public ones (Cloud Run, Railway) need no setting.
+      AGENT_ALLOW_PRIVATE_URLS: "true"
+      DATABASE_URL: postgres://nasiko:${NASIKO_DB_PASSWORD:?run scripts/nasiko-up.sh}@postgres:5432/nasiko_dev
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: http://rustfs:9000
+      TEMPO_URL: http://tempo:3200
+      LOKI_URL: http://loki:3100
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_COLLECTOR_ENDPOINT: http://otel-collector:4317
+      CODING_AGENT_OTLP_ENDPOINT: http://otel-collector:4318
+      MCP_GATEWAY_PUBLIC_URL: http://server:8080/api/mcp
+      LLM_GATEWAY_BASE_URL: http://server:8080
+      MCP_OAUTH_REDIRECT_BASE_URL: http://localhost:${NASIKO_PORT:-8480}/api/mcp
+      COMPOSIO_CALLBACK_BASE_URL: http://localhost:${NASIKO_PORT:-8480}/api/mcp
+      REGISTRY_IMPORT_ALLOWED_HOSTS: registry.nasiko.com
+      DOCKER_AGENT_NETWORK: nasiko
+      # Model keys are not set here: add them inside Nasiko (Settings > Secrets) when you route a harness through it.
+      OPENAI_API_KEY: ""
+    extra_hosts:
+      # So the server can call the Studio at host.docker.internal on Linux too (Docker Desktop has it already).
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rustfs:
+        condition: service_started
+    networks: [nasiko]
+
+networks:
+  nasiko:
+    name: nasiko
+
+volumes:
+  postgres-data:
+  rustfs-data:

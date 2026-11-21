@@ -651,3 +651,20 @@ model JevCall {
   @@index([feature, createdAt])
   @@index([ref])
 }
+
+// The Studio's link to a self-hosted Nasiko (an open runtime for agents: registry, access, cost and traces).
+// One row. The password is encrypted like the Settings keys, never shown again (last four only), and kept
+// here rather than in the environment so Claude Code runs and generated apps never receive it.
+model NasikoLink {
+  id          String    @id @default("global")
+  url         String    @default("")
+  username    String    @default("")
+  cipher      String    @default("")
+  last4       String    @default("")
+  enabled     Boolean   @default(true)
+  loggedInAt  DateTime?
+  lastOkAt    DateTime?
+  lastError   String    @default("")
+  syncedAt    DateTime?
+  updatedAt   DateTime  @updatedAt
+}

@@ -10,3 +10,32 @@ input, textarea, select { font-size: 14px; }
 /* At the foot of the side menu: part of the menu, never on top of it. */
 .view-controls.is-docked { position: static; display: inline-flex; margin: 14px 0 0; box-shadow: none; align-self: flex-start; }
 .studio-page-top .view-controls.is-docked { margin: 0; align-self: center; }
+
+/* Readable data (Doug, Nov 21): everything an agent or the team wrote is shown through <Rich>. */
+.rich { color: inherit; font-size: 14px; line-height: 1.55; overflow-wrap: anywhere; }
+.rich > div > * { margin: 0 0 8px; }
+.rich > div > *:last-child { margin-bottom: 0; }
+.rich ul, .rich ol { padding-left: 20px; }
+.rich li { margin: 0 0 4px; padding-left: 2px; }
+.rich li::marker { color: var(--faint); }
+.rich-heading { font-size: 14px; font-weight: 600; margin-top: 4px; color: var(--ink); }
+.rich-pairs { display: grid; gap: 0; border: 1px solid var(--line); border-radius: var(--radius, 8px); overflow: hidden; }
+.rich-pairs > div { display: grid; grid-template-columns: minmax(80px, 24%) 1fr; gap: 12px; padding: 6px 10px; }
+.rich-pairs > div + div { border-top: 1px solid var(--line); }
+.rich-pairs dt { color: var(--muted); font-size: 12px; font-weight: 500; }
+.rich-pairs dd { margin: 0; }
+.rich-code { padding: 10px 12px; overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius, 8px); background: rgba(var(--hi-rgb), .04); font: 12px/1.5 'DM Mono', ui-monospace, monospace; white-space: pre; }
+.rich-clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--rich-lines, 4); overflow: hidden; }
+.rich-more { margin-top: 4px; font-size: 12px; }
+@media (max-width: 480px) { .rich-pairs > div { grid-template-columns: 1fr; gap: 2px; } }
+.studio-message-text, .studio-trace-text { white-space: normal; }
+.studio-message-text { margin: 12px 0 0 32px; color: var(--muted); }
+.message-card .rich p, .studio-agent-run .rich p, .studio-list-row .rich p { margin: 0 0 8px; }
+.message-card .rich p:last-child { margin-bottom: 0; }
+.studio-run-block { display: grid; gap: 4px; }
+.studio-list-row .rich { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.studio-moved-by .rich { font-size: 13px; }
+@media (max-width: 480px) { .studio-message-text { margin-left: 0; } }
+.studio-item-q, .studio-item-context p, .studio-prfaq-turn p { white-space: normal; }
+.studio-prfaq-turn .rich p { margin: 0 0 8px; }
+.studio-item-q .rich p { margin: 0 0 8px; }
