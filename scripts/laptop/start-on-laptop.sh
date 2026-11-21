@@ -110,6 +110,35 @@ cd "$APP" || exit 1
 sh scripts/memory-secrets.sh >/dev/null
 echo "Code is in $APP."
 
+# ---------- 3b. work networks that inspect secure connections ----------
+# Many company networks (Zscaler and similar) re-sign secure connections with their own certificate.
+# Containers don't know that certificate, so npm, pip and the model APIs fail with
+# "self-signed certificate in certificate chain". Take every certificate this Mac trusts and give it
+# to Podman's machine, to each build, and to the running services.
+CA="$APP/corp-ca.pem"
+security find-certificate -a -p /System/Library/Keychains/SystemRootCertificates.keychain /Library/Keychains/System.keychain > "$CA" 2>>"$LOG"
+security find-certificate -a -p "$HOME/Library/Keychains/login.keychain-db" >> "$CA" 2>>"$LOG"
+grep -q "BEGIN CERTIFICATE" "$CA" || fail "I couldn't read this Mac's certificates. Details are in $LOG."
+podman machine ssh "sudo sh -c 'cat > /etc/pki/ca-trust/source/anchors/corp-ca.pem && update-ca-trust'" < "$CA" >>"$LOG" 2>&1 \
+  || echo "(Couldn't add the certificates to Podman's machine; carrying on.)"
+CA_ENV="NODE_EXTRA_CA_CERTS=/etc/ssl/corp-ca.pem SSL_CERT_FILE=/etc/ssl/corp-ca.pem REQUESTS_CA_BUNDLE=/etc/ssl/corp-ca.pem CURL_CA_BUNDLE=/etc/ssl/corp-ca.pem GIT_SSL_CAINFO=/etc/ssl/corp-ca.pem PIP_CERT=/etc/ssl/corp-ca.pem"
+for D in . agent-service memory/mem0; do
+  cp "$CA" "$APP/$D/corp-ca.pem" 2>/dev/null
+  F="$APP/$D/Dockerfile"
+  grep -q "corp-ca.pem" "$F" || awk -v env="$CA_ENV" '{print} /^FROM /{print "COPY corp-ca.pem /etc/ssl/corp-ca.pem"; print "ENV " env}' "$F" > "$F.tmp" && mv "$F.tmp" "$F"
+done
+# Letta is used as published, so it gets the certificates at run time.
+cat > "$APP/docker-compose.override.yml" <<'YML'
+services:
+  letta:
+    volumes:
+      - ./corp-ca.pem:/etc/ssl/corp-ca.pem:ro
+    environment:
+      SSL_CERT_FILE: /etc/ssl/corp-ca.pem
+      REQUESTS_CA_BUNDLE: /etc/ssl/corp-ca.pem
+      NODE_EXTRA_CA_CERTS: /etc/ssl/corp-ca.pem
+YML
+
 # ---------- 4. keys, through pop-ups ----------
 say "Step 4 of 6: keys (pop-up windows)"
 if ! has_env OPENAI_API_KEY; then
@@ -129,7 +158,7 @@ if ! has_env CLAUDE_CODE_OAUTH_TOKEN && ask_yes "Sign in with your Claude plan n
   elif command -v npx >/dev/null 2>&1; then script -q "$T" npx -y @anthropic-ai/claude-code setup-token
   else
     echo "(Running the sign-in inside Podman. Cmd-click the link it prints to open it.)"
-    script -q "$T" podman run --rm -it docker.io/library/node:22-bookworm-slim npx -y @anthropic-ai/claude-code setup-token
+    script -q "$T" podman run --rm -it -v "$CA:/etc/ssl/corp-ca.pem:ro" -e NODE_EXTRA_CA_CERTS=/etc/ssl/corp-ca.pem docker.io/library/node:22-bookworm-slim npx -y @anthropic-ai/claude-code setup-token
   fi
   TOKEN="$(perl -0777 -ne '
     s/\e\[[0-9;?]*[A-Za-z]//g; s/\e\][^\a]*\a//g; s/\r//g; s/[\x00-\x08\x0b-\x1f]//g;
@@ -138,7 +167,7 @@ if ! has_env CLAUDE_CODE_OAUTH_TOKEN && ask_yes "Sign in with your Claude plan n
     $best = $1 if $best && $best =~ /^(sk-ant-oat.{85,}?AA)(?=[A-Z][a-z])/; print $best if $best;' "$T")"
   rm -f "$T"
   if [ "${#TOKEN}" -ge 90 ]; then set_env CLAUDE_CODE_OAUTH_TOKEN "$TOKEN"; set_env BACC_CLAUDE_AUTH plan; echo "Signed in to your Claude plan."
-  else echo "The plan sign-in didn't finish. The Studio still starts; you can sign in later by running this again."; fi
+  else echo "The plan sign-in didn't finish. (Details: the last lines above.)"; echo "The Studio still starts; you can sign in later by running this again."; fi
   unset TOKEN
 fi
 has_env CLAUDE_CODE_OAUTH_TOKEN || has_env ANTHROPIC_API_KEY || echo "Note: no Claude sign-in yet, so Socra can't answer until you run this again and sign in."
