@@ -50,6 +50,15 @@ export const NAV_GROUPS: { title: string; about: string; items: NavItem[] }[] = 
   },
 ]
 
+/** The Enterprise Harness (Doug, Nov 21): the Studio's link to your own Nasiko, its own entry at the foot of the side menu. It opens
+ *  Settings > Enterprise Harness, where the agents, tools and cost are shown. "Nasiko" stays as the small "powered by". */
+export const HARNESS = {
+  label: 'Enterprise Harness',
+  hint: 'Agents, tools and cost · powered by Nasiko',
+  href: '/settings?tab=nasiko',
+  tip: 'Your own agent runtime, powered by Nasiko: every Studio agent registered in one place, who can use each, the tools they can reach and what they cost. Opens its page in Settings.',
+}
+
 /** The four ways in (Doug, Nov 18). The path stays in life-cycle order for everyone; who you are decides where
  *  you start, which tools sit beside the path, and how Socra talks. Nothing is hidden: the rest is under "More". */
 export const PERSONAS: { key: Persona; role: string; label: string; blurb: string; start: StudioView; tools: StudioView[] }[] = [
