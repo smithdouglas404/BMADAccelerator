@@ -15,7 +15,7 @@ export type LiveSpec = {
   capability: string; related: string[]; trace: Trace[]; updatedAt: string; updatedBy: string
 }
 export type LiveDecision = { id: string; text: string; status: 'approved' | 'assumed' | 'open' | 'rejected'; capability: string; words: string; agent: string; options: unknown; answer: string; includeInBuild: boolean; builtInVersion: number; createdAt: string }
-export type LiveBacklog = { id: string; title: string; note: string; kind: BacklogItem['kind']; group: string; source: string; recKind: string; probe: string; state: string; hidden: string; includeInBuild: boolean; builtInVersion: number; createdAt: string; trackerUrl: string; annotationId?: string; triage?: string }
+export type LiveBacklog = { id: string; title: string; note: string; kind: BacklogItem['kind']; group: string; source: string; recKind: string; probe: string; state: string; hidden: string; includeInBuild: boolean; builtInVersion: number; createdAt: string; trackerUrl: string; annotationId?: string; triage?: string; deferUntil?: string | null }
 export type LiveMove = { id: string; title: string; capability: string; decision: string; status: string; owner: string; signal: string; hidden: string; components: string[]; routes: string[]; trackerUrl: string; movedBy?: string; moveReason?: string; prompt?: string }
 export type LiveCapability = { id: string; key: string; label: string; kicker: string; description: string; readiness: number; delta: string; signal: string; color: string; items: { id: string; text: string; state: string }[] }
 export type LiveMessage = { id: string; role: string; agent: string; content: string; accent: string; createdAt: string; author: string; authorRole: string; addressed: string; raw: string; ref: string }
@@ -113,10 +113,10 @@ export function toMessages(d: Live, me?: { name?: string }): StudioMessage[] {
   }))
 }
 
-export function toBacklog(d: Live): (BacklogItem & { ownerState: string; annotationId: string; triage: string; onBoard: string; needsYou: boolean })[] {
+export function toBacklog(d: Live): (BacklogItem & { ownerState: string; annotationId: string; triage: string; deferUntil: string; onBoard: string; needsYou: boolean })[] {
   return d.backlog
     .filter((b) => b.state !== 'suggested' && b.state !== 'probing')
-    .map((b) => ({ id: b.id, title: b.title, note: b.note, kind: b.kind, group: b.group || 'Unsorted signal', source: b.source, age: ago(b.createdAt), ownerState: ownerBacklogState(b), annotationId: b.annotationId || '', triage: b.triage || '', needsYou: needsTriage(b), onBoard: b.triage === 'accepted' ? (d.moves.find((m) => m.title === b.title.slice(0, 200))?.status ?? '') : '' }))
+    .map((b) => ({ id: b.id, title: b.title, note: b.note, kind: b.kind, group: b.group || 'Unsorted signal', source: b.source, age: ago(b.createdAt), ownerState: ownerBacklogState(b), annotationId: b.annotationId || '', triage: b.triage || '', deferUntil: b.deferUntil ?? '', needsYou: needsTriage(b), onBoard: b.triage === 'accepted' ? (d.moves.find((m) => m.title === b.title.slice(0, 200))?.status ?? '') : '' }))
 }
 
 export function toRecommendations(d: Live): RecommendationItem[] {

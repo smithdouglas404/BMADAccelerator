@@ -184,6 +184,8 @@ model BacklogItem {
   trackerUrl     String   @default("")
   // On the Board: "" = new, needs a person (red marker); working | accepted | rejected.
   triage         String   @default("")
+  // Deferred until this day: the item keeps its place, greyed, and needs a person again once the day comes (Doug, Nov 21).
+  deferUntil     DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   useCase        UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)

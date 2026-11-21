@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ROLES, personaOf, personaVoice, PERSONA_VOICE } from "../src/lib/studio/core.ts";
-import { journey, needsTriage } from "../src/lib/studio/journey.ts";
+import { deferredUntil, journey, needsTriage } from "../src/lib/studio/journey.ts";
 
 test("every role maps to a persona with its own voice", () => {
   for (const r of ROLES) assert.ok(PERSONA_VOICE[personaOf(r)], r);
@@ -25,4 +25,13 @@ test("progress adds up to 100 and names the next step", () => {
   assert.equal(needsTriage({ triage: "", state: "held", kind: "capture" }), true);
   assert.equal(needsTriage({ triage: "accepted", state: "held", kind: "capture" }), false);
   assert.equal(needsTriage({ triage: "", state: "built", kind: "capture" }), false);
+});
+
+test("a deferred item keeps waiting until its day, then needs a person again (Doug, Nov 21)", () => {
+  const day = (n) => new Date(Date.now() + n * 86400000).toISOString();
+  assert.equal(needsTriage({ triage: "deferred", deferUntil: day(3), state: "held", kind: "capture" }), false);
+  assert.ok(deferredUntil({ triage: "deferred", deferUntil: day(3) }));
+  assert.equal(needsTriage({ triage: "deferred", deferUntil: day(-1), state: "held", kind: "capture" }), true);
+  assert.equal(deferredUntil({ triage: "deferred", deferUntil: day(-1) }), null);
+  assert.equal(needsTriage({ triage: "deferred", deferUntil: null, state: "held", kind: "capture" }), false);
 });

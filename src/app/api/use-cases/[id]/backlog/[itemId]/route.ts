@@ -21,6 +21,8 @@ const Body = z.object({
   triage: z.enum(["working", "accepted", "rejected", "deferred"]).optional(),
   // Doug (Nov 19): picking an item and saying yes to "work on it now" puts its card straight into Ready to shape.
   ready: z.boolean().optional(),
+  // Doug (Nov 21): defer to a day. The item keeps its place and needs a person again once that day comes.
+  until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   by: z.string().max(80).default(""),
 });
 
@@ -33,7 +35,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
   const item = await prisma.backlogItem.findFirst({ where: { id: itemId, useCaseId: id } });
   if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (parsed.data.pull) return NextResponse.json(await pullForward(id, itemId));
-  if (parsed.data.triage) return NextResponse.json(await triage(id, item, parsed.data.triage, parsed.data.by || "A person", parsed.data.ready === true));
+  if (parsed.data.triage) return NextResponse.json(await triage(id, item, parsed.data.triage, parsed.data.by || "A person", parsed.data.ready === true, parsed.data.until));
   const { title, note, withdraw, by } = parsed.data;
   if (title !== undefined || note !== undefined || withdraw) {
     const who = by || "A person";
@@ -81,7 +83,9 @@ type Item = NonNullable<Awaited<ReturnType<typeof prisma.backlogItem.findFirst>>
 // A person deals with a new backlog item from the Board. Accepting puts it on the Board as a card in the
 // Backlog column (it stays there until it moves on); rejecting sets it aside (kept in history); working on
 // it asks Socra to open the conversation about it. Each one is logged and Socra hears it.
-async function triage(useCaseId: string, item: Item, to: "working" | "accepted" | "rejected" | "deferred", by: string, ready = false) {
+async function triage(useCaseId: string, item: Item, to: "working" | "accepted" | "rejected" | "deferred", by: string, ready = false, until?: string) {
+  const back = until ? new Date(`${until}T00:00:00`) : null
+  const backLabel = back ? back.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" }) : "";
   const suggestion = item.state === "suggested" || item.state === "probing";
   const group = item.group && !/^(Unsorted signal|Withdrawn|Parked by Socra)$/i.test(item.group) ? item.group : "";
   let moveId = "";
@@ -94,16 +98,17 @@ async function triage(useCaseId: string, item: Item, to: "working" | "accepted" 
       },
     });
     moveId = move.id;
-    await prisma.backlogItem.update({ where: { id: item.id }, data: { triage: "accepted", ...(suggestion ? { state: "held", kind: "epic" } : {}) } });
+    await prisma.backlogItem.update({ where: { id: item.id }, data: { triage: "accepted", deferUntil: null, ...(suggestion ? { state: "held", kind: "epic" } : {}) } });
     await recordChange(useCaseId, { node: `move:${move.id}`, kind: "added", summary: `${by} ${ready ? "chose to work on" : "accepted"} “${item.title}” ${ready ? "now: it is Ready to shape on the Board" : "onto the Board"}`, after: item.note, by, causes: [`backlog:${item.id}`] });
   } else if (to === "rejected") {
-    await prisma.backlogItem.update({ where: { id: item.id }, data: { triage: "rejected", kind: "distraction", group: "Withdrawn", includeInBuild: false, state: "held" } });
+    await prisma.backlogItem.update({ where: { id: item.id }, data: { triage: "rejected", deferUntil: null, kind: "distraction", group: "Withdrawn", includeInBuild: false, state: "held" } });
     await recordChange(useCaseId, { node: `backlog:${item.id}`, kind: "withdrawn", summary: `${by} rejected “${item.title}” (kept in history)`, before: item.title, after: "Rejected", by });
   } else if (to === "deferred") {
-    await prisma.backlogItem.update({ where: { id: item.id }, data: { triage: "deferred", group: "Deferred", includeInBuild: false, state: "held" } });
-    await recordChange(useCaseId, { node: `backlog:${item.id}`, kind: "changed", summary: `${by} deferred “${item.title}” (kept, not on the Board)`, before: item.title, after: "Deferred", by });
+    // It keeps its place (no group change, still shown greyed where it was) and comes back on its day.
+    await prisma.backlogItem.update({ where: { id: item.id }, data: { triage: "deferred", deferUntil: back, includeInBuild: false, ...(suggestion ? { state: "held" } : {}) } });
+    await recordChange(useCaseId, { node: `backlog:${item.id}`, kind: "changed", summary: `${by} deferred “${item.title}”${back ? ` until ${backLabel}` : ""}`, before: item.title, after: back ? `Deferred until ${backLabel}` : "Deferred", by });
   } else {
-    await prisma.backlogItem.update({ where: { id: item.id }, data: { triage: "working" } });
+    await prisma.backlogItem.update({ where: { id: item.id }, data: { triage: "working", deferUntil: null } });
   }
   await prisma.useCase.update({ where: { id: useCaseId }, data: { updatedAt: new Date() } });
   if (agentsEnabled()) {
@@ -115,7 +120,7 @@ async function triage(useCaseId: string, item: Item, to: "working" | "accepted" 
         : to === "rejected"
           ? `${by} rejected the backlog item “${item.title}” (id ${item.id}). ${suggestion ? "Don't propose it again unless they ask." : "Take it out of the product truth wherever it shaped something, and say in one line what that changes"} (with say about ["backlog:${item.id}"]). Ask nothing.`
           : to === "deferred"
-            ? `${by} deferred the backlog item “${item.title}” (id ${item.id}) for later. Keep it in history, don't shape it now, and don't raise it again unless asked. Ask nothing.`
+            ? `${by} deferred the backlog item “${item.title}” (id ${item.id})${back ? ` until ${backLabel}` : " for later"}. Keep it, don't shape it now, and don't raise it before then unless asked${back ? `; on ${backLabel} it shows red again for a person to decide` : ""}. Ask nothing.`
             : `${by} wants to talk “${item.title}” (id ${item.id}) through now${item.note ? ` (${item.note.slice(0, 600)})` : ""}. Say in one line what you understand it to mean.\n${ask("working")}`;
     await enqueue(useCaseId, "user", prompt, nodes.join(" "));
   }
