@@ -2,7 +2,7 @@
 // The flow around the design team's screens: who is working on the product, the next best move, the
 // Socra's visible specialists, numbered option chips, checkpoints with Approve and Reject, and the side
 // menu's four groups. Built from the team's classes; the few new ones are in studio-extras.css.
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowRight, Check, Compass, Layers3, PenTool, Scale, ShieldCheck, Undo2, UserRound, Users, Waves, Wrench, X } from 'lucide-react'
 import { ROLES, SPECIALISTS, numberedOptions, personaOf, type Persona } from '@/lib/studio/core'
@@ -110,8 +110,17 @@ export function useMe(): [Me, (m: Me) => void] {
 export const roleShort = (role: string) => (role === 'Product owner' ? 'PO' : role === 'Product engineer' ? 'PE' : role === 'Business analyst' ? 'BA' : role === 'UX/UI designer' ? 'UX' : role === 'Architect' ? 'AR' : role === 'Tech lead' ? 'TL' : role === 'First-time creator' ? 'NEW' : role === 'Subject-matter expert' ? 'SME' : 'ST')
 
 /** The team's top-bar avatar, opening who you are and who else works on this product. */
-export function PeopleMenu({ live, me, setMe, setToast }: { live: Live; me: Me; setMe: (m: Me) => void; setToast: (v: string) => void }) {
+export function PeopleMenu({ live, me, setMe, setToast, onPickPersona }: { live: Live; me: Me; setMe: (m: Me) => void; setToast: (v: string) => void; onPickPersona: (p: (typeof PERSONAS)[number]) => void }) {
   const [open, setOpen] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
+  // Closes on a click outside it or Escape, so it behaves like any profile menu.
+  useEffect(() => {
+    if (!open) return
+    const away = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node) && !(e.target as HTMLElement).closest?.('.studio-guard-overlay')) setOpen(false) }
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', away); document.addEventListener('keydown', esc)
+    return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc) }
+  }, [open])
   const [name, setName] = useState(me.name)
   const [role, setRole] = useState(me.role)
   const [other, setOther] = useState({ name: '', role: 'Business analyst' })
@@ -131,10 +140,14 @@ export function PeopleMenu({ live, me, setMe, setToast }: { live: Live; me: Me; 
   }
   const remove = (id: string) => void api(`/api/use-cases/${live.id}/members?member=${id}`, { method: 'DELETE' }).catch(() => undefined)
   return (
-    <div className="studio-people">
+    <div className="studio-people" ref={box}>
       <button className="top-avatar studio-avatar-button" type="button" onClick={() => setOpen(!open)} aria-expanded={open} title={me.name ? `${me.name} · ${me.role}` : me.role}>{me.name ? initials(me.name) : roleShort(me.role)}</button>
       {open && (
-        <div className="studio-people-menu" role="dialog" aria-label="People on this product">
+        <div className="studio-people-menu" role="dialog" aria-label="Your profile and the people on this product">
+          <a className="studio-profile-link" href="/settings"><span className="avatar">{me.name ? initials(me.name) : roleShort(me.role)}</span><span><strong>Settings</strong><small>{me.name ? `${me.name} · ${me.role}` : me.role}</small></span><ArrowRight size={14} /></a>
+          <PersonaSwitch me={me} onPick={onPickPersona} />
+          <p className="eyebrow">Colours</p>
+          <div className="profile-menu-theme" />
           <p className="eyebrow">You</p>
           <input className="studio-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
           <select className="studio-input" value={role} onChange={(e) => setRole(e.target.value)}>{ROLES.map((r) => <option key={r}>{r}</option>)}</select>

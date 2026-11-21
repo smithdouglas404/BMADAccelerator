@@ -67,3 +67,15 @@ input, textarea, select { font-size: 14px; }
 .studio-item-q, .studio-item-context p, .studio-prfaq-turn p { white-space: normal; }
 .studio-prfaq-turn .rich p { margin: 0 0 8px; }
 .studio-item-q .rich p { margin: 0 0 8px; }
+
+/* Profile menu in the top bar (Doug, Nov 21): Settings, who you are, colours and the people on this product, all behind
+   the avatar. Nothing of it stays in the side menu. */
+.studio-people-menu { max-height: calc(100vh - 80px); overflow-y: auto; top: 44px; }
+.studio-profile-link { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: var(--radius, 8px); color: var(--ink); text-decoration: none; }
+.studio-profile-link:hover { background: rgba(var(--hi-rgb), .05); }
+.studio-profile-link > span:nth-child(2) { display: grid; flex: 1; gap: 1px; min-width: 0; }
+.studio-profile-link small { color: var(--faint); font-size: 12px; }
+.studio-profile-link > svg { color: var(--faint); }
+.studio-people-menu .studio-persona-switch { display: flex; width: 100%; margin-top: 0; }
+.profile-menu-theme .view-controls.is-docked { margin: 0; }
+@media (max-width: 480px) { .studio-people-menu { position: fixed; left: 12px; right: 12px; top: 64px; width: auto; } }

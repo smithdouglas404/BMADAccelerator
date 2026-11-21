@@ -435,7 +435,6 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
           <ChevronDown size={15} />
         </ProductSwitcher>
 
-        <PersonaSwitch me={me} onPick={pickPersona} />
         <nav className="primary-nav studio-nav" aria-label="Product workspace">
           {menu.groups.map((group) => (<div className="studio-nav-group" key={group.title}><div className="sidebar-section-label studio-stage-label">{group.title}<small>{group.about}</small></div>{group.items.map(navButton)}</div>))}
           {menu.more.length > 0 && <div className="studio-nav-group studio-nav-more">
@@ -457,13 +456,12 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
           <p>Have a thought while you’re away from the desk? Put it here. No need to make it a ticket yet.</p>
           <button type="button" onClick={() => { if (!document.getElementById('ambient-capture')) changeView('product'); window.setTimeout(() => document.getElementById('ambient-capture')?.focus(), 80) }}><Plus size={14} /> Capture a thought</button>
         </div>
-        <div className="profile-row" role="link" tabIndex={0} title="Settings" onClick={() => { window.location.href = '/settings' }} onKeyDown={(event) => { if (event.key === 'Enter') window.location.href = '/settings' }}><div className="avatar">{me.name ? initials(me.name) : roleShort(me.role)}</div><div><strong>Settings</strong><small>{me.name ? `${me.name} · ${me.role}` : me.role}</small></div><MoreHorizontal size={16} /></div>
       </aside>
 
       <main className="main-content">
         <header className="topbar">
           <div className="breadcrumbs"><span>{live.name}</span><span className="crumb-slash">/</span><strong>{viewTitles[activeView]}</strong></div>
-          <div className="topbar-actions"><span className="save-state"><span /> {live.generateBusy ? live.generateStatus || 'Claude Code is building' : busy ? live.agentStatus || 'Socra is working' : 'All changes saved'}</span><button className="icon-button" type="button" aria-label="Notifications" onClick={() => changeView('conversation')}><Bell size={17} /></button><PeopleMenu live={live} me={me} setMe={setMe} setToast={setToast} /></div>
+          <div className="topbar-actions"><span className="save-state"><span /> {live.generateBusy ? live.generateStatus || 'Claude Code is building' : busy ? live.agentStatus || 'Socra is working' : 'All changes saved'}</span><button className="icon-button" type="button" aria-label="Notifications" onClick={() => changeView('conversation')}><Bell size={17} /></button><PeopleMenu live={live} me={me} setMe={setMe} setToast={setToast} onPickPersona={pickPersona} /></div>
         </header>
 
         <NextMove live={live} changeView={changeView} />
