@@ -223,4 +223,4 @@ for i in $(seq 1 90); do curl -fsS -o /dev/null http://localhost:3000 && break; 
 curl -fsS -o /dev/null http://localhost:3000 || fail "The Studio is starting slowly. Wait a minute and open http://localhost:3000. Details are in $LOG."
 open http://localhost:3000
 say "Done. The Studio is on http://localhost:3000 with your use cases."
-echo "To start it again after a restart: open Podman Desktop, start the machine, and the Studio comes back by itself."
+echo "After a restart, if localhost:3000 does not open: start the machine in Podman Desktop, then run this same line again (no pop-ups, your data stays)."
