@@ -120,11 +120,7 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
       await enqueue(
         useCaseId,
         "user",
-<<<<<<< HEAD
-        `${who.said} said: "${content}"\n\nThe Studio recorded it as an approved decision (id ${decision.id}): "${proposal}"${focus ? `, in ${focus.label}` : ""}, and moved its readiness forward. They can undo it. Carry it into the product truth (PRFAQ, the spec sections it touches, the capability's items from [assumed] to [confirmed] where it applies)${about.length ? `, and into the item it answers (${about.join(", ")}): its details and acceptance criteria; reply and ask the next question with say about ${JSON.stringify(about)}` : " and ask the next question"}.\n\n${await teamListensFor(useCaseId, { about, msg: `msg:${msg.id}` })}\n\n${personaVoice(who.role)}`,
-=======
-        `${who.said} said: "${content}"\n\nThe Studio recorded it as an approved decision (id ${decision.id}): "${proposal}"${focus ? `, in ${focus.label}` : ""}, and moved its readiness forward. They can undo it.${prfaqNote(about, msg.id)} Carry it into the product truth (PRFAQ, the spec sections it touches, the capability's items from [assumed] to [confirmed] where it applies)${about.length ? `, and into the item it answers (${about.join(", ")}): its details and acceptance criteria; reply and ask the next question with say about ${JSON.stringify(about)}` : " and ask the next question"}.\n\n${personaVoice(who.role)}`,
->>>>>>> origin/claude/project-thread-gesnu9
+        `${who.said} said: "${content}"\n\nThe Studio recorded it as an approved decision (id ${decision.id}): "${proposal}"${focus ? `, in ${focus.label}` : ""}, and moved its readiness forward. They can undo it.${prfaqNote(about, msg.id)} Carry it into the product truth (PRFAQ, the spec sections it touches, the capability's items from [assumed] to [confirmed] where it applies)${about.length ? `, and into the item it answers (${about.join(", ")}): its details and acceptance criteria; reply and ask the next question with say about ${JSON.stringify(about)}` : " and ask the next question"}.\n\n${await teamListensFor(useCaseId, { about, msg: `msg:${msg.id}` })}\n\n${personaVoice(who.role)}`,
         [`decision:${decision.id}`, ...about].join(" "),
       );
   } else if (unclearYes) {
@@ -145,11 +141,7 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
       await enqueue(
         useCaseId,
         "user",
-<<<<<<< HEAD
-        `${who.said} answered about ${titles}${answered ? ` (your question: “${clip(answered.content, 400)}”)` : ""}: "${content}"\n\nWrite the answer into the item (the card's details and acceptance criteria with upsert_move, or the backlog item) and the spec sections it touches. Reply in one line with say about ${JSON.stringify(about)}; if something a builder needs is still missing, ask the next question the same way (numbered options, your suggestion marked).\n\n${await teamListensFor(useCaseId, { about, msg: `msg:${msg.id}` })}\n\n${personaVoice(who.role)}`,
-=======
-        `${who.said} answered about ${titles}${answered ? ` (your question: “${clip(answered.content, 400)}”)` : ""}: "${content}"\n\n${about.includes("prfaq") ? prfaqNote(about, msg.id).trim() : "Write the answer into the item (the card's details and acceptance criteria with upsert_move, or the backlog item) and the spec sections it touches."} Reply in one line with say about ${JSON.stringify(about)}; if something a builder needs is still missing, ask the next question the same way (numbered options, your suggestion marked).\n\n${personaVoice(who.role)}`,
->>>>>>> origin/claude/project-thread-gesnu9
+        `${who.said} answered about ${titles}${answered ? ` (your question: “${clip(answered.content, 400)}”)` : ""}: "${content}"\n\n${about.includes("prfaq") ? prfaqNote(about, msg.id).trim() : "Write the answer into the item (the card's details and acceptance criteria with upsert_move, or the backlog item) and the spec sections it touches."} Reply in one line with say about ${JSON.stringify(about)}; if something a builder needs is still missing, ask the next question the same way (numbered options, your suggestion marked).\n\n${await teamListensFor(useCaseId, { about, msg: `msg:${msg.id}` })}\n\n${personaVoice(who.role)}`,
         [`msg:${msg.id}`, ...about].join(" "),
       );
     }
