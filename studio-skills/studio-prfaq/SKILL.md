@@ -71,8 +71,11 @@ For people who have never written a PRFAQ (and anyone who asks), the PRFAQ is bu
 
 ## What it reads
 
-- **Generate new**: everything the person has said for the PRFAQ (each talk, kept with the words as spoken), what they said in the conversation, and the documents they picked on the PRFAQ (Word, PowerPoint, PDF and the rest, read through their text versions). Each quote names which of these it came from, so every line links back to the talk, the message or the document.
-- **Reformat** (any press after the first): the PRFAQ as it stands, edits included. It only puts the same content back into the format's order and shape: the same sentences, the same markers, nothing added, nothing reworded, nothing removed. A line the format has no place for goes under Other notes. Sections still empty get a Missing line. A Reformat never brings in anything new; Generate new does, and replaces the draft (the previous version is kept and can be brought back).
+- **The first Generate**: everything the person has said for the PRFAQ (each talk, kept with the words as spoken), what they said in the conversation, and the documents they added on the PRFAQ (Word, PowerPoint, PDF and the rest, read through their text versions). Each quote names which of these it came from, so every line links back to the talk, the message or the document.
+- **Generate again, when a PRFAQ exists** (Doug, Nov 21): the person picks one of two.
+  - **Update it with what's new** (suggested): the PRFAQ stays exactly as it is. Only what came in since it was last written (new talks, new documents, new things said) is added: new lines inserted where they belong, gaps the new material answers filled. Nothing already there is reworded or removed.
+  - **Start a brand-new one**: rewritten from scratch from everything: the current PRFAQ (edits included), every talk and message before, every document ever added, plus the new material. Nothing said before is lost; the new material is woven in.
+  - Either way the previous version is kept and can be brought back.
 
 ## How the PRFAQ is written down
 
