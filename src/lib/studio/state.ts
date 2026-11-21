@@ -7,6 +7,7 @@ import { workspacePath } from "@/lib/workspace";
 import { syncPreviewState } from "@/lib/preview";
 import { ROUTE_AGENTS, overallReadiness, validationScore, type Validation } from "./core";
 import { assemblePackage, type PackageInput } from "./package";
+import { prfaqMarkers, prfaqWithFootnotes, type Source } from "./prfaqDraft";
 import { truthExport } from "./truthlog";
 import { readInterpretation } from "./truth";
 import { truthGraphSchema } from "@/studio/graph";
@@ -150,7 +151,7 @@ export async function packageInput(useCaseId: string, opts: { frames?: boolean; 
     validationScore: validationScore((uc.validation ?? {}) as Validation),
     repositoryUrl: uc.repoUrl,
     gitBranch: uc.gitBranch,
-    prfaq: uc.prfaq,
+    prfaq: await prfaqForPackage(uc.id, uc.prfaq, uc.prfaqSources),
     capabilities: uc.capabilities.map((c) => ({ key: c.key, label: c.label, readiness: c.readiness, description: c.description, items: (c.items ?? []) as { id: string; text: string; state: string }[] })),
     decisions: uc.decisions.map((d) => ({ id: d.id, text: d.text, status: d.status, capability: d.capability, words: d.words, agent: d.agent, answer: d.answer })),
     backlog: uc.backlog.map((b) => ({ id: b.id, title: b.title, note: b.note, kind: b.kind, group: b.group, source: b.source, recKind: b.recKind, state: b.state, hidden: b.hidden, includeInBuild: b.includeInBuild })),
@@ -217,4 +218,12 @@ export async function writePackage(useCaseId: string) {
   await fs.mkdir(dir, { recursive: true });
   for (const [name, content] of Object.entries(files)) await fs.writeFile(path.join(dir, name), content);
   return { iteration: uc.packageCount, version: rev.version, dir, files };
+}
+
+/** The PRFAQ for the package: its line markers become footnotes with the words each line rests on. */
+async function prfaqForPackage(useCaseId: string, prfaq: string, meta: unknown) {
+  const sources = ((meta && typeof meta === "object" ? (meta as { sources?: Record<string, Source> }).sources : undefined) ?? {});
+  const ids = prfaqMarkers(prfaq).filter((k) => k.startsWith("m:")).map((k) => k.slice(2));
+  const answers = ids.length ? await prisma.message.findMany({ where: { useCaseId, id: { in: ids } }, select: { id: true, content: true } }) : [];
+  return prfaqWithFootnotes(prfaq, sources, Object.fromEntries(answers.map((a) => [a.id, a.content])));
 }
