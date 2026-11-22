@@ -29,5 +29,5 @@ export async function GET() {
   const perMessageSummary = { messages: answered.size, runs: turnRuns.filter((x) => messagesOf(x.causes).length).length, retries: perMessage.reduce((n, m) => n + m.retries, 0), failed: perMessage.reduce((n, m) => n + m.failed, 0) };
 
   const recent = rows.filter((x) => !x.baseline).slice(0, 12).map((x) => ({ at: x.at, agent: x.agent, product: names.get(x.useCaseId) ?? "", model: x.model, provider: x.provider, purpose: x.purpose, tokens: x.inputTokens + x.outputTokens + x.cacheTokens, usd: x.costUsd, estimated: x.costSource === "estimated", ok: x.ok, attempt: x.attempt, error: x.error, kind: x.kind }));
-  return NextResponse.json({ ...r, byProduct: r.byProduct.map((p) => ({ ...p, name: p.useCaseId ? (names.get(p.useCaseId) ?? "Removed product") : "Not tied to a product" })), recent, messages, perMessage: perMessageSummary });
+  return NextResponse.json({ ...r, byAgentProduct: r.byAgentProduct.map((x) => ({ ...x, product: x.useCaseId ? (names.get(x.useCaseId) ?? "Removed product") : "Not tied to a product" })), byProduct: r.byProduct.map((p) => ({ ...p, name: p.useCaseId ? (names.get(p.useCaseId) ?? "Removed product") : "Not tied to a product" })), recent, messages, perMessage: perMessageSummary });
 }
