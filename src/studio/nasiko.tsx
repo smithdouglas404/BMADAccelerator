@@ -23,6 +23,7 @@ type Info = {
   studioAgents: { name: string; displayName: string; kind: string; product: string; description: string }[]
   mcp: { id: string; name: string; displayName: string; url: string; auth: string; status: string; error: string; connected: boolean; tools: { name: string; description: string }[] }[]
 }
+type Usage = { totalUsd: number; runs: number; tokens: number; since: string | null; byAgent: { agent: string; runs: number; tokens: number; usd: number }[]; byProduct: { useCaseId: string; name: string; runs: number; tokens: number; usd: number }[]; recent: { at: string; agent: string; product: string; model: string; tokens: number; usd: number; kind: string }[] }
 type Sync = { ok: boolean; created: number; updated: number; removed?: number; failed: { name: string; why: string }[]; total: number; note: string }
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : 'never')
@@ -34,6 +35,8 @@ export function NasikoTab({ setToast }: { setToast: (s: string) => void }) {
   // The result of the last Save and test, shown right under the button (a toast alone can scroll out of sight or vanish).
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null)
   const [sync, setSync] = useState<Sync | null>(null)
+  const [usage, setUsage] = useState<Usage | null>(null)
+  useEffect(() => { void api<Usage>('/api/usage', { cache: 'no-store' }).then(setUsage).catch(() => undefined) }, [])
   const load = () => void api<Info>('/api/nasiko', { cache: 'no-store' }).then((i) => { setInfo(i); setForm((f) => ({ url: f.url || i.link.url, username: f.username || i.link.username, password: '' })) }).catch((e: Error) => setToast(e.message))
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
   if (!info) return <p className="studio-muted">Reading Nasiko…</p>
@@ -132,6 +135,18 @@ export function NasikoTab({ setToast }: { setToast: (s: string) => void }) {
             <span className={c.status === 'active' && c.connected ? 'studio-ok' : 'studio-warn'}>{c.status === 'active' && c.connected ? 'active' : c.status || 'not connected'}</span>
           </div>
         ))}</div>
+      </section>
+
+      <section className="studio-card">
+        <div className="stack-header"><div><p className="eyebrow">Model use · recorded by the Studio</p><h3>What the Studio’s agents used</h3></div></div>
+        <Rich text={'Every Socra turn and every build is recorded when it ends, from the numbers Claude Code reports (an estimate, not a bill). Socra’s figure includes the specialists she sent out. Not recorded yet: document reading, cleaning up spoken words, Letta and Mem0 (OpenAI) memory calls. Jev keeps its own record on Settings > Jev. None of this passes through Nasiko, so Nasiko’s own cost page stays empty.'} />
+        {!usage || usage.runs === 0 ? <p className="studio-muted">Nothing recorded yet. The next time Socra answers or a build runs, it shows here.</p> : <>
+          <p><strong>${usage.totalUsd.toFixed(2)}</strong> over {usage.runs} run{usage.runs === 1 ? '' : 's'} · {usage.tokens.toLocaleString()} tokens{usage.since ? ` · since ${when(usage.since)}` : ''}</p>
+          <div className="studio-list">{usage.byAgent.map((a) => <div key={a.agent} className="studio-list-row"><div className="studio-row-main"><strong>{a.agent}</strong><small>{a.runs} run{a.runs === 1 ? '' : 's'} · {a.tokens.toLocaleString()} tokens</small></div><span>${a.usd.toFixed(2)}</span></div>)}</div>
+          <p className="eyebrow" style={{ marginTop: 12 }}>By product</p>
+          <div className="studio-list">{usage.byProduct.map((p) => <div key={p.useCaseId} className="studio-list-row"><div className="studio-row-main"><strong>{p.name}</strong><small>{p.runs} run{p.runs === 1 ? '' : 's'} · {p.tokens.toLocaleString()} tokens</small></div><span>${p.usd.toFixed(2)}</span></div>)}</div>
+          <details><summary>Latest runs</summary><ul>{usage.recent.map((r, i) => <li key={i}>{when(r.at)} · {r.agent}{r.product ? ` on ${r.product}` : ''} · {r.model || 'model'} · {r.tokens.toLocaleString()} tokens · ${r.usd.toFixed(3)}</li>)}</ul></details>
+        </>}
       </section>
 
       {info.spend && (
