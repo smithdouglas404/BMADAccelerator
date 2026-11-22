@@ -206,6 +206,9 @@ services:
     restart: unless-stopped
     depends_on:
       - app
+    # So the router can reach Nasiko (a separate Docker project) on this computer's port 8480.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "127.0.0.1:8089:8080"
     volumes:
