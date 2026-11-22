@@ -88,3 +88,17 @@ test("usage: the rollup groups per agent and per product and skips baselines", (
   assert.deepEqual(r.byAgent.map((a) => [a.agent, a.usd]), [["Claude Code", 4], ["Socra", 3]]);
   assert.deepEqual(r.byProduct.map((p) => [p.useCaseId, p.usd]), [["p1", 5], ["p2", 2]]);
 });
+
+import { usageEvent } from "../src/lib/nasiko/core.ts";
+test("usage event: one run becomes one Nasiko intake event with every required field and a stable id", () => {
+  const e = usageEvent({ id: "r1", useCaseId: "u1", productName: "ClaimSnap", agent: "Socra", kind: "turn", model: "claude-sonnet-5-5", inputTokens: 10, outputTokens: 5, cacheTokens: 7, at: new Date("2026-11-22T13:40:00Z"), ms: 8000 }, "ag1", "studio-socra");
+  assert.equal(e.version, 1);
+  assert.equal(e.event_id, "studio-usage-r1");
+  assert.equal(e.capture_policy, "metadata_only");
+  assert.deepEqual(e.source, { agent_id: "ag1", agent_name: "studio-socra" });
+  assert.equal(e.session.title, "ClaimSnap: conversation");
+  assert.equal(e.turn.llm_calls.length, 1);
+  assert.deepEqual([e.turn.llm_calls[0].input_tokens, e.turn.llm_calls[0].output_tokens, e.turn.llm_calls[0].cache_read_tokens, e.turn.llm_calls[0].cache_creation_tokens], [10, 5, 7, 0]);
+  assert.equal(e.turn.started_at, "2026-11-22T13:39:52.000Z");
+  assert.equal(usageEvent({ id: "b", useCaseId: "u", productName: "", agent: "Claude Code", kind: "build", model: "", inputTokens: 0, outputTokens: 0, cacheTokens: 0, at: new Date(0), ms: 0 }, "x", "studio-claude-code").session.title, "Studio: builds");
+});

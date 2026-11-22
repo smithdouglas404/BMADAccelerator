@@ -139,3 +139,29 @@ export function task(id: string, state: TaskState, text = "", contextId = "") {
     ...(text ? { artifacts: [{ artifactId: `${id}-answer`, parts: [{ text }] }] } : {}),
   };
 }
+
+// ---- usage events: what each Studio Claude run looks like to Nasiko's coding-agent intake ----
+
+export type UsageRun = { id: string; useCaseId: string; productName: string; agent: string; kind: string; model: string; inputTokens: number; outputTokens: number; cacheTokens: number; at: Date; ms: number };
+
+/** One Nasiko intake event for one recorded run. The cost is not sent: Nasiko prices the call from the model name. Same id twice is ignored by Nasiko. */
+export function usageEvent(r: UsageRun, agentId: string, agentName: string) {
+  const end = new Date(r.at);
+  const start = new Date(end.getTime() - Math.max(1, r.ms));
+  const iso = (d: Date) => d.toISOString();
+  return {
+    version: 1,
+    event_id: `studio-usage-${r.id}`,
+    captured_at: iso(end),
+    capture_policy: "metadata_only",
+    source: { agent_id: agentId, agent_name: agentName },
+    session: { id: `studio-${r.useCaseId}`, source_id: r.useCaseId, title: `${r.productName || "Studio"}: ${r.kind === "build" ? "builds" : "conversation"}` },
+    turn: {
+      id: `studio-turn-${r.id}`,
+      started_at: iso(start),
+      ended_at: iso(end),
+      tool_calls: [],
+      llm_calls: [{ id: `studio-call-${r.id}`, provider: "anthropic", model: r.model || "claude-sonnet-5-5", input_tokens: r.inputTokens, output_tokens: r.outputTokens, cache_read_tokens: r.cacheTokens, cache_creation_tokens: 0, started_at: iso(start), ended_at: iso(end) }],
+    },
+  };
+}
