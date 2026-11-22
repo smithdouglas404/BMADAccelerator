@@ -21,9 +21,41 @@ set -uo pipefail
 MODE="${1:-}"
 CODE_BRANCH="${SOCRA_BRANCH:-mac-studio}"
 # Release of THIS script (the laptop fixes). Settings > Update compares it with the newest one on GitHub.
-SCRIPT_REV="9"
+SCRIPT_REV="10"
 
 HOME_DIR="$HOME/SocraStudio"
+
+# Which Podman machine is Doug's? Never create a second one when one exists. Order: SOCRA_MACHINE, the saved
+# choice (~/SocraStudio/.machine), a machine that is running the Studio's containers, any running machine,
+# the default machine, the only machine. Sets PM_NAME ("" = no machine at all) and points podman at it.
+pick_machine() {
+  PM_NAME=""
+  command -v podman >/dev/null 2>&1 || return 0
+  local names n saved
+  names=$(podman machine list --format '{{.Name}}' 2>/dev/null | sed 's/\*$//' | sed '/^$/d')
+  [ -z "$names" ] && return 0
+  saved=$(cat "$HOME_DIR/.machine" 2>/dev/null | tr -d '[:space:]')
+  for n in "${SOCRA_MACHINE:-}" "$saved"; do
+    [ -n "$n" ] && echo "$names" | grep -qx "$n" && PM_NAME="$n" && break
+  done
+  if [ -z "$PM_NAME" ]; then
+    for n in $names; do
+      if podman --connection "$n" ps -a --format '{{.Names}}' 2>/dev/null | grep -q '^bmadaccelerator-'; then PM_NAME="$n"; break; fi
+    done
+  fi
+  if [ -z "$PM_NAME" ]; then
+    PM_NAME=$(podman machine list --format '{{.Name}}|{{.Running}}' 2>/dev/null | sed 's/\*|/|/' | awk -F'|' '$2=="true"{print $1; exit}')
+  fi
+  if [ -z "$PM_NAME" ]; then
+    PM_NAME=$(podman machine list --format '{{.Name}}|{{.Default}}' 2>/dev/null | sed 's/\*|/|/' | awk -F'|' '$2=="true"{print $1; exit}')
+  fi
+  [ -z "$PM_NAME" ] && PM_NAME=$(echo "$names" | head -1)
+  mkdir -p "$HOME_DIR" && echo "$PM_NAME" > "$HOME_DIR/.machine"
+  podman system connection default "$PM_NAME" >/dev/null 2>&1 || true
+  export CONTAINER_CONNECTION="$PM_NAME"
+}
+command -v podman >/dev/null 2>&1 || for p in /opt/podman/bin /opt/homebrew/bin /usr/local/bin; do [ -x "$p/podman" ] && export PATH="$p:$PATH"; done
+pick_machine
 APP="$HOME_DIR/BMADAccelerator"
 DATA="$HOME_DIR/data"
 LOG="$HOME_DIR/setup.log"
@@ -61,7 +93,7 @@ diagnose() {
     echo; echo "== containers =="
     podman ps -a --format '{{.Names}}  {{.Status}}' 2>&1 | sort
     echo; echo "== memory =="
-    podman machine inspect --format 'Podman machine memory (MB): {{.Resources.Memory}}' 2>&1 | head -1
+    podman machine inspect "$PM_NAME" --format 'Podman machine memory (MB): {{.Resources.Memory}}' 2>&1 | head -1
     podman exec bmadaccelerator-app-1 sh -c 'free -m | head -2' 2>&1
     echo; echo "== the Studio app's settings =="
     podman exec bmadaccelerator-app-1 sh -c 'echo "npm certificate file: ${npm_config_cafile:-NOT SET}"; echo "start every app at boot: ${BACC_NO_RESUME_PREVIEWS:-yes}"; ls -ld /home/node/.npm /data/workspaces; id' 2>&1
@@ -157,19 +189,23 @@ command -v podman >/dev/null 2>&1 || fail "I can't find Podman on this laptop. I
 
 TOTAL_MB=$(( $(sysctl -n hw.memsize) / 1024 / 1024 ))
 WANT_MB=8192; [ "$TOTAL_MB" -lt 16384 ] && WANT_MB=$(( TOTAL_MB / 2 ))
-if ! podman machine inspect >/dev/null 2>&1; then
-  echo "Creating Podman's Linux machine (one time, a few minutes)..."
+pick_machine
+if [ -z "$PM_NAME" ]; then
+  echo "No Podman machine found; creating one (one time, a few minutes)..."
   podman machine init --cpus 4 --memory "$WANT_MB" --disk-size 100 >>"$LOG" 2>&1 || fail "Podman couldn't create its machine. Details are in $LOG."
+  pick_machine
+else
+  echo "Using your Podman machine: $PM_NAME"
 fi
-MEM=$(podman machine inspect --format '{{.Resources.Memory}}' 2>/dev/null | head -1)
+MEM=$(podman machine inspect "$PM_NAME" --format '{{.Resources.Memory}}' 2>/dev/null | head -1)
 if [ -n "$MEM" ] && [ "$MEM" -lt 6144 ] && [ "$WANT_MB" -gt "$MEM" ]; then
   echo "Giving Podman more memory ($MEM MB is too little for the Studio build)..."
-  podman machine stop >>"$LOG" 2>&1
-  podman machine set --memory "$WANT_MB" --cpus 4 >>"$LOG" 2>&1
+  podman machine stop "$PM_NAME" >>"$LOG" 2>&1
+  podman machine set "$PM_NAME" --memory "$WANT_MB" --cpus 4 >>"$LOG" 2>&1
 fi
 if ! podman info >/dev/null 2>&1; then
-  podman machine start >>"$LOG" 2>&1
-  podman info >/dev/null 2>&1 || fail "Podman's machine didn't start. Open Podman Desktop, start the machine there, then run this again."
+  podman machine start "$PM_NAME" >>"$LOG" 2>&1
+  podman info >/dev/null 2>&1 || fail "Podman's machine ($PM_NAME) didn't start. Open Podman Desktop, start it there, then run this again."
 fi
 
 # A compose tool for "podman compose". The Studio's file needs Docker Compose (podman-compose skips its
@@ -225,7 +261,7 @@ CA="$APP/corp-ca.pem"
 security find-certificate -a -p /System/Library/Keychains/SystemRootCertificates.keychain /Library/Keychains/System.keychain > "$CA" 2>>"$LOG"
 security find-certificate -a -p "$HOME/Library/Keychains/login.keychain-db" >> "$CA" 2>>"$LOG"
 grep -q "BEGIN CERTIFICATE" "$CA" || fail "I couldn't read this Mac's certificates. Details are in $LOG."
-podman machine ssh "sudo sh -c 'cat > /etc/pki/ca-trust/source/anchors/corp-ca.pem && update-ca-trust'" < "$CA" >>"$LOG" 2>&1 \
+podman machine ssh "$PM_NAME" "sudo sh -c 'cat > /etc/pki/ca-trust/source/anchors/corp-ca.pem && update-ca-trust'" < "$CA" >>"$LOG" 2>&1 \
   || echo "(optional certificate step for Podman's own machine did not apply; image downloads work without it)" >>"$LOG"
 CA_ENV="NODE_EXTRA_CA_CERTS=/etc/ssl/corp-ca.pem SSL_CERT_FILE=/etc/ssl/corp-ca.pem REQUESTS_CA_BUNDLE=/etc/ssl/corp-ca.pem CURL_CA_BUNDLE=/etc/ssl/corp-ca.pem GIT_SSL_CAINFO=/etc/ssl/corp-ca.pem PIP_CERT=/etc/ssl/corp-ca.pem"
 for D in . agent-service memory/mem0; do
