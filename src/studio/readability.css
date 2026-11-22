@@ -95,3 +95,4 @@ input, textarea, select { font-size: 14px; }
 @media (prefers-reduced-motion: reduce) { .studio-nav-body, .studio-nav-chevron { transition: none; } }
 @media (max-width: 760px) { .studio-nav-head { display: none; } .studio-nav-body { grid-template-rows: 1fr; } .studio-nav-body > div { display: flex; gap: 5px; } .studio-nav-accordion { display: contents; } .studio-nav-body { display: contents; } }
 @media (min-width: 761px) { .studio-nav-accordion:not(.is-open) > .studio-nav-body > div { visibility: hidden; } }
+.studio-profile-icon { display: grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 50%; background: rgba(var(--hi-rgb), .06); color: var(--muted); }

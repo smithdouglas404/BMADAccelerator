@@ -4,7 +4,7 @@
 // menu's four groups. Built from the team's classes; the few new ones are in studio-extras.css.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowRight, Check, Compass, Layers3, PenTool, Scale, ShieldCheck, Undo2, UserRound, Users, Waves, Wrench, X } from 'lucide-react'
+import { Archive, Server, ArrowRight, Check, Compass, Layers3, PenTool, Scale, ShieldCheck, Undo2, UserRound, Users, Waves, Wrench, X } from 'lucide-react'
 import { ROLES, SPECIALISTS, numberedOptions, personaOf, type Persona } from '@/lib/studio/core'
 import type { ViewId } from './data'
 import { api, initials, type Live, type StudioMessage } from './live'
@@ -154,6 +154,8 @@ export function PeopleMenu({ live, me, setMe, setToast, onPickPersona }: { live:
       {open && (
         <div className="studio-people-menu" role="dialog" aria-label="Your profile and the people on this product">
           <a className="studio-profile-link" href="/settings"><span className="avatar">{me.name ? initials(me.name) : roleShort(me.role)}</span><span><strong>Settings</strong><small>{me.name ? `${me.name} · ${me.role}` : me.role}</small></span><ArrowRight size={14} /></a>
+          <a className="studio-profile-link" href={HARNESS.href} title={HARNESS.tip}><span className="studio-profile-icon"><Server size={14} /></span><span><strong>{HARNESS.label}</strong><small>{HARNESS.hint}</small></span><ArrowRight size={14} /></a>
+          <a className="studio-profile-link" href="/archived"><span className="studio-profile-icon"><Archive size={14} /></span><span><strong>Archived use cases</strong><small>Browse and restore</small></span><ArrowRight size={14} /></a>
           <PersonaSwitch me={me} onPick={onPickPersona} />
           <p className="eyebrow">Colours</p>
           <div className="profile-menu-theme" />
