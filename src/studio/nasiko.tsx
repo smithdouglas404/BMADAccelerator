@@ -3,14 +3,18 @@
 // traces). Everything shown is read from the real Nasiko server and the Studio's own records.
 import { useEffect, useState } from 'react'
 import { Check, Plug, RefreshCw, Trash2 } from 'lucide-react'
-import { api, previewUrl } from './live'
+import { api } from './live'
 import { Rich } from './rich'
 
-/** Where to open Nasiko's own dashboard from the browser in use. On the Mac itself (localhost) it is the Nasiko port on this computer; through a public
- *  address it is the same port-per-hostname door the product previews use (https://p8480.<your domain>), taken from the address in the browser, never typed in. */
-function dashboardUrl(serverUrl: string) {
+/** Nasiko's own dashboard is on this computer's Nasiko port, so it opens from the Mac the Studio runs on. There is no public address for it (the Studio's public door
+ *  serves product previews only); from another computer the card says so instead of showing a link that would not open. */
+function dashboard(serverUrl: string): { href: string; here: boolean } {
   const m = /:(\d{2,5})(?:\/|$)/.exec(serverUrl || '')
-  return previewUrl(m ? Number(m[1]) : 8480, '/')
+  const port = m ? Number(m[1]) : 8480
+  if (typeof window === 'undefined') return { href: '', here: false }
+  const h = window.location.hostname
+  const here = h === 'localhost' || h === '[::1]' || /^\d{1,3}(\.\d{1,3}){3}$/.test(h) || h.endsWith('.local') || !h.includes('.')
+  return { href: `${window.location.protocol}//${h}:${port}/`, here }
 }
 
 type Info = {
@@ -70,7 +74,7 @@ export function NasikoTab({ setToast }: { setToast: (s: string) => void }) {
         <div className="studio-list">
           <div className="studio-list-row"><div className="studio-row-main"><strong>Server</strong><small>{!info.link.url ? 'Not set up yet' : h?.reachable ? (h.ready ? 'Running and ready' : 'Running, not ready') : h?.error || 'Not answering'}</small></div><span className={h?.reachable && h.ready ? 'studio-ok' : 'studio-warn'}>{!info.link.url ? '–' : h?.reachable ? (h.ready ? 'up' : 'starting') : 'down'}</span></div>
           {h?.reachable && <div className="studio-list-row"><div className="studio-row-main"><strong>Inside Nasiko</strong><small>database {h.postgres ? 'ok' : 'down'} · cache {h.redis ? 'ok' : 'down'} · agent runtime {h.orchestrator ? 'ok' : 'down'}{typeof h.agentsTotal === 'number' ? ` · ${h.agentsTotal} agents, ${h.agentsRunning ?? 0} running` : ''}</small></div></div>}
-          {info.link.url && <div className="studio-list-row"><div className="studio-row-main"><strong>Nasiko’s own dashboard</strong><small>Opens from this computer, or through your public address when you are not on it. Nasiko asks for its own sign-in (admin; the password is in .env.nasiko).</small></div><a className="button button-quiet" href={dashboardUrl(info.link.url)} target="_blank" rel="noreferrer">Open Nasiko</a></div>}
+          {info.link.url && (() => { const d = dashboard(info.link.url); return <div className="studio-list-row"><div className="studio-row-main"><strong>Nasiko’s own dashboard</strong><small>{d.here ? `Sign in to Nasiko as ${info.link.username || 'admin'}. Its password is in the file .env.nasiko in the Studio’s folder on the Mac; it is never shown here.` : `Open it from the computer the Studio runs on (port ${/:(\d{2,5})(?:\/|$)/.exec(info.link.url)?.[1] || '8480'} there). It has no public address, on purpose. Sign in as ${info.link.username || 'admin'}; the password is in .env.nasiko on that computer.`}</small></div>{d.here && <a className="button button-quiet" href={d.href} target="_blank" rel="noreferrer">Open Nasiko</a>}</div> })()}
           <div className="studio-list-row"><div className="studio-row-main"><strong>Studio’s sign-in</strong><small>{info.signedIn ? `Signed in as ${info.link.username}. Last signed in ${when(info.link.loggedInAt)}; it signs in again after 6 days.` : info.problem || info.link.lastError || (info.link.passwordSet ? 'Not signed in yet' : 'No password saved')}</small></div><span className={info.signedIn ? 'studio-ok' : 'studio-muted'}>{info.signedIn ? 'signed in' : '–'}</span></div>
         </div>
         <div className="studio-kv">
