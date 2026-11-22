@@ -56,11 +56,15 @@ if [ ! -f .env.nasiko ]; then
   echo "Created .env.nasiko with fresh passwords."
 fi
 
+# Optional local settings (a Composio key, coding sessions) live in a git-ignored override file; use it when it is there.
+OVERRIDE=""
+[ -f .env.nasiko.override.yml ] && OVERRIDE="-f .env.nasiko.override.yml"
+
 if [ -n "${NASIKO_NO_BUILD:-}" ]; then
   # The server image was built elsewhere and loaded here (podman load): start without compiling anything.
-  $COMPOSE -p bacc-nasiko -f docker-compose.nasiko.yml --env-file .env.nasiko up -d --no-build
+  $COMPOSE -p bacc-nasiko -f docker-compose.nasiko.yml $OVERRIDE --env-file .env.nasiko up -d --no-build
 else
-  $COMPOSE -p bacc-nasiko -f docker-compose.nasiko.yml --env-file .env.nasiko up -d --build
+  $COMPOSE -p bacc-nasiko -f docker-compose.nasiko.yml $OVERRIDE --env-file .env.nasiko up -d --build
 fi
 
 printf "Waiting for Nasiko on port %s" "$PORT"
