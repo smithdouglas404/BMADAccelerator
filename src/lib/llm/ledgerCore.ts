@@ -127,3 +127,26 @@ export function runsPerMessage(rows: RunRow[]): MessageRuns[] {
 
 /** The attempt number of the next run in a turn: one more than the runs already recorded for it. */
 export const nextAttempt = (alreadyInTurn: number) => alreadyInTurn + 1;
+
+// ---- the LiteLLM gateway (Doug, Nov 22) ----
+
+/** The environment name of an agent's LiteLLM virtual key: "Document reader" -> LITELLM_KEY_DOCUMENT_READER. */
+export const gatewayKeyName = (agent: string) => "LITELLM_KEY_" + agent.normalize("NFKD").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "").toUpperCase();
+
+/** Which key an agent uses: its own when one is set, else the shared one for its kind of work (writers), else none (the call goes direct). */
+export function gatewayKeyFor(agent: string, kind: string, env: Record<string, string | undefined>): string | null {
+  const own = env[gatewayKeyName(agent)];
+  if (own) return own;
+  if (kind === "writer") return env.LITELLM_KEY_WRITERS || null;
+  return null;
+}
+
+/** True when a failed call says the gateway itself is not there (no connection, a timeout, or a bad-gateway answer), so the call may go direct.
+ *  A refusal the gateway gave on purpose (a spent budget, a bad key) is NOT a reason to go around it. */
+export function gatewayIsDown(e: unknown): boolean {
+  const x = e as { status?: number; code?: string; cause?: { code?: string }; name?: string; message?: string } | null;
+  if (!x) return false;
+  if (typeof x.status === "number") return x.status === 502 || x.status === 503 || x.status === 504;
+  const code = x.code ?? x.cause?.code ?? "";
+  return /ECONNREFUSED|ECONNRESET|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|UND_ERR/i.test(code) || /APIConnection|fetch failed|ECONNREFUSED|timed? ?out/i.test(`${x.name ?? ""} ${x.message ?? ""}`);
+}

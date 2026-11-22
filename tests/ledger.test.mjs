@@ -126,3 +126,22 @@ test("the agent service reads tokens from Anthropic, OpenAI and Gemini answers, 
   assert.equal(svc.tokensFromRaw("nope"), null);
   assert.equal(svc.tokensFromRaw(undefined), null);
 });
+
+test("the LiteLLM gateway: each agent's own key name, the shared writers key, and when going direct is allowed", () => {
+  assert.equal(core.gatewayKeyName("Document reader"), "LITELLM_KEY_DOCUMENT_READER");
+  assert.equal(core.gatewayKeyName("Mem0 · recall"), "LITELLM_KEY_MEM0_RECALL");
+  const env = { LITELLM_KEY_DOCUMENT_READER: "k1", LITELLM_KEY_WRITERS: "kw" };
+  assert.equal(core.gatewayKeyFor("Document reader", "document", env), "k1");
+  assert.equal(core.gatewayKeyFor("PRFAQ writer", "writer", env), "kw");
+  assert.equal(core.gatewayKeyFor("Speech cleaner", "speech", env), null);
+  // not there: go direct
+  assert.equal(core.gatewayIsDown({ code: "ECONNREFUSED" }), true);
+  assert.equal(core.gatewayIsDown({ cause: { code: "UND_ERR_CONNECT_TIMEOUT" } }), true);
+  assert.equal(core.gatewayIsDown({ status: 503 }), true);
+  assert.equal(core.gatewayIsDown({ name: "APIConnectionError", message: "Connection error." }), true);
+  // there, and said no on purpose (budget, bad key): never gone around
+  assert.equal(core.gatewayIsDown({ status: 400 }), false);
+  assert.equal(core.gatewayIsDown({ status: 401 }), false);
+  assert.equal(core.gatewayIsDown({ status: 429 }), false);
+  assert.equal(core.gatewayIsDown(null), false);
+});

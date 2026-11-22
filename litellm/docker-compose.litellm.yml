@@ -1,0 +1,40 @@
+# LiteLLM proxy, its own Docker project (bacc-litellm). Host port 4000, loopback only; nothing else is published.
+# Start: docker compose -p bacc-litellm -f litellm/docker-compose.litellm.yml --env-file /path/to/.env.litellm up -d
+# .env.litellm (git-ignored, never committed) holds LITELLM_MASTER_KEY, LITELLM_SALT_KEY, LITELLM_DB_PASSWORD,
+# ANTHROPIC_API_KEY and OPENAI_API_KEY.
+name: bacc-litellm
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: ${LITELLM_DB_PASSWORD:?missing .env.litellm}
+      POSTGRES_DB: litellm
+    volumes: [litellm-db:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U litellm -d litellm"], interval: 5s, timeout: 5s, retries: 10 }
+    networks: [litellm]
+  litellm:
+    # Pinned by digest (main-stable as pulled on 2026-11-22).
+    image: ghcr.io/berriai/litellm@sha256:ef798594ca3db8d81bad2e1439f536f49b71fe095ee9f20416f5e149b4e22035
+    restart: unless-stopped
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    ports: ["127.0.0.1:4000:4000"]
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?missing .env.litellm}
+      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:?missing .env.litellm}
+      DATABASE_URL: postgresql://litellm:${LITELLM_DB_PASSWORD}@db:5432/litellm
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      STORE_MODEL_IN_DB: "False"
+    volumes: [./config.yaml:/app/config.yaml:ro]
+    depends_on: { db: { condition: service_healthy } }
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    networks: [litellm, nasiko]
+networks:
+  litellm: {}
+  nasiko:
+    external: true
+    name: nasiko
+volumes:
+  litellm-db:
