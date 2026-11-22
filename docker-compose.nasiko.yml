@@ -94,6 +94,8 @@ services:
       # The Studio's agents are registered by their address, and the Studio runs on this computer (a private
       # address), so Nasiko must be allowed to call private addresses. Public ones (Cloud Run, Railway) need no setting.
       AGENT_ALLOW_PRIVATE_URLS: "true"
+      # The MCP gateway refuses private addresses too; the Studio's own MCP connector (/api/mcp) is one.
+      MCP_ALLOW_PRIVATE_URLS: "true"
       DATABASE_URL: postgres://nasiko:${NASIKO_DB_PASSWORD:?run scripts/nasiko-up.sh}@postgres:5432/nasiko_dev
       REDIS_URL: redis://redis:6379
       S3_ENDPOINT: http://rustfs:9000
