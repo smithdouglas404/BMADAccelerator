@@ -24,3 +24,18 @@ Nasiko registers an agent by URL and forwards through its own proxy (access rule
 Works: sign-in, all agents registered (POST /api/agents), MCP connector registered and its tools listed. The Studio's A2A door answers the card, `message/send` and `tasks/get` for a caller on Docker's network.
 
 Does not work in this Nasiko version: its `/api/agents/<id>` proxy cannot forward to an agent that is only registered by URL. The resolver asks the Docker runtime for a container for the agent, gets "Unknown" and answers 503 ("agent workload is not running") before it ever tries the stored address. Setting the status to `running` does not change that. So a call routed *through* Nasiko to a Studio agent needs either Nasiko to learn to fall back to the stored URL for agents with no image, or a small forwarding container per agent. Until then the agents are in Nasiko's registry and the Studio's door is ready for any A2A caller; Nasiko's own proxy, access rules and traces do not yet apply to them.
+
+## Opening Nasiko's dashboard from another computer (proposal, NOT active)
+
+Settings > Enterprise Harness has an "Open Nasiko" button. On the Mac it opens `http://localhost:8480`. From any other address it opens `https://p8480.<your domain>`, built from the address in the browser, the same way product previews open (`previewUrl`). The wildcard Cloudflare route already sends `p8480.<domain>` to the preview router, but the router only serves ports 4100-4129, so today that address answers 404. To serve Nasiko through it, the router would need one more `server` block (and `extra_hosts: host.docker.internal:host-gateway` on the `preview-router` service):
+
+```
+server {
+  listen 8080;
+  server_name ~^p8480\.innume\.com$;
+  location / { proxy_pass http://host.docker.internal:8480; proxy_http_version 1.1; proxy_set_header Host $http_host;
+    proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection $conn_up; }
+}
+```
+
+Not applied: it needs the owner's OK to restart the router. Security note: the public Studio has no sign-in on the Mac, so Nasiko's own admin password would be the only lock on a runtime whose server holds the Docker socket. Put Cloudflare Access (email sign-in) in front of `p8480` before opening it.
