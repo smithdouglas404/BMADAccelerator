@@ -129,7 +129,7 @@ type Recognizer = { lang: string; interimResults: boolean; continuous: boolean; 
  * set, the browser's own speech recognition otherwise, and typing always. With `clean`, what was said is
  * turned into clean natural language before it is handed on; the words as spoken come with it.
  */
-export function useVoice(platform: boolean, onText: (text: string, raw?: string) => void, onNote: (msg: string) => void, opts: { clean?: boolean } = {}) {
+export function useVoice(platform: boolean, onText: (text: string, raw?: string) => void, onNote: (msg: string) => void, opts: { clean?: boolean; useCaseId?: string } = {}) {
   const [listening, setListening] = useState(false)
   const [working, setWorking] = useState(false)
   const rec = useRef<Recognizer | null>(null)
@@ -144,7 +144,7 @@ export function useVoice(platform: boolean, onText: (text: string, raw?: string)
     setWorking(true)
     onNote('Turning what you said into clean text…')
     try {
-      const r = await api<{ text: string }>('/api/voice/clean', { json: { text: said } })
+      const r = await api<{ text: string }>('/api/voice/clean', { json: { text: said, ...(opts.useCaseId ? { useCaseId: opts.useCaseId } : {}) } })
       onText(r.text || said, said)
     } catch {
       onText(said, said)

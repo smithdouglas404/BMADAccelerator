@@ -673,7 +673,7 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
           if (!target.startsWith(appRoot + path.sep)) return ok("The file must be inside app/.");
           try {
             imagesMade++;
-            const model = await makeImage(prompt, size, target);
+            const model = await makeImage(prompt, size, target, useCaseId);
             return ok(`Saved ${path.relative(workspacePath(slug), target)} (${model}). Open it with Read to check it.`);
           } catch (e) {
             return ok(`${e instanceof Error ? e.message : String(e)}. Draw this as SVG instead.`);
@@ -694,7 +694,7 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
         "Ask a Studio role's long-term memory (Letta) for its experience across earlier products.",
         { role: z.enum(ROLE_KEYS), question: z.string().min(5) },
         async ({ role, question }) => {
-          const answer = await letta.askRole(role, question, speaker).catch(() => null);
+          const answer = await letta.askRole(role, question, speaker, "", useCaseId).catch(() => null);
           return ok(answer || "That role's memory is not available right now. Carry on without it.");
         },
       ),

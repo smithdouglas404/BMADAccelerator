@@ -1,4 +1,8 @@
 import type { MemoryClient, MemoryHit } from "./agentMemory";
+import { guessTokens, recordCall } from "@/lib/llm/ledger";
+
+/** What fact extraction writes back, as a share of what it reads: a guess (Mem0 does not say), flagged as an estimate wherever shown. */
+const EXTRACTION_OUT_SHARE = 0.25;
 
 // The self-hosted Mem0 server (open source, docker-compose service "mem0") behind the
 // MemoryClient interface AgentMemory expects. Differences from Mem0 Cloud that this hides:
@@ -66,21 +70,53 @@ export class Mem0RestClient implements MemoryClient {
 
   async add(messages: { role: string; content: string }[], options: Record<string, unknown>) {
     const { app_id, metadata, ...rest } = options;
-    return this.call("POST", "/memories", {
-      messages,
-      ...rest,
-      metadata: { ...((metadata as Filter) ?? {}), ...(app_id ? { app_id } : {}) },
-    });
+    const t = Date.now();
+    const text = messages.map((m) => m.content).join("\n");
+    const useCaseId = typeof options.run_id === "string" ? options.run_id : "";
+    const agent = `Mem0 · ${typeof options.agent_id === "string" ? options.agent_id : "memory"}`;
+    try {
+      const res = await this.call("POST", "/memories", {
+        messages,
+        ...rest,
+        metadata: { ...((metadata as Filter) ?? {}), ...(app_id ? { app_id } : {}) },
+      });
+      await this.record(agent, useCaseId, "saving a memory", text, guessTokens(text) * EXTRACTION_OUT_SHARE, options.infer !== false, Date.now() - t, true, "");
+      return res;
+    } catch (e) {
+      await this.record(agent, useCaseId, "saving a memory", text, 0, options.infer !== false, Date.now() - t, false, e instanceof Error ? e.message : String(e));
+      throw e;
+    }
+  }
+
+  /**
+   * Mem0 (self-hosted) does not report what its OpenAI calls used, so they are recorded from the text sent and received, as an
+   * estimate: fact extraction on the chat model when it infers facts, and the embedding of the text (or the search words).
+   * The models are the ones Mem0 is configured with (MEM0_DEFAULT_LLM_MODEL, MEM0_DEFAULT_EMBEDDER_MODEL).
+   */
+  private async record(agent: string, useCaseId: string, purpose: string, text: string, outTokens: number, infers: boolean, ms: number, ok: boolean, error: string) {
+    const input = guessTokens(text);
+    const where = { useCaseId };
+    if (infers) await recordCall({ agent, kind: "memory", purpose: `${purpose}: picking out the facts`, provider: "openai", model: process.env.MEM0_DEFAULT_LLM_MODEL || "gpt-4.1-mini", input, output: Math.ceil(outTokens), ms, ok, error }, where, { estimated: true });
+    await recordCall({ agent, kind: "memory", purpose: `${purpose}: embedding`, provider: "openai", model: process.env.MEM0_DEFAULT_EMBEDDER_MODEL || "text-embedding-3-small", input, output: 0, ms: infers ? 0 : ms, ok, error }, where, { estimated: true });
   }
 
   async search(query: string, options: Record<string, unknown>): Promise<{ results?: MemoryHit[] }> {
     const filters = flattenFilters(toServerFilters(options.filters));
-    return this.call("POST", "/search", {
-      query,
-      filters,
-      ...(options.top_k !== undefined ? { top_k: options.top_k } : {}),
-      ...(options.threshold !== undefined ? { threshold: options.threshold } : {}),
-    });
+    const t = Date.now();
+    const useCaseId = JSON.stringify(options.filters ?? {}).match(/"use_case":"([^"]+)"/)?.[1] ?? "";
+    try {
+      const res = await this.call<{ results?: MemoryHit[] }>("POST", "/search", {
+        query,
+        filters,
+        ...(options.top_k !== undefined ? { top_k: options.top_k } : {}),
+        ...(options.threshold !== undefined ? { threshold: options.threshold } : {}),
+      });
+      await this.record("Mem0 · recall", useCaseId, "searching memory", query, 0, false, Date.now() - t, true, "");
+      return res;
+    } catch (e) {
+      await this.record("Mem0 · recall", useCaseId, "searching memory", query, 0, false, Date.now() - t, false, e instanceof Error ? e.message : String(e));
+      throw e;
+    }
   }
 
   async health(): Promise<boolean> {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
+import { closeoutSummary } from "@/lib/studio/archive";
 import { ensureWorkspace, slugify } from "@/lib/workspace";
 import { validationScore, workingName, type Validation } from "@/lib/studio/core";
 import { explainReadiness } from "@/lib/studio/spec";
@@ -8,12 +9,12 @@ import { ensureRoutes, ensureSpec } from "@/lib/studio/state";
 import { ensureStarted } from "@/lib/studio/actions";
 import { journey, needsTriage, hasDetail, idleDays, questionTally } from "@/lib/studio/journey";
 
-// Every product the team is shaping, newest first. Archived ones only with ?archived=1.
+// Every product the team is shaping, newest first. ?archived=1 adds the archived ones; ?archived=only lists just those.
 export async function GET(req: Request) {
-  const withArchived = new URL(req.url).searchParams.get("archived") === "1";
+  const archived = new URL(req.url).searchParams.get("archived");
   const rows = await prisma.useCase.findMany({
-    where: withArchived ? {} : { archivedAt: null },
-    orderBy: { updatedAt: "desc" },
+    where: archived === "only" ? { archivedAt: { not: null } } : archived === "1" ? {} : { archivedAt: null },
+    orderBy: archived === "only" ? { archivedAt: "desc" } : { updatedAt: "desc" },
     include: { capabilities: { select: { readiness: true } }, spec: true, decisions: { select: { status: true, includeInBuild: true } }, moves: { select: { status: true, prompt: true } }, backlog: { select: { triage: true, state: true, kind: true, deferUntil: true } }, _count: { select: { backlog: true, decisions: true, evidence: true, feedback: true, messages: { where: { role: "user" } } } } },
   });
   // Every question asked and answered, per product, for the same "answered of asked" the product's screens show.
@@ -64,6 +65,8 @@ export async function GET(req: Request) {
       busy: u.agentBusy || u.generateBusy,
       updatedAt: u.updatedAt,
       archivedAt: u.archivedAt,
+      createdBy: u.createdBy,
+      closeout: u.archivedAt ? { by: u.archivedBy, ...closeoutSummary({ outcome: (u.archiveOutcome as "approved" | "rejected" | "") || "", comments: u.archiveComments, cost: u.archiveCostEstimate, benefits: u.archiveBenefits }), outcome: u.archiveOutcome } : null,
     })),
   );
 }
@@ -100,6 +103,7 @@ export async function POST(req: Request) {
       businessArea,
       summary,
       messages: description ? { create: { role: "user", agent: "You", content: description, author: author?.name ?? "", authorRole: author?.role ?? "" } } : undefined,
+      createdBy: author?.name ?? "",
       members: author?.name ? { create: { name: author.name, role: author.role } } : undefined,
     },
   });

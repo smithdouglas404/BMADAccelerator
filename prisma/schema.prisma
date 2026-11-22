@@ -72,6 +72,15 @@ model UseCase {
   previewPort       Int       @default(0)
   // Archived use cases leave the home list but keep everything; an admin can restore them.
   archivedAt        DateTime?
+  // Who started the use case (the one person allowed to archive it once RBAC is on; see lib/studio/archive.ts).
+  createdBy         String    @default("")
+  // What was captured when it was archived (Doug, Nov 22): approved for production or rejected, with comments,
+  // the estimated cost to implement, and the benefits and metrics that must be tracked and delivered.
+  archivedBy        String    @default("")
+  archiveOutcome    String    @default("") // approved | rejected | "" (not recorded)
+  archiveComments   String    @default("")
+  archiveCostEstimate String  @default("")
+  archiveBenefits   String    @default("")
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
@@ -650,4 +659,59 @@ model JevCall {
 
   @@index([feature, createdAt])
   @@index([ref])
+}
+
+// The Studio's link to a self-hosted Nasiko (an open runtime for agents: registry, access, cost and traces).
+// One row. The password is encrypted like the Settings keys, never shown again (last four only), and kept
+// here rather than in the environment so Claude Code runs and generated apps never receive it.
+model NasikoLink {
+  id          String    @id @default("global")
+  url         String    @default("")
+  username    String    @default("")
+  cipher      String    @default("")
+  last4       String    @default("")
+  enabled     Boolean   @default(true)
+  loggedInAt  DateTime?
+  lastOkAt    DateTime?
+  lastError   String    @default("")
+  syncedAt    DateTime?
+  updatedAt   DateTime  @updatedAt
+}
+
+// What each Claude run used and cost, from the numbers Claude Code reports at the end of a run. An estimate, not a bill.
+model LlmUsage {
+  id           String   @id @default(cuid())
+  useCaseId    String
+  turnId       String   @default("")
+  sessionId    String   @default("")
+  agent        String // Socra (a turn, with the specialists it sent out) | Claude Code (a build)
+  kind         String   @default("turn") // turn | build
+  model        String   @default("")
+  auth         String   @default("") // plan | key
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  cacheTokens  Int      @default(0)
+  costUsd      Float    @default(0)
+  cumCostUsd   Float    @default(0)
+  cumInput     Int      @default(0)
+  cumOutput    Int      @default(0)
+  cumCache     Int      @default(0)
+  sentToNasiko Boolean  @default(false)
+  baseline     Boolean  @default(false) // first sight of a resumed session: its earlier cost is not ours to count
+  ms           Int      @default(0)
+  // Every model call is recorded here (Doug, Nov 22), not only Claude Code runs. See src/lib/llm/.
+  provider     String   @default("anthropic") // anthropic | openai | letta | typesafe | ...
+  purpose      String   @default("") // what the call was for: "document reading", "memory fact extraction", ...
+  costSource   String   @default("reported") // reported (by the provider) | estimated (tokens x a price table, or text length)
+  ok           Boolean  @default(true)
+  error        String   @default("")
+  attempt      Int      @default(1) // 2 or more: another run for the same turn (a retry)
+  causes       String   @default("") // what the turn answered (msg:..., backlog:...), so runs can be counted per message
+  externalId   String?  @unique // an id from the system that made the call (the agent service), so it is recorded once
+  extSeq       Int      @default(0) // that system's own order number, so the next read continues after the last one
+  at           DateTime @default(now())
+
+  @@index([useCaseId, at])
+  @@index([sessionId])
+  @@index([turnId])
 }

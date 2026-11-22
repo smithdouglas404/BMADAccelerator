@@ -2,12 +2,14 @@
 // Settings: models and keys, MCP connectors (for every product or chosen ones), Agent Skills, and memory.
 // Keys and connector secrets go in once, are stored encrypted, and are never shown again (last four only).
 import { Rich } from './rich'
+import { SaveButton, useSaveState } from './savestate'
 import { useEffect, useState } from 'react'
 import { Check, Plug, Plus, Trash2, Upload, Wrench } from 'lucide-react'
 import { api } from './live'
 import { StudioTop } from './pages'
 import { ConnectTab } from './connect'
 import { JevValue } from './jev'
+import { NasikoTab } from './nasiko'
 
 type KeyStatus = { env: string; name: string; source: 'saved' | 'env' | 'missing'; last4: string }
 type Status = { providers: (KeyStatus & { id: string; models: string[] })[]; other: KeyStatus[]; claudePlan: boolean; roles: { env: string; label: string; note: string; providers: string[]; current: string; saved: boolean }[] }
@@ -19,11 +21,11 @@ const SOURCES = [['all', 'All'], ['studio', 'Studio'], ['ecc', 'ECC'], ['yours',
 const PAGE = 40
 
 export function SettingsPage() {
-  const [tab, setTab] = useState<'models' | 'connectors' | 'connect' | 'skills' | 'memory' | 'jev'>('models')
+  const [tab, setTab] = useState<'models' | 'connectors' | 'connect' | 'skills' | 'memory' | 'jev' | 'nasiko'>('models')
   const [toast, setToast] = useState('')
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get('tab')
-    if (t === 'connectors' || t === 'connect' || t === 'skills' || t === 'memory' || t === 'jev') setTab(t)
+    if (t === 'connectors' || t === 'connect' || t === 'skills' || t === 'memory' || t === 'jev' || t === 'nasiko') setTab(t)
   }, [])
   useEffect(() => { if (toast) { const t = window.setTimeout(() => setToast(''), 5000); return () => window.clearTimeout(t) } }, [toast])
   return (
@@ -31,13 +33,14 @@ export function SettingsPage() {
       <StudioTop active="settings" />
       <div className="page-wrap">
         <div className="page-intro"><div><p className="eyebrow">Settings</p><h1>The plumbing,<br /><em>out of the way.</em></h1><p>Three places to know: AI models and keys (what runs Socra), Tools the Studio uses (outside systems Socra can call), and Connect your assistant (how Muse or Claude reaches the Studio).</p></div></div>
-        <div className="studio-tabs">{([['models', 'AI models and keys'], ['connectors', 'Tools the Studio uses'], ['connect', 'Connect your assistant (Muse, Claude)'], ['skills', 'Skills'], ['memory', 'Memory'], ['jev', 'Jev']] as const).map(([k, l]) => <button key={k} type="button" className={tab === k ? 'is-active' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
+        <div className="studio-tabs">{([['models', 'AI models and keys'], ['connectors', 'Tools the Studio uses'], ['connect', 'Connect your assistant (Muse, Claude)'], ['skills', 'Skills'], ['memory', 'Memory'], ['jev', 'Jev'], ['nasiko', 'Enterprise Harness']] as const).map(([k, l]) => <button key={k} type="button" className={tab === k ? 'is-active' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
         {tab === 'models' && <Models setToast={setToast} />}
         {tab === 'connectors' && <Connectors setToast={setToast} />}
         {tab === 'connect' && <ConnectTab setToast={setToast} />}
         {tab === 'skills' && <Skills setToast={setToast} />}
         {tab === 'memory' && <Memory />}
         {tab === 'jev' && <JevValue />}
+        {tab === 'nasiko' && <NasikoTab setToast={setToast} />}
       </div>
       {toast && <div className="toast" role="status"><span className="toast-check"><Check size={14} /></span>{toast}</div>}
     </div>
@@ -46,19 +49,20 @@ export function SettingsPage() {
 
 function KeyRow({ k, onSaved, setToast }: { k: KeyStatus; onSaved: (s: Status) => void; setToast: (s: string) => void }) {
   const [value, setValue] = useState('')
+  const { state: saveState, run } = useSaveState()
   const save = async () => {
-    try {
+    const ok = await run(async () => {
       onSaved(await api<Status>('/api/settings/models', { method: 'PUT', json: { action: 'key', env: k.env, value } }))
       setValue('')
-      setToast(`${k.name} saved. It is stored encrypted and never shown again.`)
-    } catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
+    })
+    if (ok) setToast(`${k.name} saved. It is stored encrypted and never shown again.`)
   }
   const remove = async () => onSaved(await api<Status>('/api/settings/models', { method: 'PUT', json: { action: 'removeKey', env: k.env } }))
   return (
     <div className="studio-list-row">
       <div className="studio-row-main"><strong>{k.name}</strong><small>{k.source === 'missing' ? 'not set' : `set (${k.source === 'saved' ? 'here' : '.env'}) · ends ${k.last4}`}</small></div>
       {k.source === 'saved' ? <button type="button" className="button button-quiet button-small" onClick={() => void remove()}>Remove</button> : <span />}
-      <div className="studio-review-actions"><input className="studio-input" style={{ marginTop: 0, flex: 1 }} type="password" autoComplete="off" value={value} onChange={(e) => setValue(e.target.value)} placeholder={k.source === 'missing' ? 'Paste the key here (never in chat)' : 'Replace the key'} /><button type="button" className="button button-primary button-small" disabled={!value.trim()} onClick={() => void save()}>Save</button></div>
+      <div className="studio-review-actions"><input className="studio-input" style={{ marginTop: 0, flex: 1 }} type="password" autoComplete="off" value={value} onChange={(e) => setValue(e.target.value)} placeholder={k.source === 'missing' ? 'Paste the key here (never in chat)' : 'Replace the key'} /><SaveButton state={saveState} label="Save" disabled={!value.trim()} onClick={() => void save()} /></div>
     </div>
   )
 }

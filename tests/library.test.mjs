@@ -62,3 +62,19 @@ test("TypeSafe's Jev skill is in the library with its license, and its key stays
   const preview = await fs.readFile(path.join(process.cwd(), "src/lib/preview.ts"), "utf8");
   assert.doesNotMatch(preview, /TYPESAFE/, "generated apps never get the Studio's key");
 });
+
+test("Composio's skill is in the library with its license and source, unchanged, on the architect and engineer only, and no key reaches Claude Code", async () => {
+  const dir = path.join(STUDIO, "composio");
+  const md = await fs.readFile(path.join(dir, "SKILL.md"), "utf8");
+  assert.match(md, /^license: MIT$/m);
+  assert.match(md, /^origin: ComposioHQ\/composio$/m);
+  assert.match(await fs.readFile(path.join(dir, "LICENSE"), "utf8"), /Permission is hereby granted, free of charge/);
+  for (const r of ["for-you.md", "platform.md", "errors.md"]) await fs.access(path.join(dir, "references", r));
+  assert.doesNotMatch(md + (await fs.readFile(path.join(dir, "references", "for-you.md"), "utf8")), /\bck_[A-Za-z0-9]{8,}|sk-[A-Za-z0-9]{16,}/, "no key in the skill");
+  const team = await fs.readFile(path.join(process.cwd(), "src/lib/agent/team.ts"), "utf8");
+  const users = team.split("\n").filter((l) => l.includes(".claude/skills/composio/SKILL.md"));
+  assert.equal(users.length, 2, "only the architect and the product engineer read it");
+  assert.ok(users.some((l) => l.includes("studio-solution-architect")) && users.some((l) => l.includes("studio-product-engineer")));
+  const auth = await fs.readFile(path.join(process.cwd(), "src/lib/agent/auth.ts"), "utf8");
+  assert.match(auth, /"COMPOSIO_API_KEY", "TYPESAFE_API_KEY"\]\) delete env\[k\]/);
+});

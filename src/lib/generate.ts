@@ -197,6 +197,7 @@ export async function runGenerate(useCaseId: string, opts: { redesign?: boolean;
         resume: fresh ? "" : uc.generateSessionId,
         appendSystem: GENERATOR_RULES,
         speaker: "Claude Code",
+        kind: "build",
         tally,
         maxTurns: 600,
         model: process.env.BACC_GENERATE_MODEL || undefined,

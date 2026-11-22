@@ -7,7 +7,7 @@ import { ArrowRight, Check, ChevronDown, CircleHelp, ExternalLink, GitBranch, Hi
 import { SPEC_BASIS, SPEC_STATUSES } from '@/lib/studio/spec'
 import { api, ago, previewUrl, type Live } from './live'
 
-type Act = (fn: () => Promise<unknown>, ok?: string) => Promise<void>
+type Act = (fn: () => Promise<unknown>, ok?: string, opts?: { rethrow?: boolean }) => Promise<void>
 type ProductRow = { id: string; name: string; stageLabel: string; readiness: number; busy: boolean }
 
 /** The team's project switcher, opening a list of every product plus "New product". */
