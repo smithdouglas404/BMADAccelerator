@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 // The pure parts of the Studio's Nasiko link (tests/nasiko.test.mjs): names, A2A agent cards, the body that
 // registers an agent in Nasiko's catalog, when to sign in again, and who may call the Studio's A2A door.
 // Nothing here has a word of its own about a product: every name, description and skill is passed in from
@@ -144,24 +145,55 @@ export function task(id: string, state: TaskState, text = "", contextId = "") {
 
 export type UsageRun = { id: string; useCaseId: string; productName: string; agent: string; kind: string; model: string; inputTokens: number; outputTokens: number; cacheTokens: number; at: Date; ms: number };
 
-/** One Nasiko intake event for one recorded run. The cost is not sent: Nasiko prices the call from the model name. Same id twice is ignored by Nasiko. */
-export function usageEvent(r: UsageRun, agentId: string, agentName: string) {
+// Nasiko's coding-agent intake accepts events only from a registered coding-agent connection (here "claude"), with an event id and a
+// session id that it re-derives itself, and without a session title in metadata-only mode. These two functions build exactly that.
+const INTAKE_NS = "e8c6fef8-5fe4-4dc2-9b48-47466355ced7";
+
+/** UUID version 5 (SHA-1) of `name` in the namespace INTAKE_NS. */
+export function uuidV5(name: string, ns = INTAKE_NS): string {
+  const nsBytes = Buffer.from(ns.replace(/-/g, ""), "hex");
+  const h = createHash("sha1").update(nsBytes).update(Buffer.from(name, "utf8")).digest();
+  h[6] = (h[6] & 0x0f) | 0x50;
+  h[8] = (h[8] & 0x3f) | 0x80;
+  const x = h.subarray(0, 16).toString("hex");
+  return `${x.slice(0, 8)}-${x.slice(8, 12)}-${x.slice(12, 16)}-${x.slice(16, 20)}-${x.slice(20, 32)}`;
+}
+
+/** The id Nasiko expects for an event: v5 over "v1|<len>:<agent id>|<len>:<session source id>|<len>:<turn id>". */
+export function intakeEventId(agentId: string, sessionSourceId: string, turnId: string): string {
+  const part = (v: string) => `${Buffer.byteLength(v, "utf8")}:${v}`;
+  return uuidV5(`v1|${part(agentId)}|${part(sessionSourceId)}|${part(turnId)}`);
+}
+
+/** One Nasiko intake event for one recorded run. The cost is not sent: Nasiko prices the call from the model name. The agent and the
+ *  product ride in the session's source id ("socra:<product id>"), because every event must come from the one registered connection. */
+export function usageEvent(r: UsageRun, integrationId: string, integrationName: string) {
   const end = new Date(r.at);
   const start = new Date(end.getTime() - Math.max(1, r.ms));
   const iso = (d: Date) => d.toISOString();
+  const sourceId = `${r.kind === "build" ? "claude-code" : "socra"}:${r.useCaseId}`;
+  const turnId = `studio-turn-${r.id}`;
   return {
     version: 1,
-    event_id: `studio-usage-${r.id}`,
+    event_id: intakeEventId(integrationId, sourceId, turnId),
     captured_at: iso(end),
     capture_policy: "metadata_only",
-    source: { agent_id: agentId, agent_name: agentName },
-    session: { id: `studio-${r.useCaseId}`, source_id: r.useCaseId, title: `${r.productName || "Studio"}: ${r.kind === "build" ? "builds" : "conversation"}` },
+    source: { agent_id: integrationId, agent_name: integrationName },
+    session: { id: `${integrationId}:${sourceId}`, source_id: sourceId },
     turn: {
-      id: `studio-turn-${r.id}`,
+      id: turnId,
       started_at: iso(start),
       ended_at: iso(end),
       tool_calls: [],
       llm_calls: [{ id: `studio-call-${r.id}`, provider: "anthropic", model: r.model || "claude-sonnet-5-5", input_tokens: r.inputTokens, output_tokens: r.outputTokens, cache_read_tokens: r.cacheTokens, cache_creation_tokens: 0, started_at: iso(start), ended_at: iso(end) }],
     },
   };
+}
+
+/** What Nasiko said about each event. It answers 200 even when it rejects, so the verdict is read from the body. Unknown shapes count as not stored. */
+export function intakeVerdicts(body: unknown): Map<string, string> {
+  const out = new Map<string, string>();
+  const list = Array.isArray(body) ? body : Array.isArray((body as { events?: unknown })?.events) ? (body as { events: unknown[] }).events : Array.isArray((body as { results?: unknown })?.results) ? (body as { results: unknown[] }).results : [];
+  for (const e of list as { event_id?: string; status?: string }[]) if (e && typeof e.event_id === "string") out.set(e.event_id, String(e.status ?? ""));
+  return out;
 }

@@ -89,16 +89,30 @@ test("usage: the rollup groups per agent and per product and skips baselines", (
   assert.deepEqual(r.byProduct.map((p) => [p.useCaseId, p.usd]), [["p1", 5], ["p2", 2]]);
 });
 
-import { usageEvent } from "../src/lib/nasiko/core.ts";
-test("usage event: one run becomes one Nasiko intake event with every required field and a stable id", () => {
-  const e = usageEvent({ id: "r1", useCaseId: "u1", productName: "ClaimSnap", agent: "Socra", kind: "turn", model: "claude-sonnet-5-5", inputTokens: 10, outputTokens: 5, cacheTokens: 7, at: new Date("2026-11-22T13:40:00Z"), ms: 8000 }, "ag1", "studio-socra");
+import { usageEvent, uuidV5, intakeEventId, intakeVerdicts } from "../src/lib/nasiko/core.ts";
+test("usage event: uuid v5 matches the standard test vector", () => {
+  assert.equal(uuidV5("python.org", "6ba7b810-9dad-11d1-80b4-00c04fd430c8"), "886313e1-3b8a-5372-9b90-0c9aee199e5d");
+});
+test("usage event: one run becomes one intake event shaped the way Nasiko re-derives it", () => {
+  const e = usageEvent({ id: "r1", useCaseId: "u1", productName: "ClaimSnap", agent: "Socra", kind: "turn", model: "claude-sonnet-5-5", inputTokens: 10, outputTokens: 5, cacheTokens: 7, at: new Date("2026-11-22T13:40:00Z"), ms: 8000 }, "claude", "admin-claude-code");
   assert.equal(e.version, 1);
-  assert.equal(e.event_id, "studio-usage-r1");
   assert.equal(e.capture_policy, "metadata_only");
-  assert.deepEqual(e.source, { agent_id: "ag1", agent_name: "studio-socra" });
-  assert.equal(e.session.title, "ClaimSnap: conversation");
-  assert.equal(e.turn.llm_calls.length, 1);
-  assert.deepEqual([e.turn.llm_calls[0].input_tokens, e.turn.llm_calls[0].output_tokens, e.turn.llm_calls[0].cache_read_tokens, e.turn.llm_calls[0].cache_creation_tokens], [10, 5, 7, 0]);
+  assert.equal("title" in e.session, false); // metadata-only events must not carry a title
+  assert.deepEqual(e.source, { agent_id: "claude", agent_name: "admin-claude-code" });
+  assert.equal(e.session.source_id, "socra:u1");
+  assert.equal(e.session.id, "claude:socra:u1"); // <agent id>:<source id>
+  assert.equal(e.turn.id, "studio-turn-r1");
+  assert.equal(e.event_id, intakeEventId("claude", "socra:u1", "studio-turn-r1"));
+  assert.match(e.event_id, /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  assert.deepEqual([e.turn.llm_calls[0].input_tokens, e.turn.llm_calls[0].output_tokens, e.turn.llm_calls[0].cache_read_tokens], [10, 5, 7]);
   assert.equal(e.turn.started_at, "2026-11-22T13:39:52.000Z");
-  assert.equal(usageEvent({ id: "b", useCaseId: "u", productName: "", agent: "Claude Code", kind: "build", model: "", inputTokens: 0, outputTokens: 0, cacheTokens: 0, at: new Date(0), ms: 0 }, "x", "studio-claude-code").session.title, "Studio: builds");
+  const b = usageEvent({ id: "b", useCaseId: "u", productName: "", agent: "Claude Code", kind: "build", model: "", inputTokens: 0, outputTokens: 0, cacheTokens: 0, at: new Date(0), ms: 0 }, "claude", "n");
+  assert.equal(b.session.source_id, "claude-code:u");
+  // same run, same id; different run, different id
+  assert.notEqual(e.event_id, intakeEventId("claude", "socra:u1", "studio-turn-r2"));
+});
+test("usage event: the verdicts come from the body, and an unknown answer counts as not stored", () => {
+  assert.equal(intakeVerdicts("<html>web page</html>").size, 0);
+  assert.equal(intakeVerdicts({ events: [{ event_id: "a", status: "accepted" }, { event_id: "b", status: "rejected" }] }).get("b"), "rejected");
+  assert.equal(intakeVerdicts({ results: [{ event_id: "c", status: "duplicate" }] }).get("c"), "duplicate");
 });
