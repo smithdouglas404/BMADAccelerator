@@ -161,9 +161,9 @@ export function roleForGate(gate: string, fallback = "muse") {
 }
 
 /** Step 5 of the loop: the role saves lessons, then the app refreshes its top lessons block. */
-async function reflect(roleKey: string, message: string) {
+async function reflect(roleKey: string, message: string, useCaseId = "") {
   try {
-    const r = await letta.tellRole(roleKey, message);
+    const r = await letta.tellRole(roleKey, message, useCaseId);
     if (r) await promoteLessons(roleKey);
   } catch (e) {
     console.warn(`letta ${roleKey} reflection failed`, e instanceof Error ? e.message : e);
@@ -189,7 +189,7 @@ export function onGatePassed(uc: UseCaseRef & { stage?: string }, gate: string, 
     } catch (e) {
       console.warn("letta portfolio update failed", e instanceof Error ? e.message : e);
     }
-    await reflect(roleKey, gateMessage(uc.name, gate, summary, clientSaid));
+    await reflect(roleKey, gateMessage(uc.name, gate, summary, clientSaid), uc.id);
   })();
 }
 
@@ -213,8 +213,8 @@ export function onAppGenerated(uc: UseCaseRef & { stage?: string }, built: strin
     } catch (e) {
       console.warn("letta portfolio update failed", e instanceof Error ? e.message : e);
     }
-    await reflect("engineer", generatedMessage(uc.name, built, feedbackBuilt));
-    if (feedbackBuilt) await reflect("ux", generatedMessage(uc.name, built, feedbackBuilt));
+    await reflect("engineer", generatedMessage(uc.name, built, feedbackBuilt), uc.id);
+    if (feedbackBuilt) await reflect("ux", generatedMessage(uc.name, built, feedbackBuilt), uc.id);
   })();
 }
 

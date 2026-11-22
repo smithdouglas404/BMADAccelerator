@@ -1,6 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { query, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+import { recordUsage } from "@/lib/agent/usage";
 import { prisma } from "@/lib/db";
 import { WORKSPACES_DIR, workspacePath } from "@/lib/workspace";
 import { authEnv, authOrder, claudeConfigured } from "@/lib/agent/auth";
@@ -87,7 +88,10 @@ export async function runControlBuild(useCaseId: string) {
         },
       });
       for await (const m of q as AsyncIterable<SDKMessage>) {
-        if (m.type === "result" && m.subtype !== "success") throw new Error(`Control build stopped: ${m.subtype}`);
+        if (m.type === "result") {
+          await recordUsage({ useCaseId, turnId: "", sessionId: m.session_id ?? "", agent: "Control build", kind: "control", purpose: "plain Claude Code builds the same product for comparison", auth, resumed: false, result: m, ok: m.subtype === "success" && !m.is_error, error: m.subtype === "success" ? (m.is_error ? String(m.result ?? "error").slice(0, 300) : "") : `stopped: ${m.subtype}` });
+          if (m.subtype !== "success") throw new Error(`Control build stopped: ${m.subtype}`);
+        }
       }
     }
     // Copy the screenshots next to ours, where Socra reads them.

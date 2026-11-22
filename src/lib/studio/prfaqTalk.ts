@@ -183,7 +183,7 @@ export async function writePrfaq(useCaseId: string, o: { mode: "generate" | "ref
   if (!fake && !claudeConfigured()) throw new PrfaqError("Claude isn't signed in (Settings), so the PRFAQ writer can't run. Your words are kept.");
   const turn = await prisma.agentTurn.create({ data: { useCaseId, causes: [PRFAQ_NODE, ...causes], loaded: [SKILL], skills: [SKILL], tools: [`prfaq_${o.mode}`] } });
   const keys = format.map((f) => f.key) as [string, ...string[]];
-  const draft: Draft | null = fake ? fakePrfaqDraft(format, sources, o.mode, uc.prfaq) : await lowCostAnswer(writerPrompt(skill, sources, o.mode), draftSchema(keys), 16000);
+  const draft: Draft | null = fake ? fakePrfaqDraft(format, sources, o.mode, uc.prfaq) : await lowCostAnswer(writerPrompt(skill, sources, o.mode), draftSchema(keys), 16000, { useCaseId, agent: "PRFAQ writer", purpose: `writes the PRFAQ (${o.mode})` });
   if (!draft) {
     await prisma.agentTurn.update({ where: { id: turn.id }, data: { status: "failed", error: "The PRFAQ writer didn't answer", endedAt: new Date() } });
     throw new PrfaqError("The PRFAQ writer didn't answer. Your words are kept; press Generate PRFAQ again to retry.");

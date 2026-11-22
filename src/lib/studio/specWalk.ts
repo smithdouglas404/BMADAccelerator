@@ -127,7 +127,7 @@ ${exchange}
     ? said.split(/\s+/).length >= 25
       ? { verdict: "ready" as const, note: "That covers it: it is specific and in your own words.", followUp: "" }
       : { verdict: "thin" as const, note: `Not quite there yet. ${step.bar}`, followUp: rounds >= MAX_ROUNDS ? "" : `${step.ask.split("?")[0]}? Say a little more.` }
-    : await lowCostAnswer(prompt, Check, 2000);
+    : await lowCostAnswer(prompt, Check, 2000, { useCaseId: uc.id, agent: "Spec checker", purpose: `checks "${step.title}" against the bar` });
   if (!c) {
     await prisma.agentTurn.update({ where: { id: turn.id }, data: { status: "failed", error: "The check didn't answer", endedAt: new Date() } });
     throw new SpecWalkError("The team couldn't check that answer just now. It is kept; press Send again to retry.");
@@ -193,7 +193,7 @@ ${answers.map((a) => `- ${a.content}`).join("\n")}
 </answers>`;
   const w = fakeAgent()
     ? { content: answers.map((a) => a.content).join("\n\n"), completeness: 70, confidence: "high" as const, inferred: [] }
-    : await lowCostAnswer(prompt, Write, 6000);
+    : await lowCostAnswer(prompt, Write, 6000, { useCaseId: uc.id, agent: "Spec writer", purpose: `writes "${step.title}"` });
   if (!w || !w.content.trim()) throw new SpecWalkError(`“${step.title}” couldn't be written just now; your answers are kept.`);
   const quote = answers.at(-1)!.content.slice(0, 380);
   const trace = cleanTrace([...(Array.isArray(cur.trace) ? cur.trace : []), { label: `Your answer (${step.title})`, detail: quote, type: "conversation" }]).slice(-12);

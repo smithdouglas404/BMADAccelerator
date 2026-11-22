@@ -1,3 +1,4 @@
+import { recordCall } from "@/lib/llm/ledger";
 import { promises as fs } from "fs";
 import path from "path";
 import type { Prisma } from "@prisma/client";
@@ -25,14 +26,24 @@ export async function askJev(state: unknown, questions: Record<string, Question>
   const key = process.env.TYPESAFE_API_KEY;
   if (!key) throw new Error("Jev is not configured: no TypeSafe key on Settings.");
   const t = Date.now();
-  const res = await fetch(JEV_URL, {
+  // Jev keeps its own record (JevCall); the ledger records the call too, so every model call is in one place.
+  const note = (input: number, ok: boolean, error: string) => recordCall({ agent: "Jev", kind: "judgement", purpose: "small judgments (yes, mark-up kind, story links)", provider: "typesafe", model: JEV_MODEL, input, output: 0, ms: Date.now() - t, ok, error }, {}, { estimated: true });
+  const res = await fetch(process.env.BACC_JEV_URL || JEV_URL, {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({ model: JEV_MODEL, state, questions }),
     signal: AbortSignal.timeout(timeoutMs),
+  }).catch(async (e) => {
+    await note(0, false, e instanceof Error ? e.message : String(e));
+    throw e;
   });
-  if (!res.ok) throw new Error(`Jev answered ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
+  if (!res.ok) {
+    const err = `Jev answered ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`;
+    await note(0, false, err);
+    throw new Error(err);
+  }
   const body = (await res.json()) as { answers?: Answers; usage?: { input_tokens?: number } };
+  await note(body.usage?.input_tokens ?? 0, Boolean(body.answers), body.answers ? "" : "no answers");
   if (!body.answers) throw new Error("Jev sent no answers.");
   return { answers: body.answers, inputTokens: body.usage?.input_tokens ?? 0, ms: Date.now() - t };
 }

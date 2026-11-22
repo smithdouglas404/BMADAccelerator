@@ -142,7 +142,22 @@ export function task(id: string, state: TaskState, text = "", contextId = "") {
 
 // ---- usage events: what each Studio Claude run looks like to Nasiko's coding-agent intake ----
 
-export type UsageRun = { id: string; useCaseId: string; productName: string; agent: string; kind: string; model: string; inputTokens: number; outputTokens: number; cacheTokens: number; at: Date; ms: number };
+export type UsageRun = { id: string; useCaseId: string; productName: string; agent: string; kind: string; model: string; inputTokens: number; outputTokens: number; cacheTokens: number; at: Date; ms: number; provider?: string; purpose?: string };
+
+/** Nasiko prices a call from its provider and model name. Letta names models "anthropic/claude-haiku-5-5"; a service such as Jev is not a model provider Nasiko prices. */
+export function llmIdentity(provider: string, model: string): { provider: string; model: string } {
+  const m = model.includes("/") ? model.split("/") : null;
+  if (m) return { provider: m[0], model: m.slice(1).join("/") };
+  if (provider === "letta" || !provider) return { provider: /^gpt|^text-embedding|^o\d/i.test(model) ? "openai" : /^gemini/i.test(model) ? "google" : "anthropic", model };
+  return { provider, model };
+}
+
+/** Which Nasiko agent a recorded call belongs to: Claude Code builds and Socra's turns have their own; every other kind of call is "studio-<what made it>". */
+export function usageAgentName(agent: string, kind: string): string {
+  if (agent === "Claude Code") return "studio-claude-code";
+  if (agent === "Socra" && kind === "turn") return agentName("team", "socra");
+  return agentName("team", agent.replace(/[·:]/g, " "));
+}
 
 /** One Nasiko intake event for one recorded run. The cost is not sent: Nasiko prices the call from the model name. Same id twice is ignored by Nasiko. */
 export function usageEvent(r: UsageRun, agentId: string, agentName: string) {
@@ -155,13 +170,13 @@ export function usageEvent(r: UsageRun, agentId: string, agentName: string) {
     captured_at: iso(end),
     capture_policy: "metadata_only",
     source: { agent_id: agentId, agent_name: agentName },
-    session: { id: `studio-${r.useCaseId}`, source_id: r.useCaseId, title: `${r.productName || "Studio"}: ${r.kind === "build" ? "builds" : "conversation"}` },
+    session: { id: `studio-${r.useCaseId || "system"}`, source_id: r.useCaseId || "system", title: `${r.productName || "Studio"}: ${r.kind === "build" ? "builds" : r.kind === "turn" ? "conversation" : r.kind}` },
     turn: {
       id: `studio-turn-${r.id}`,
       started_at: iso(start),
       ended_at: iso(end),
       tool_calls: [],
-      llm_calls: [{ id: `studio-call-${r.id}`, provider: "anthropic", model: r.model || "claude-sonnet-5-5", input_tokens: r.inputTokens, output_tokens: r.outputTokens, cache_read_tokens: r.cacheTokens, cache_creation_tokens: 0, started_at: iso(start), ended_at: iso(end) }],
+      llm_calls: [{ id: `studio-call-${r.id}`, provider: llmIdentity(r.provider ?? "anthropic", r.model).provider, model: llmIdentity(r.provider ?? "anthropic", r.model).model || "claude-sonnet-5-5", input_tokens: r.inputTokens, output_tokens: r.outputTokens, cache_read_tokens: r.cacheTokens, cache_creation_tokens: 0, started_at: iso(start), ended_at: iso(end) }],
     },
   };
 }

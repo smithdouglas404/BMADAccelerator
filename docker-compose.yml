@@ -88,6 +88,8 @@ services:
       INNGEST_BASE_URL: http://inngest:8288
       MEM0_BASE_URL: http://mem0:8000
       MEM0_API_KEY: ${MEM0_ADMIN_API_KEY:-}
+      MEM0_DEFAULT_LLM_MODEL: ${MEM0_DEFAULT_LLM_MODEL:-gpt-4.1-mini}
+      MEM0_DEFAULT_EMBEDDER_MODEL: ${MEM0_DEFAULT_EMBEDDER_MODEL:-text-embedding-3-small}
       LETTA_BASE_URL: http://letta:8283
       LETTA_SERVER_PASSWORD: ${LETTA_SERVER_PASSWORD:-}
       AGENT_SERVICE_LETTA_MODEL: ${BACC_LETTA_MODEL:-anthropic/claude-haiku-5-5}
@@ -141,6 +143,9 @@ services:
       JIRA_API_TOKEN: ${JIRA_API_TOKEN:-}
       MEM0_BASE_URL: http://mem0:8000
       MEM0_API_KEY: ${MEM0_ADMIN_API_KEY:-}
+      # The models Mem0 uses, so the usage ledger names them (Mem0 does not report its own token use).
+      MEM0_DEFAULT_LLM_MODEL: ${MEM0_DEFAULT_LLM_MODEL:-gpt-4.1-mini}
+      MEM0_DEFAULT_EMBEDDER_MODEL: ${MEM0_DEFAULT_EMBEDDER_MODEL:-text-embedding-3-small}
       LETTA_BASE_URL: http://letta:8283
       LETTA_API_KEY: ${LETTA_SERVER_PASSWORD:-}
       # The shared agent service. Previews reach it as http://agents:8300 too.
