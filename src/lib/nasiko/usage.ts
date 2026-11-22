@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getLink, listAgents, nasiko } from "@/lib/nasiko/client";
-import { agentName, usageEvent } from "@/lib/nasiko/core";
+import { intakeVerdicts, usageEvent } from "@/lib/nasiko/core";
 
 // Sends the Studio's recorded Claude runs (LlmUsage) to Nasiko's coding-agent intake, so Nasiko's usage and cost pages show them.
 // Best effort: when Nasiko is off or away nothing is lost; unsent runs go out on the next try.
@@ -18,16 +18,20 @@ export async function pushPendingUsage(limit = 100): Promise<PushResult> {
     const rows = await prisma.llmUsage.findMany({ where: { sentToNasiko: false, baseline: false }, orderBy: { at: "asc" }, take: limit });
     if (rows.length === 0) return { sent: 0, failed: 0, pending: 0, error: "" };
     const names = new Map((await prisma.useCase.findMany({ select: { id: true, name: true } })).map((u) => [u.id, u.name]));
+    // Nasiko's intake accepts only a registered coding-agent connection. Ours is the Claude Code one (id "claude").
     const agents = await listAgents();
-    const idOf = new Map((agents.ok ? agents.body : []).map((a) => [a.name, a.id]));
-    const events = rows.map((r) => {
-      const name = r.agent === "Claude Code" ? "studio-claude-code" : agentName("team", "socra");
-      return usageEvent({ id: r.id, useCaseId: r.useCaseId, productName: names.get(r.useCaseId) ?? "", agent: r.agent, kind: r.kind, model: r.model, inputTokens: r.inputTokens, outputTokens: r.outputTokens, cacheTokens: r.cacheTokens, at: r.at, ms: r.ms }, idOf.get(name) ?? name, name);
-    });
-    const r = await nasiko("POST", "/telemetry/coding-agent/events/batch", { events });
+    const conn = (agents.ok ? agents.body : []).find((a) => !a.name.startsWith("studio-") && /claude-code$/.test(a.name));
+    if (!conn) return { sent: 0, failed: 0, pending: rows.length, error: "Nasiko has no Claude Code connection yet. Register one (Nasiko: POST /api/agents/coding-integrations {\"integration_id\":\"claude\"}), then send again." };
+    const events = rows.map((r) => ({ row: r, ev: usageEvent({ id: r.id, useCaseId: r.useCaseId, productName: names.get(r.useCaseId) ?? "", agent: r.agent, kind: r.kind, model: r.model, inputTokens: r.inputTokens, outputTokens: r.outputTokens, cacheTokens: r.cacheTokens, at: r.at, ms: r.ms }, "claude", conn.name) }));
+    const r = await nasiko("POST", "/api/telemetry/coding-agent/events/batch", { events: events.map((e) => e.ev) });
     if (!r.ok) return { sent: 0, failed: rows.length, pending: rows.length, error: r.error };
-    await prisma.llmUsage.updateMany({ where: { id: { in: rows.map((x) => x.id) } }, data: { sentToNasiko: true } });
-    return { sent: rows.length, failed: 0, pending: await prisma.llmUsage.count({ where: { sentToNasiko: false, baseline: false } }), error: "" };
+    // Nasiko answers 200 even when it turns an event down: a run counts as sent only when its own verdict says so.
+    const verdicts = intakeVerdicts(r.body);
+    const done = events.filter((e) => ["accepted", "duplicate"].includes(verdicts.get(e.ev.event_id) ?? "")).map((e) => e.row.id);
+    if (done.length) await prisma.llmUsage.updateMany({ where: { id: { in: done } }, data: { sentToNasiko: true } });
+    const rejected = rows.length - done.length;
+    const pending = await prisma.llmUsage.count({ where: { sentToNasiko: false, baseline: false } });
+    return { sent: done.length, failed: rejected, pending, error: rejected ? `Nasiko did not accept ${rejected} of ${rows.length} runs (${typeof r.body === "string" ? "no verdicts in its answer" : JSON.stringify(r.body).slice(0, 200)})` : "" };
   } catch (e) {
     return { sent: 0, failed: 0, pending: 0, error: e instanceof Error ? e.message : String(e) };
   } finally {
