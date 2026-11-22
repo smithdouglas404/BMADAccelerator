@@ -21,7 +21,7 @@ set -uo pipefail
 MODE="${1:-}"
 CODE_BRANCH="${SOCRA_BRANCH:-mac-studio}"
 # Release of THIS script (the laptop fixes). Settings > Update compares it with the newest one on GitHub.
-SCRIPT_REV="11"
+SCRIPT_REV="12"
 
 HOME_DIR="$HOME/SocraStudio"
 
@@ -365,7 +365,7 @@ export function UpdatePanel() {
 }
 TSX
 perl -0pi -e '
-  s{\A}{import { UpdatePanel } from \x27./updatepanel\x27\n} unless /^import[^\n]*\bUpdatePanel\b/m;
+  s{^(import )}{import { UpdatePanel } from \x27./updatepanel\x27\n$1}m unless /^import[^\n]*\bUpdatePanel\b/m;
   s{(useState<[^>]*?)>\(\x27models\x27\)}{$1 | \x27update\x27>(\x27models\x27)};
   s{(if \(t === \x27[a-z]+\x27(?: \|\| t === \x27[a-z]+\x27)*)\) setTab}{$1 || t === \x27update\x27) setTab};
   s{(\[\x27[a-z]+\x27, \x27[^\x27]*\x27\])\] as const\)}{$1, [\x27update\x27, \x27Update\x27]] as const)};
