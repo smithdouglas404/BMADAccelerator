@@ -1,4 +1,9 @@
 import { lettaName } from "./config.ts";
+import { guess, noteUsage } from "./usage.ts";
+
+// Mem0 (self-hosted) does not say what its OpenAI calls used, so they are noted from the text sent: fact extraction on the chat model
+// and the embedding. The models are the ones Mem0 is configured with. Always flagged estimated.
+const mem0Models = () => ({ llm: process.env.MEM0_DEFAULT_LLM_MODEL || "gpt-4.1-mini", embed: process.env.MEM0_DEFAULT_EMBEDDER_MODEL || "text-embedding-3-small" });
 
 // Memory for every agent in the service (CLAUDE.md, "Agent memory: Mem0 + Letta"):
 // - Mem0 (self-hosted) holds long-term facts, scoped to one customer and use case (user_id) and one agent (agent_id).
@@ -33,17 +38,35 @@ export class Mem0 {
   }
   async recall(scope: string, agent: string, query: string, limit = 6): Promise<string[]> {
     if (!this.on || !query.trim()) return [];
+    const t = Date.now();
     const r = await call<{ results?: { memory?: string }[] } | { memory?: string }[]>(this.base, this.h(), "POST", "/search", {
       query: query.slice(0, 1000),
       filters: { user_id: scope, agent_id: agent },
       limit,
+    }).catch(async (e) => {
+      await noteUsage({ kind: "memory", purpose: "Mem0 search: embedding", provider: "openai", model: mem0Models().embed, input: guess(query.slice(0, 1000)), output: 0, cache: 0, estimated: true, ok: false, error: (e as Error).message, ms: Date.now() - t });
+      throw e;
     });
+    await noteUsage({ kind: "memory", purpose: "Mem0 search: embedding", provider: "openai", model: mem0Models().embed, input: guess(query.slice(0, 1000)), output: 0, cache: 0, estimated: true, ok: true, error: "", ms: Date.now() - t });
     const rows = Array.isArray(r) ? r : (r?.results ?? []);
     return rows.map((x) => x.memory ?? "").filter(Boolean).slice(0, limit);
   }
   async remember(scope: string, agent: string, messages: { role: string; content: string }[], meta: Record<string, string> = {}) {
     if (!this.on) return;
-    await call(this.base, this.h(), "POST", "/memories", { messages, user_id: scope, agent_id: agent, metadata: { app_id: "studio-agent-service", ...meta } });
+    const t = Date.now();
+    const text = messages.map((m) => m.content).join("\n");
+    const note = (ok: boolean, error: string) =>
+      Promise.all([
+        noteUsage({ kind: "memory", purpose: "Mem0 save: picking out the facts", provider: "openai", model: mem0Models().llm, input: guess(text), output: Math.ceil(guess(text) * 0.25), cache: 0, estimated: true, ok, error, ms: Date.now() - t }),
+        noteUsage({ kind: "memory", purpose: "Mem0 save: embedding", provider: "openai", model: mem0Models().embed, input: guess(text), output: 0, cache: 0, estimated: true, ok, error, ms: 0 }),
+      ]);
+    try {
+      await call(this.base, this.h(), "POST", "/memories", { messages, user_id: scope, agent_id: agent, metadata: { app_id: "studio-agent-service", ...meta } });
+    } catch (e) {
+      await note(false, (e as Error).message);
+      throw e;
+    }
+    await note(true, "");
   }
 }
 
@@ -113,7 +136,8 @@ export class Letta {
   }
   /** Tells the persona what just happened, so it updates its own memory of the person (and itself). */
   async reflect(agentId: string, input: string, output: string) {
-    await call(
+    const t = Date.now();
+    const res = await call<{ usage?: { prompt_tokens?: number; completion_tokens?: number; cached_input_tokens?: number | null; step_count?: number }; messages?: { message_type?: string; content?: unknown }[] } | null>(
       this.base,
       this.h(),
       "POST",
@@ -127,6 +151,23 @@ export class Letta {
         ],
       },
       60_000,
-    );
+    ).catch(async (e) => {
+      await noteUsage({ kind: "letta", purpose: "Letta persona updates its memory", provider: "letta", model: await this.modelOf(agentId), input: 0, output: 0, cache: 0, estimated: true, ok: false, error: (e as Error).message, ms: Date.now() - t });
+      throw e;
+    });
+    // Letta says what its model used when it answers; when it does not, the text sent is counted (an estimate).
+    const u = res?.usage;
+    const sent = input.slice(0, 3000) + output.slice(0, 3000);
+    await noteUsage({ kind: "letta", purpose: `Letta persona updates its memory${u?.step_count ? ` (${u.step_count} steps)` : ""}`, provider: "letta", model: await this.modelOf(agentId), input: u?.prompt_tokens ?? guess(sent), output: u?.completion_tokens ?? 0, cache: u?.cached_input_tokens ?? 0, estimated: !u, ok: true, error: "", ms: Date.now() - t });
+  }
+  private modelNames = new Map<string, string>();
+  /** The model a Letta agent runs on, for the usage note. */
+  private async modelOf(agentId: string): Promise<string> {
+    const hit = this.modelNames.get(agentId);
+    if (hit) return hit;
+    const a = await call<{ llm_config?: { model?: string }; model?: string }>(this.base, this.h(), "GET", `/v1/agents/${agentId}`).catch(() => null);
+    const m = a?.llm_config?.model ?? a?.model ?? "";
+    if (m) this.modelNames.set(agentId, m);
+    return m;
   }
 }

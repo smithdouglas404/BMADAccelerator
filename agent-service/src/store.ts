@@ -1,6 +1,7 @@
 import pg from "pg";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { AgentConfig } from "./config.ts";
+import type { UsageNote } from "./usage.ts";
 
 // The service's own records, in its own Postgres database: use cases (with their app token, stored
 // only as a hash), agents (configuration), runs (history) and approvals.
@@ -24,6 +25,7 @@ create table if not exists runs (id text primary key, use_case text not null ref
 create index if not exists runs_uc on runs (use_case, created_at desc);
 create table if not exists approvals (id text primary key, run_id text not null references runs(id) on delete cascade, use_case text not null, agent text not null, kind text not null, title text not null, detail text not null default '', status text not null default 'pending', comment text not null default '', decided_by text not null default '', created_at timestamptz not null default now(), decided_at timestamptz, expires_at timestamptz not null);
 create index if not exists approvals_uc on approvals (use_case, status, created_at desc);
+create table if not exists llm_usage (seq bigserial primary key, id text unique not null, use_case text not null default '', run text not null default '', agent text not null default '', kind text not null, purpose text not null default '', provider text not null default '', model text not null default '', input_tokens integer not null default 0, output_tokens integer not null default 0, cache_tokens integer not null default 0, estimated boolean not null default false, ok boolean not null default true, error text not null default '', ms integer not null default 0, at timestamptz not null default now());
 `;
 
 export const hash = (s: string) => createHash("sha256").update(s).digest("hex");
@@ -108,6 +110,20 @@ export class Store {
   }
   async step(id: string, kind: string, detail: string) {
     await this.pool.query("update runs set steps = steps || $2::jsonb where id=$1", [id, JSON.stringify([{ at: new Date().toISOString(), kind, detail: detail.slice(0, 2000) }])]);
+  }
+
+  /** One model call the service made. The Studio reads them in order (usageAfter) and records each once. */
+  async addUsage(n: UsageNote) {
+    await this.pool.query(
+      "insert into llm_usage (id, use_case, run, agent, kind, purpose, provider, model, input_tokens, output_tokens, cache_tokens, estimated, ok, error, ms) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) on conflict (id) do nothing",
+      [n.key ? `svc_${n.key}` : `svc_${randomUUID()}`, n.useCase, n.run, n.agent, n.kind, n.purpose.slice(0, 200), n.provider, n.model, Math.round(n.input), Math.round(n.output), Math.round(n.cache), n.estimated, n.ok, n.error.slice(0, 300), Math.round(n.ms)],
+    );
+  }
+  usageAfter(seq: number, limit = 500) {
+    return this.all<{ seq: string; id: string; use_case: string; run: string; agent: string; kind: string; purpose: string; provider: string; model: string; input_tokens: number; output_tokens: number; cache_tokens: number; estimated: boolean; ok: boolean; error: string; ms: number; at: string }>(
+      "select * from llm_usage where seq > $1 order by seq asc limit $2",
+      [seq, Math.max(1, Math.min(1000, limit))],
+    );
   }
 
   async createApproval(a: { id?: string; run: string; useCase: string; agent: string; kind: Approval["kind"]; title: string; detail: string; timeoutMinutes: number }) {

@@ -26,30 +26,41 @@ export function totalsOf(r: ResultLike): { totals: Totals; model: string } {
 
 // ---- what the screens show ----
 
-export type Row = { useCaseId: string; agent: string; kind: string; model: string; inputTokens: number; outputTokens: number; cacheTokens: number; costUsd: number; baseline: boolean; at: Date | string };
-export type Rollup = { totalUsd: number; runs: number; tokens: number; since: string | null; byAgent: { agent: string; runs: number; tokens: number; usd: number }[]; byProduct: { useCaseId: string; runs: number; tokens: number; usd: number }[] };
+export type Row = { useCaseId: string; agent: string; kind: string; model: string; provider?: string; inputTokens: number; outputTokens: number; cacheTokens: number; costUsd: number; costSource?: string; ok?: boolean; baseline: boolean; at: Date | string };
+type Group = { runs: number; tokens: number; usd: number; failed: number; estimatedUsd: number };
+export type Rollup = {
+  totalUsd: number; estimatedUsd: number; runs: number; failed: number; tokens: number; since: string | null;
+  byAgent: ({ agent: string } & Group)[];
+  byKind: ({ kind: string } & Group)[];
+  byProduct: ({ useCaseId: string } & Group)[];
+};
 
-/** Sums the records per agent and per product, biggest first. Baselines (first sight of a resumed session) are not runs of ours. */
+/** Sums the records per agent, per kind of call and per product, biggest first. Baselines (first sight of a resumed session) are not calls of ours. `estimatedUsd` is the part of the cost that is an estimate, not reported by the provider. */
 export function rollup(rows: Row[]): Rollup {
   const real = rows.filter((r) => !r.baseline);
   const group = <K extends string>(key: (r: Row) => string, name: K) => {
-    const m = new Map<string, { runs: number; tokens: number; usd: number }>();
+    const m = new Map<string, Group>();
     for (const r of real) {
-      const g = m.get(key(r)) ?? { runs: 0, tokens: 0, usd: 0 };
+      const g = m.get(key(r)) ?? { runs: 0, tokens: 0, usd: 0, failed: 0, estimatedUsd: 0 };
       g.runs++;
       g.tokens += r.inputTokens + r.outputTokens + r.cacheTokens;
       g.usd += r.costUsd;
+      if (r.ok === false) g.failed++;
+      if (r.costSource === "estimated") g.estimatedUsd += r.costUsd;
       m.set(key(r), g);
     }
-    return [...m.entries()].map(([k, g]) => ({ [name]: k, ...g })).sort((a, b) => b.usd - a.usd);
+    return [...m.entries()].map(([k, g]) => ({ [name]: k, ...g })).sort((a, b) => b.usd - a.usd || b.runs - a.runs);
   };
   const first = rows.map((r) => new Date(r.at).getTime()).sort((a, b) => a - b)[0];
   return {
     totalUsd: real.reduce((n, r) => n + r.costUsd, 0),
+    estimatedUsd: real.filter((r) => r.costSource === "estimated").reduce((n, r) => n + r.costUsd, 0),
     runs: real.length,
+    failed: real.filter((r) => r.ok === false).length,
     tokens: real.reduce((n, r) => n + r.inputTokens + r.outputTokens + r.cacheTokens, 0),
     since: first ? new Date(first).toISOString() : null,
     byAgent: group((r) => r.agent, "agent") as Rollup["byAgent"],
+    byKind: group((r) => r.kind, "kind") as Rollup["byKind"],
     byProduct: group((r) => r.useCaseId, "useCaseId") as Rollup["byProduct"],
   };
 }

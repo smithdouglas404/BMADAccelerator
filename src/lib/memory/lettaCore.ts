@@ -181,9 +181,21 @@ export function pickEmbedding(handles: string[], preferred?: string): string | n
 
 export interface LettaMessage {
   message_type?: string;
+  /** On the usage_statistics message at the end of a run: what the model used across all the run's steps. */
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  cached_input_tokens?: number | null;
+  step_count?: number;
   content?: unknown;
   tool_call?: { name?: string | null; arguments?: string | null } | null;
   tool_calls?: Array<{ name?: string | null; arguments?: string | null }> | null;
+}
+
+/** What a Letta run used, from its usage_statistics message(s); null when Letta reported none. */
+export function lettaUsage(messages: LettaMessage[]): { input: number; output: number; cache: number; steps: number } | null {
+  const u = messages.filter((m) => m.message_type === "usage_statistics");
+  if (!u.length) return null;
+  return { input: u.reduce((n, m) => n + (m.prompt_tokens ?? 0), 0), output: u.reduce((n, m) => n + (m.completion_tokens ?? 0), 0), cache: u.reduce((n, m) => n + (m.cached_input_tokens ?? 0), 0), steps: u.reduce((n, m) => n + (m.step_count ?? 0), 0) };
 }
 
 /** The text the agent said. (Unchanged from the original.) */

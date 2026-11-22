@@ -699,8 +699,19 @@ model LlmUsage {
   sentToNasiko Boolean  @default(false)
   baseline     Boolean  @default(false) // first sight of a resumed session: its earlier cost is not ours to count
   ms           Int      @default(0)
+  // Every model call is recorded here (Doug, Nov 22), not only Claude Code runs. See src/lib/llm/.
+  provider     String   @default("anthropic") // anthropic | openai | letta | typesafe | ...
+  purpose      String   @default("") // what the call was for: "document reading", "memory fact extraction", ...
+  costSource   String   @default("reported") // reported (by the provider) | estimated (tokens x a price table, or text length)
+  ok           Boolean  @default(true)
+  error        String   @default("")
+  attempt      Int      @default(1) // 2 or more: another run for the same turn (a retry)
+  causes       String   @default("") // what the turn answered (msg:..., backlog:...), so runs can be counted per message
+  externalId   String?  @unique // an id from the system that made the call (the agent service), so it is recorded once
+  extSeq       Int      @default(0) // that system's own order number, so the next read continues after the last one
   at           DateTime @default(now())
 
   @@index([useCaseId, at])
   @@index([sessionId])
+  @@index([turnId])
 }
