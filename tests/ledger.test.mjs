@@ -88,6 +88,17 @@ test("the rollup totals every kind of call and shows the estimated part and the 
   assert.deepEqual(r.byKind.map((k) => k.kind).sort(), ["document", "memory", "turn"]);
 });
 
+test("the rollup splits tokens in, out and cached, and gives each agent per product", () => {
+  const row = (agent, useCaseId, costUsd) => ({ useCaseId, agent, kind: "turn", model: "m", inputTokens: 10, outputTokens: 5, cacheTokens: 2, costUsd, baseline: false, at: "2026-11-22T10:00:00Z" });
+  const r = usage.rollup([row("Socra", "p1", 1), row("Socra", "p2", 2), row("Document reader", "p1", 0.5)]);
+  const socra = r.byAgent.find((a) => a.agent === "Socra");
+  assert.deepEqual([socra.inputTokens, socra.outputTokens, socra.cacheTokens], [20, 10, 4]);
+  const x = r.byAgentProduct.find((g) => g.agent === "Socra" && g.useCaseId === "p2");
+  assert.equal(x.runs, 1);
+  assert.equal(x.usd, 2);
+  assert.equal(r.byAgentProduct.length, 3);
+});
+
 test("Nasiko gets the right provider, model, agent and session for every kind of call", () => {
   assert.deepEqual(nasiko.llmIdentity("letta", "anthropic/claude-haiku-5-5"), { provider: "anthropic", model: "claude-haiku-5-5" });
   assert.deepEqual(nasiko.llmIdentity("openai", "text-embedding-3-small"), { provider: "openai", model: "text-embedding-3-small" });
