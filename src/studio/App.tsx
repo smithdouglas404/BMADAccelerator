@@ -48,6 +48,7 @@ import {
   Zap,
   Workflow,
   CornerDownRight, MessageSquareReply,
+  Server,
 } from 'lucide-react'
 import {
   type BacklogItem,
@@ -61,7 +62,7 @@ import {
 import { downloadPrototypeZip } from './generation'
 import { api, ago, initials, previewUrl, sessionLine, toBacklog, toCapabilities, toEvidence, toExecution, toMessages, toRecommendations, toSpec, useLive, type Live, type StudioMessage } from './live'
 import { LiveFrame, captureLive, useVoice, type Pick } from './vibe'
-import { NextMove, journeyOf, PERSONAS, personaFor, PersonaPicker, PersonaSwitch, menuFor, type NavItem, PeopleMenu, TeamPanel, Checkpoints, UndoChip, optionsFrom, roleShort, specialistIcon, useMe, type Me, type StudioView } from './flow'
+import { NextMove, journeyOf, PERSONAS, personaFor, PersonaPicker, PersonaSwitch, menuFor, HARNESS, type NavItem, PeopleMenu, TeamPanel, Checkpoints, UndoChip, optionsFrom, roleShort, specialistIcon, useMe, type Me, type StudioView } from './flow'
 import { TruthGraphView, MarkChain, ObservationEffects } from './truth'
 import { ConversationStream } from './convo'
 import { ProgressView } from './progress'
@@ -148,7 +149,11 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
   const [replying, setReplying] = useState<StudioMessage | null>(null)
   const [me, setMe] = useMe()
   const menu = useMemo(() => menuFor(me.role), [me.role])
-  const [moreOpen, setMoreOpen] = useState(false)
+  // The side menu is an accordion (Doug, Nov 21): one section open at a time, the one holding the view you are on. A click
+  // on a heading opens it and closes the others, or closes it. The last choice is remembered in this browser.
+  const sectionOf = (view: StudioView) => menu.groups.find((g) => g.items.some((i) => i.id === view))?.title ?? (menu.more.some((i) => i.id === view) ? 'More tools' : '')
+  const [openSection, setOpenSection] = useState<string | null>(null)
+  useEffect(() => { setOpenSection(sectionOf(activeView) || (menu.groups[0]?.title ?? '')) }, [activeView, menu]) // eslint-disable-line react-hooks/exhaustive-deps
   // Who you are decides what the menu shows first, where you start, and how Socra talks to you.
   const pickPersona = (p: (typeof PERSONAS)[number]) => {
     setMe({ ...me, role: p.role })
@@ -436,11 +441,17 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
 
         <PersonaSwitch me={me} onPick={pickPersona} />
         <nav className="primary-nav studio-nav" aria-label="Product workspace">
-          {menu.groups.map((group) => (<div className="studio-nav-group" key={group.title}><div className="sidebar-section-label studio-stage-label">{group.title}<small>{group.about}</small></div>{group.items.map(navButton)}</div>))}
+          {menu.groups.map((group) => { const open = openSection === group.title; return (<div className="studio-nav-group" key={group.title}><button type="button" className="sidebar-section-label studio-stage-label studio-more-toggle" onClick={() => setOpenSection(open ? '' : group.title)} aria-expanded={open}>{group.title}<small>{group.about} · {group.items.length} {open ? '▴' : '▾'}</small></button>{open && group.items.map(navButton)}</div>) })}
           {menu.more.length > 0 && <div className="studio-nav-group studio-nav-more">
-            <button type="button" className="sidebar-section-label studio-stage-label studio-more-toggle" onClick={() => setMoreOpen(!moreOpen)} aria-expanded={moreOpen || menu.more.some((i) => i.id === activeView)}> More tools <small>{menu.more.length} more {moreOpen || menu.more.some((i) => i.id === activeView) ? '▴' : '▾'}</small></button>
-            {(moreOpen || menu.more.some((i) => i.id === activeView)) && menu.more.map(navButton)}
+            <button type="button" className="sidebar-section-label studio-stage-label studio-more-toggle" onClick={() => setOpenSection(openSection === 'More tools' ? '' : 'More tools')} aria-expanded={openSection === 'More tools'}> More tools <small>{menu.more.length} more {openSection === 'More tools' ? '▴' : '▾'}</small></button>
+            {openSection === 'More tools' && menu.more.map(navButton)}
           </div>}
+          <div className="studio-nav-group studio-nav-harness">
+            <a className="nav-item" href={HARNESS.href} title={HARNESS.tip} aria-label={`${HARNESS.label}: ${HARNESS.tip}`} data-tip={HARNESS.tip}>
+              <span className="nav-icon"><Server size={17} /></span>
+              <span className="nav-copy"><strong>{HARNESS.label}</strong><small>{HARNESS.hint}</small></span>
+            </a>
+          </div>
         </nav>
 
         <div className="sidebar-divider" />

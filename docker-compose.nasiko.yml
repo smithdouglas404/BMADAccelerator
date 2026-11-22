@@ -94,7 +94,7 @@ services:
       # The Studio's agents are registered by their address, and the Studio runs on this computer (a private
       # address), so Nasiko must be allowed to call private addresses. Public ones (Cloud Run, Railway) need no setting.
       AGENT_ALLOW_PRIVATE_URLS: "true"
-      # Same for the MCP gateway: the Studio's own connector (/api/mcp) is on this computer.
+      # The MCP gateway refuses private addresses too; the Studio's own MCP connector (/api/mcp) is one.
       MCP_ALLOW_PRIVATE_URLS: "true"
       DATABASE_URL: postgres://nasiko:${NASIKO_DB_PASSWORD:?run scripts/nasiko-up.sh}@postgres:5432/nasiko_dev
       REDIS_URL: redis://redis:6379
@@ -114,9 +114,9 @@ services:
       OPENAI_API_KEY: ""
     extra_hosts:
       # So the server can call the Studio at host.docker.internal on Linux too (Docker Desktop has it already).
-      - "host.docker.internal:host-gateway"
+      - "${NASIKO_EXTRA_HOST:-host.docker.internal:host-gateway}"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - ${NASIKO_DOCKER_SOCK:-/var/run/docker.sock}:/var/run/docker.sock
     depends_on:
       postgres:
         condition: service_healthy

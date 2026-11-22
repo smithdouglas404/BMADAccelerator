@@ -1,5 +1,5 @@
 'use client'
-// Settings > Nasiko: the link to your self-hosted Nasiko (an open runtime for agents: one registry, access, cost and
+// Settings > Enterprise Harness (powered by Nasiko): the link to your self-hosted Nasiko (an open runtime for agents: one registry, access, cost and
 // traces). Everything shown is read from the real Nasiko server and the Studio's own records.
 import { useEffect, useState } from 'react'
 import { Check, Plug, RefreshCw, Trash2 } from 'lucide-react'
@@ -58,7 +58,7 @@ export function NasikoTab({ setToast }: { setToast: (s: string) => void }) {
   return (
     <div className="studio-settings-grid">
       <section className="studio-card">
-        <div className="stack-header"><div><p className="eyebrow">Nasiko · your own server</p><h3>Connection</h3></div><Plug size={16} /></div>
+        <div className="stack-header"><div><p className="eyebrow">Enterprise Harness · powered by Nasiko · your own server</p><h3>Connection</h3></div><Plug size={16} /></div>
         <Rich text={'Nasiko is an open runtime for agents. It keeps one registry of every agent, controls who and what each can reach, and shows what each costs, with a trace of every call.\nThe Studio registers its agents there. Socra, the specialists and every product agent keep running exactly as before: if Nasiko is down, nothing in the Studio changes.'} />
         <div className="studio-list">
           <div className="studio-list-row"><div className="studio-row-main"><strong>Server</strong><small>{!info.link.url ? 'Not set up yet' : h?.reachable ? (h.ready ? 'Running and ready' : 'Running, not ready') : h?.error || 'Not answering'}</small></div><span className={h?.reachable && h.ready ? 'studio-ok' : 'studio-warn'}>{!info.link.url ? '–' : h?.reachable ? (h.ready ? 'up' : 'starting') : 'down'}</span></div>
@@ -78,7 +78,7 @@ export function NasikoTab({ setToast }: { setToast: (s: string) => void }) {
       </section>
 
       <section className="studio-card">
-        <div className="stack-header"><div><p className="eyebrow">Agents · {info.agents.length} of {info.studioAgents.length} registered</p><h3>The Studio’s agents in Nasiko</h3></div><RefreshCw size={16} /></div>
+        <div className="stack-header"><div><p className="eyebrow">Agents · {info.agents.length} of {info.studioAgents.length} registered</p><h3>The Studio’s agents in the harness</h3></div><RefreshCw size={16} /></div>
         <Rich text={'Each agent is registered by its address with the open A2A agent card, so any harness that speaks A2A can use it, here or elsewhere. Calls come back to the Studio, so the answers keep the Studio’s rules. Note: this version of Nasiko cannot yet forward its own proxy calls to an agent that is only registered by address (it answers 503), so they are listed and ready, but not routed through Nasiko’s access rules and traces yet.'} />
         <div className="studio-review-actions" style={{ margin: '8px 0' }}>
           <button type="button" className="button button-primary" disabled={!info.signedIn || busy !== ''} onClick={() => void register()}>{busy === 'sync' ? 'Registering…' : missing.length ? `Register ${missing.length} agent${missing.length === 1 ? '' : 's'}` : 'Update all'}</button>
