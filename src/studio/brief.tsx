@@ -76,7 +76,7 @@ export function BriefView({ live, act, buildNow, validationScore, repositoryUrl,
       />
       <p className="-mt-3 text-sm text-muted-foreground [overflow-wrap:anywhere]">{live.generateBusy ? `${live.generateStatus ? `${live.generateStatus}. ` : ''}Building on your Claude plan; the preview updates when it’s done.` : repositoryUrl || 'Builds run on your Claude plan. The ZIP is for running it in your own Claude Code.'}</p>
 
-      <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_26rem]">
+      <div className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_26rem]">
         <div className="grid min-w-0 grid-cols-1 content-start gap-6">
           <Section
             title={generatedFiles.length ? `${generatedFiles.length} files ready to ship` : 'The package is ready to assemble'}
@@ -87,7 +87,7 @@ export function BriefView({ live, act, buildNow, validationScore, repositoryUrl,
               {manifest.map(([icon, title, detail, done]) => (
                 <div key={title} className="flex min-w-0 items-start gap-3 border-b border-border px-5 py-3.5 sm:odd:border-r">
                   <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-primary">{icon}</span>
-                  <div className="grid min-w-0 flex-1 gap-0.5"><span className="text-sm font-semibold">{title}</span><span className="text-xs text-muted-foreground">{detail}</span></div>
+                  <div className="grid min-w-0 flex-1 gap-0.5"><span className="text-sm font-semibold break-words">{title}</span><span className="text-xs text-muted-foreground break-words">{detail}</span></div>
                   {done ? <Check className="mt-1 size-4 shrink-0 text-primary" aria-label="Done" /> : <Timer className="mt-1 size-4 shrink-0 text-muted-foreground" aria-label="Not yet" />}
                 </div>
               ))}

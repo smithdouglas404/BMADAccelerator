@@ -116,7 +116,7 @@ export function TruthGraphView({ live, changeView, setToast, focusNode: focusPar
         <Stat label="Changes with reasons" value={String(truth.timeline.length)} detail={truth.timeline[0] ? `latest ${ago(truth.timeline[0].createdAt)}` : 'none yet'} />
       </div>
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <div className="grid min-w-0 grid-cols-1 gap-4">
           <Tabs value={tab} onValueChange={(v) => { if (v === 'why') setWhyFor(''); setTab(v as 'graph' | 'why') }}>
             <TabsList aria-label="Truth Graph views" className="!h-10 !w-full !flex-row sm:!w-fit">
@@ -224,9 +224,9 @@ export function TruthGraphView({ live, changeView, setToast, focusNode: focusPar
               <div className="grid grid-cols-1 border-t border-border">
                 <p className="px-5 pt-3 pb-1 text-xs font-semibold text-muted-foreground uppercase">Connected to · {selectedEdges.length}</p>
                 {selectedEdges.length ? selectedEdges.slice(0, 12).map((edge) => (
-                  <button key={edge.id} type="button" onClick={() => setSelectedNodeId(edge.from === selectedNode.id ? edge.to : edge.from)} className="flex items-center gap-3 px-5 py-2 text-left text-sm hover:bg-accent/60">
+                  <button key={edge.id} type="button" onClick={() => setSelectedNodeId(edge.from === selectedNode.id ? edge.to : edge.from)} className="flex items-start gap-3 px-5 py-2 text-left text-sm hover:bg-accent/60">
                     <Badge variant="outline" className="shrink-0 text-xs">{edge.relation}</Badge>
-                    <span className="min-w-0 flex-1 truncate">{edge.from === selectedNode.id ? `${edge.label} → ${titleOf(edge.to)}` : `${titleOf(edge.from)} ${edge.label}`}</span>
+                    <span className="min-w-0 flex-1 break-words">{edge.from === selectedNode.id ? `${edge.label} → ${titleOf(edge.to)}` : `${titleOf(edge.from)} ${edge.label}`}</span>
                     <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
                   </button>
                 )) : <Empty>Not connected to anything yet.</Empty>}
