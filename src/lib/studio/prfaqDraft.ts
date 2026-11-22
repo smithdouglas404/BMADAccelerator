@@ -106,7 +106,9 @@ export function draftMarkdown(draft: Draft, format: FormatSection[], sourceTexts
   const out: string[] = [];
   for (const f of format) {
     const sec = draft.sections.find((s) => s.key === f.key) ?? { key: f.key, statements: [], missing: [] };
-    let good = sec.statements.map(check).filter((s): s is Kept => !!s);
+    // The same statement twice in one section is written once.
+    const seen = new Set<string>();
+    let good = sec.statements.map(check).filter((s): s is Kept => !!s).filter((s) => { const k = normalize(`${s.question ?? ""} ${s.text.replace(MARKER, " ")}`); return seen.has(k) ? false : (seen.add(k), true) });
     dropped += sec.statements.length - good.length;
     // Reformat: what the draft didn't place anywhere goes under the "other" section, word for word.
     if (keepsOld && f.key === "other") {

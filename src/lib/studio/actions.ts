@@ -5,7 +5,7 @@ import { rememberDecision } from "@/lib/memory";
 import { bumpReadiness, clip, personaVoice, isAffirmative, numberedOptions, pickedNumbers, proposalFrom, specialistByKey, suggestedOption } from "./core";
 import { SESSION_EDGES, addTrace } from "./trace";
 import { recordChange } from "./truthlog";
-import { judgeYes, jevOutcome, tagJevCall } from "@/lib/jev";
+import { judgeGate, judgeYes, jevOutcome, tagJevCall } from "@/lib/jev";
 import { itemAsk } from "./itemAsk";
 
 const NO_AGENTS = "I've kept that. Socra switches on once Claude is signed in on Settings.";
@@ -78,6 +78,8 @@ export async function ownerSays(useCaseId: string, content: string, opts: SayOpt
   let picked = nums ? options.filter((x) => nums.includes(x.n)) : [];
   // A bare yes approves only what was actually proposed: the option Socra marked as its suggestion,
   // or the yes/no proposal it last made. A yes to an open question or to unmarked options is held.
+  // The Jev gate (log-only): would this message need a full turn? Logged beside what the turn really does.
+  judgeGate(useCaseId, msg.id, lastMuse?.content ?? "", content);
   const rulesYes = !specialist && !picked.length && isAffirmative(content);
   // What a yes would approve, if anything is on the table: Socra's marked option or its yes/no proposal.
   // Jev (TypeSafe) judges whether a short reply agrees to it and adds nothing new; when Jev is unsettled,

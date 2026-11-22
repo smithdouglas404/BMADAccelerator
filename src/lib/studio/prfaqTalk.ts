@@ -134,7 +134,7 @@ ${skill}
 </skill>
 
 ${body}`;
-  return `You are the PRFAQ writer. Follow the skill below exactly. Task: GENERATE a PRFAQ baseline from the sources: what the person said (talks and conversation), the PRFAQ as it stood (their edits), and documents they picked.
+  return `You are the PRFAQ writer. Follow the skill below exactly. Task: GENERATE a PRFAQ baseline from the sources: what the person said (talks and conversation), the PRFAQ as it stood (their edits and everything written before), and every document they have added, old and new. Start from scratch: rebuild the whole PRFAQ from all of it, so nothing said before is lost and the new material is woven in.
 - Write each statement in press-release voice, as if the product has launched, but only from what the sources say. Never add a fact, number, name, customer, date, price or promise that is not in them.
 - quote: the shortest verbatim span (at least 5 words, copied exactly, no ellipsis) from one source that the statement rests on; from: that source's id. A statement without such a quote must be left out.
 - For an FAQ section, write the question a customer (or the business) would ask in question; the answer in text. Otherwise leave question empty.
@@ -156,7 +156,9 @@ export async function writePrfaq(useCaseId: string, o: { mode: "generate" | "ref
   const uc = await prisma.useCase.findUniqueOrThrow({ where: { id: useCaseId } });
   const meta = prfaqMeta(uc.prfaqSources);
   if (o.mode !== "generate" && !uc.prfaq.trim()) throw new PrfaqError("There is no PRFAQ yet. Generate one first.");
-  const docs = o.docs ?? meta.docs;
+  // A brand-new one rebuilds from everything (Doug, Nov 21): every document used before plus the ones picked now.
+  const picked = o.docs ?? meta.docs;
+  const docs = o.mode === "generate" ? [...new Set([...(meta.usedDocs ?? []), ...picked])] : picked;
   const causes: string[] = [];
   // The talk being recorded becomes a talk on record (and a message in the conversation, about the PRFAQ).
   const words = (o.transcript ?? "").trim();

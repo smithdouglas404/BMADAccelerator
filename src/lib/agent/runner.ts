@@ -15,6 +15,7 @@ import { fakeAgentTurn } from "./fake";
 import { recallForTurn, searchMemory, startMemoryJobs } from "@/lib/memory";
 import { resumeBrief } from "@/lib/studio/resume";
 import { withContext } from "@/lib/memory/lettaCore";
+import { noteGateTurn } from "@/lib/jev";
 
 // One Socra turn at a time per product. Queued events (messages, captures, pulled-forward
 // recommendations, annotations, build notes) are combined into the next turn, in order.
@@ -116,6 +117,7 @@ export async function kick(useCaseId: string) {
         await prisma.agentTurn
           .update({ where: { id: turn.id }, data: { status: ok ? "done" : "failed", error: failure, skills: [...used.skills], agents: [...used.agents], tools: [...used.tools], endedAt: new Date() } })
           .catch(() => undefined);
+      if (ok) await noteGateTurn(causes, [...used.tools], [...used.agents]).catch(() => undefined);
       await prisma.agentEvent.updateMany({ where: { id: { in: ids } }, data: { status: ok ? "done" : "failed" } });
     }
   } finally {
