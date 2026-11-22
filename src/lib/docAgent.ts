@@ -219,3 +219,33 @@ export async function lowCostAnswer<T>(prompt: string, schema: z.ZodType<T>, max
   }
   return null;
 }
+
+/**
+ * One structured answer from the document model (Haiku by default), on the plan first and the key
+ * second, like the document agent. Returns which sign-in answered, or null when none could.
+ */
+export async function askDocModel<T>(prompt: string, schema: z.ZodType<T>, maxTokens = 4000): Promise<{ data: T; auth: Auth; model: string } | null> {
+  for (const auth of authOrder()) {
+    try {
+      if (auth === "plan") {
+        const q = query({
+          prompt,
+          options: { model: docModel(), tools: [], maxTurns: 3, effort: "low", persistSession: false, settingSources: [], outputFormat: { type: "json_schema", schema: z.toJSONSchema(schema, { target: "draft-7" }) as Record<string, unknown> }, env: authEnv(auth) },
+        });
+        for await (const m of q as AsyncIterable<SDKMessage>) {
+          if (m.type === "result") {
+            if (m.subtype !== "success") throw new Error(`document model stopped: ${m.subtype}`);
+            const r = schema.safeParse(m.structured_output);
+            if (r.success) return { data: r.data, auth, model: docModel() };
+          }
+        }
+      } else {
+        const response = await new Anthropic().messages.parse({ model: docModel(), max_tokens: maxTokens, output_config: { effort: "low", format: zodOutputFormat(schema) }, messages: [{ role: "user", content: prompt }] });
+        if (response.parsed_output) return { data: response.parsed_output as T, auth, model: docModel() };
+      }
+    } catch (e) {
+      console.error(`document model (${auth})`, e);
+    }
+  }
+  return null;
+}

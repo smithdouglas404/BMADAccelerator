@@ -14,6 +14,7 @@ import {
   PackageOpen,
   RefreshCw,
   Settings2,
+  Wrench,
   Upload,
   UserRound,
   ArrowLeft,
@@ -151,6 +152,8 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
   const [replying, setReplying] = useState<StudioMessage | null>(null)
   const [me, setMe] = useMe()
   const menu = useMemo(() => menuFor(me.role), [me.role])
+  const [ourSkills, setOurSkills] = useState<number | null>(null)
+  useEffect(() => { void fetch('/api/skills/library', { cache: 'no-store' }).then((r) => r.json()).then((rows: { source: string }[]) => setOurSkills(Array.isArray(rows) ? rows.filter((r) => r.source === 'studio').length : null)).catch(() => setOurSkills(null)) }, [])
   // Who you are decides what the menu shows first, where you start, and how Socra talks to you.
   const pickPersona = (p: (typeof PERSONAS)[number]) => {
     setMe({ ...me, role: p.role })
@@ -472,6 +475,13 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
               <span className="nav-copy"><strong>{HARNESS.label}</strong><small>{HARNESS.hint}</small></span>
             </a>
           </div>
+        </nav>
+
+        <nav className="studio-nav studio-nav-foot" aria-label="Our skills">
+          <a className="nav-item" href="/settings?tab=skills&source=studio" title="The Studio's own skills, kept in our private copy of ECC" aria-label="Skills: the Studio's own skills, kept in our private copy of ECC" data-tip="The Studio's own skills, kept in our private copy of ECC">
+            <span className="nav-icon"><Wrench size={17} /></span>
+            <span className="nav-copy"><strong>Skills</strong><small>{ourSkills === null ? 'the Studio’s own skills' : `${ourSkills} of ours, in our private ECC copy`}</small></span>
+          </a>
         </nav>
 
         <div className="sidebar-divider" />

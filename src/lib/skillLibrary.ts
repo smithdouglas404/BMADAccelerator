@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db";
 import { ECC_SKILLS } from "@/lib/skills";
 import { STUDIO_SKILLS_DIR, VENDOR_DIR } from "@/lib/provision";
 import { CORE_SKILLS } from "@/lib/agent/instructions";
+import { STUDIO_TEAM } from "@/lib/agent/team";
+import { SPECIALISTS } from "@/lib/studio/core";
 
 // One skill library: the open-source ECC library (Everything Claude Code, MIT, pinned in vendor/ecc), the
 // Studio's own skills (written in ECC's skill format, origin "Working Backwards Studio") and the skills
@@ -22,6 +24,8 @@ export type LibrarySkill = {
   useCases: string[];
   valid: boolean;
   report: string;
+  /** Which agents are told to read it, taken from their real instructions (never typed in). */
+  usedBy: string[];
 };
 
 // ECC skills every build reads, whatever is switched on.
@@ -50,6 +54,15 @@ export async function studioSkills(dir = STUDIO_SKILLS_DIR) {
   return out.sort((a, b) => rank(a.name) - rank(b.name));
 }
 
+/** The agents whose instructions name a skill: Socra (core skills, and any skill her own skill names), and each team member's prompt. */
+export function skillUsers(name: string, socraText = ""): string[] {
+  const nice = (key: string) => SPECIALISTS.find((s) => s.agent === key)?.name ?? key.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase());
+  const users: string[] = [];
+  if ((CORE_SKILLS as readonly string[]).includes(name) || socraText.includes(name)) users.push("Socra");
+  for (const [key, def] of Object.entries(STUDIO_TEAM)) if (def.prompt.includes(`skills/${name}/`) || def.prompt.includes(name)) users.push(nice(key));
+  return users;
+}
+
 export async function librarySkills(): Promise<LibrarySkill[]> {
   const [studio, prefs, picks, custom] = await Promise.all([
     studioSkills(),
@@ -60,20 +73,21 @@ export async function librarySkills(): Promise<LibrarySkill[]> {
   const byProduct = new Map<string, string[]>();
   for (const p of picks) byProduct.set(p.skillId, [...(byProduct.get(p.skillId) ?? []), p.useCaseId]);
   const all = new Set(prefs.eccAllProducts);
+  const socraText = (await Promise.all(["studio-reimagine", "studio-muse"].map((n) => fs.readFile(path.join(STUDIO_SKILLS_DIR, n, "SKILL.md"), "utf8").catch(() => "")))).join("\n");
   return [
     ...studio.map((s) => ({
       id: `studio:${s.name}`, name: s.name, description: s.description, source: "studio" as const,
       origin: s.origin || "Working Backwards Studio", alwaysOn: true,
-      core: (CORE_SKILLS as readonly string[]).includes(s.name), allProducts: true, useCases: [], valid: true, report: "",
+      core: (CORE_SKILLS as readonly string[]).includes(s.name), allProducts: true, useCases: [], valid: true, report: "", usedBy: skillUsers(s.name, socraText),
     })),
     ...ECC_SKILLS.map((s) => ({
       id: `ecc:${s.id}`, name: s.id, description: s.description, source: "ecc" as const, origin: "ECC",
       alwaysOn: ECC_ALWAYS.includes(s.id), core: false, allProducts: ECC_ALWAYS.includes(s.id) || all.has(s.id),
-      useCases: byProduct.get(s.id) ?? [], valid: true, report: "",
+      useCases: byProduct.get(s.id) ?? [], valid: true, report: "", usedBy: [],
     })),
     ...custom.map((c) => ({
       id: `yours:${c.id}`, name: c.name, description: c.description, source: "yours" as const, origin: "Yours",
-      alwaysOn: false, core: false, allProducts: c.enabled && c.valid, useCases: [], valid: c.valid, report: c.report,
+      alwaysOn: false, core: false, allProducts: c.enabled && c.valid, useCases: [], valid: c.valid, report: c.report, usedBy: [],
     })),
   ];
 }

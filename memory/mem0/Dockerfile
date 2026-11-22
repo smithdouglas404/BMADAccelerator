@@ -13,6 +13,12 @@ WORKDIR /app
 # psycopg[binary] carries its own libpq: the upstream image crashes without one ("no pq wrapper available").
 RUN pip install --no-cache-dir -r requirements.txt "mem0ai==${MEM0_VERSION}" "psycopg[binary]>=3.2.8"
 
+# Hybrid search (Doug, Nov 21: use the maximum): Mem0's keyword (BM25) and entity-matching signals need these optional
+# packages; without them it quietly searches by meaning only. If the extras cannot be installed the build still
+# succeeds and search stays semantic-only (the memory page cannot tell the difference, check the build log).
+RUN pip install --no-cache-dir "mem0ai[nlp]==${MEM0_VERSION}" fastembed && python -m spacy download en_core_web_sm \
+    || echo "mem0: hybrid search extras not installed; search stays semantic-only"
+
 # Mem0 keeps a small SQLite history next to pgvector and will not create the folder itself.
 RUN mkdir -p /app/history
 

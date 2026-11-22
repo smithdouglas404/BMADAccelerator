@@ -22,7 +22,7 @@ export const LESSONS_BLOCK_LABEL = "top_lessons";
 export const MEM0_APP_ID = "working-backwards-studio";
 export const MEM0_USER_ID = "bacc";
 
-export type RoleKey = "muse" | "validator" | "ux" | "engineer";
+export type RoleKey = "muse" | "validator" | "ux" | "engineer" | "analyst" | "architect" | "domain" | "researcher" | "industry" | "scout" | (string & {});
 
 export interface Role {
   key: RoleKey;
@@ -44,9 +44,10 @@ const COMMON_RULES = [
   "Facts from the Mem0 archive arrive inside <retrieved_context>. Search it with search_memory (a focused query; role and kind narrow it) before answering about earlier use cases, decisions or answers. If you need facts you were not given and the search finds nothing, end your reply with one line per need: NEED_CONTEXT: <search query>. Never invent a requirement or a past decision; quote what you rely on and name the use case it came from.",
   "One client's details are private to that use case. Lessons you save must be general (\"retail pilots: ask about payment provider and currency early\"), never one client's prices, names or plans.",
   "Keep your status block current with your memory tools: CURRENT_USE_CASE, CURRENT_TASK, OPEN_QUESTIONS.",
+  "Your human block holds what you learn about the people you work with (their role, how they like to decide, what they care about). When a message names a person and shows how they decide, add one short line with core_memory_append. Your archive holds longer notes the app saves for you: search it with archival_memory_search before you answer, and keep a detailed playbook there with archival_memory_insert.",
   "The top_lessons block is written by the app from your saved lessons. Do not edit it; save lessons with save_lesson.",
   "A message starting [GATE PASSED] or [APP GENERATED] reports progress in a use case. Decide whether there is a lesson that would help a future, similar use case. If there is, save it with save_lesson (one lesson per call, with a confidence from 0 to 1). Then reply in two or three sentences. Do not call ask_role for these.",
-  "When you need something another role knows, ask it with ask_role (role keys: muse, validator, ux, engineer; pass your own key as from_role). A message starting [QUESTION from the ...] is another role or the app asking you: answer it directly from your memory and never call ask_role while answering.",
+  "When you need something another role knows, ask it with ask_role (role keys: muse, validator, ux, engineer, analyst, architect, domain, researcher, industry, scout; pass your own key as from_role). A message starting [QUESTION from the ...] is another role or the app asking you: answer it directly from your memory and never call ask_role while answering.",
   "Plain language. Things only the owner decides: spending money or prices, secrets or production access, legal or privacy, deleting customer data, messages to people outside the project.",
 ].join("\n- ");
 
@@ -67,11 +68,60 @@ export const ROLES: Role[] = [
   role("muse", "Socra", "Product physician", "In each product Socra holds the conversation, writes the PRFAQ and the capability floor, and turns every yes into a decision. Remember which questions uncovered the real promise, which assumptions owners corrected, and which capabilities every product of a kind needs."),
   role("validator", "Use Case Validator", "Validator", "In each product the validator tests the problem, the customer, the evidence, the proof point and the thin slice. Remember which proof points held up in pilots and which were too soft."),
   role("ux", "UX / Component Mapper", "Product surface", "In each product the mapper turns capabilities into real shadcn/ui components and screens. Remember which screens and flows owners changed after seeing the built app."),
+  role("analyst", "Business analyst", "Requirements", "In each product the business analyst pins down the flows, roles, business rules, edge cases and acceptance criteria. Remember which rules and exceptions owners always had to be asked about, and which acceptance checks caught real gaps."),
+  role("architect", "Solution architect", "System shape", "In each product the architect shapes the data, integrations, security, privacy and scale. Remember which integrations and compliance rules each kind of product needed, and which trade-offs owners chose."),
+  role("domain", "Domain expert", "Industry practice", "When a product's field is not yet named, this is the general domain expert: how professionals work, the regulations and risks a newcomer misses. A field's own expert (a claims expert, a clinical expert) has its own memory once its field is named."),
+  role("researcher", "Category researcher", "Category research", "In each product the category researcher studies the leading products of its kind and lists what they all have, most have and only one has. Remember which categories have which floor of capabilities, and which sources proved reliable."),
+  role("industry", "Industry expert", "Industry rules", "In each product the industry expert finds the laws, conventions and risks a newcomer misses (labelling, payments, privacy, accessibility). Remember which rules and risks each kind of product ran into, with the source."),
+  role("scout", "Innovation scout", "What nobody does yet", "In each product the innovation scout looks for what nobody in the category does yet, from the owner's context and the leaders' gaps. Remember which ideas owners picked or rejected and why."),
   role("engineer", "Product Engineer", "Pilot boundary", "In each product the engineer shapes the pilot: build moves, AgentKit workflows and human-in-the-loop points, and Claude Code builds it. Remember what broke in builds, which agentic workflows earned their place, and what owners corrected on screen."),
 ];
 
+/** The slug a field's expert is filed under ("Claims expert" -> "claims-expert"). */
+export function fieldSlug(title: string): string {
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 36);
+}
+
+/**
+ * A domain expert is named for the product's field (Claims expert, Clinical expert...), so it is made
+ * when the field is first named, with the same memory as every other agent (Doug, Nov 21): a Letta
+ * persona and its own Mem0 id. Its name comes back from the key, so nothing is stored in code.
+ */
+export function domainRole(key: string): Role | undefined {
+  const m = /^domain-([a-z0-9][a-z0-9-]{1,35})$/.exec(key);
+  if (!m) return undefined;
+  const name = m[1].replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase());
+  return {
+    key,
+    name,
+    title: "Domain expert",
+    agentName: `bacc-${key}`,
+    memAgentId: memAgentId(key),
+    persona: persona(name, "Domain expert", `In each product of this field the ${name.toLowerCase()} brings how professionals in the industry really work: its rules, deadlines, vocabulary and the risks a newcomer misses. Remember which questions uncovered a real rule, which figures and sources held up, and what owners corrected.`),
+  };
+}
+
 export function roleFor(key: string): Role | undefined {
-  return ROLES.find((x) => x.key === key);
+  return ROLES.find((x) => x.key === key) ?? domainRole(key);
+}
+
+/** The memory role a specialist speaks and learns as. A field's expert gets its own, named by its title. */
+/** The research specialists Socra shares for: their agent name, the memory role they speak as, and their display name. */
+export const RESEARCH_AGENTS: Record<string, { role: string; name: string }> = {
+  "category-researcher": { role: "researcher", name: "Category researcher" },
+  "industry-expert": { role: "industry", name: "Industry expert" },
+  "innovation-scout": { role: "scout", name: "Innovation scout" },
+};
+
+export function specialistRoleKey(specialist: string, title = ""): string {
+  if (RESEARCH_AGENTS[specialist]) return RESEARCH_AGENTS[specialist].role;
+  if (specialist === "use-case-validator") return "validator";
+  if (specialist === "business-analyst") return "analyst";
+  if (specialist === "domain") {
+    const slug = fieldSlug(title);
+    return slug.length >= 2 ? `domain-${slug}` : "domain";
+  }
+  return specialist;
 }
 
 export function statusBlock(): string {
@@ -123,14 +173,15 @@ export function upsertPortfolio(rows: PortfolioRow[], row: PortfolioRow): Portfo
   return [r, ...rows.filter((x) => x.useCaseId !== row.useCaseId)].slice(0, 40);
 }
 
-export function gateMessage(useCaseTitle: string, gate: string, summary: string, clientSaid: string): string {
+export function gateMessage(useCaseTitle: string, gate: string, summary: string, clientSaid: string, by = ""): string {
   return [
     `[GATE PASSED] Use case "${useCaseTitle}"`,
     `Gate: ${gate}`,
     `What was approved: ${summary || "(no summary)"}`,
     `The client said: ${clientSaid || "approved"}`,
+    ...(by ? [`Decided by: ${by}`] : []),
     "",
-    "Update your status block. Save any lesson a future, similar use case should learn with save_lesson, then reply briefly.",
+    "Update your status block. If this shows how the person decides, add one line to your human block. Save any lesson a future, similar use case should learn with save_lesson, then reply briefly.",
   ].join("\n");
 }
 
@@ -411,4 +462,41 @@ export const ASK_TOOL_SOURCE = `def ask_role(role: str, question: str, from_role
 
 export function toolSources(): string[] {
   return [SEARCH_TOOL_SOURCE, LESSON_TOOL_SOURCE, ASK_TOOL_SOURCE];
+}
+
+
+/**
+ * Letta features beyond the persona (Doug, Nov 21: use the maximum): archival notes an agent keeps in its own
+ * archive, one standalone memory block per customer that holds that customer's decisions (a playbook the Studio
+ * reads each turn, never attached to the cross-customer role agents), and a "human" block per role.
+ */
+export const HUMAN_BLOCK_LABEL = "human";
+export const PLAYBOOK_LIMIT = 5000;
+
+export const customerSlug = (customer?: string) => (customer ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "workspace";
+export const playbookLabel = (customer?: string) => `playbook-${customerSlug(customer)}`;
+export const customerTag = (customer?: string) => `customer:${customerSlug(customer)}`;
+
+/** Adds one line to a playbook, newest first, dropping the oldest lines past the limit and exact repeats. */
+export function appendPlaybookLine(value: string, line: string, limit = PLAYBOOK_LIMIT): string {
+  const clean = line.replace(/\s+/g, " ").trim().slice(0, 400);
+  if (!clean) return value;
+  const old = value.split("\n").map((l) => l.trim()).filter((l) => l && l !== "none yet");
+  const lines = [clean, ...old.filter((l) => l !== clean)];
+  const out: string[] = [];
+  let n = 0;
+  for (const l of lines) {
+    if (n + l.length + 1 > limit) break;
+    out.push(l);
+    n += l.length + 1;
+  }
+  return out.join("\n");
+}
+
+export type ArchivePassage = { id?: string; text: string; tags?: string[] | null; created_at?: string | null };
+
+/** Only this customer's archive notes: a passage with no matching customer tag is never offered to another customer. */
+export function keepPassages(passages: ArchivePassage[], customer?: string, limit = 3): ArchivePassage[] {
+  const tag = customerTag(customer);
+  return passages.filter((p) => (p.tags ?? []).includes(tag) && p.text.trim()).slice(0, limit);
 }

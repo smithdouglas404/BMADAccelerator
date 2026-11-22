@@ -3,7 +3,11 @@
 # vendor/. The Studio copies what each product needs into its workspace.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-ECC_REPO="https://github.com/affaan-m/everything-claude-code"
+# Our own copy of ECC (private, smithdouglas404/eccsmith, imported from the public project at the same commit).
+# If it cannot be reached without a sign-in (a Docker build has none), the build falls back to the public project at the
+# same pinned commit, which has identical ECC content; the Studio's own skills come from this repo's studio-skills/.
+ECC_REPO="${ECC_REPO:-https://github.com/smithdouglas404/eccsmith}"
+ECC_UPSTREAM="https://github.com/affaan-m/everything-claude-code"
 ECC_SHA="${ECC_SHA:-d2ef2680594f9a17526a6e1a2e18b3d242c5d17b}"
 # Anthropic's official skills (Apache 2.0): Generate uses frontend-design.
 ANTHROPIC_SKILLS_REPO="https://github.com/anthropics/skills"
@@ -19,13 +23,19 @@ fetch() { # repo sha dest
   rm -rf "$dest" && mkdir -p "$dest"
   git -C "$dest" init -q
   git -C "$dest" remote add origin "$repo"
-  git -C "$dest" fetch -q --depth 1 origin "$sha"
+  # A private repo needs a token: ECC_GITHUB_TOKEN (read-only) goes in a request header, never in the URL, a log or a file.
+  local auth=()
+  if [ -n "${ECC_GITHUB_TOKEN:-}" ] && [ "$repo" = "$ECC_REPO" ]; then
+    auth=(-c "http.extraHeader=Authorization: Basic $(printf 'x-access-token:%s' "$ECC_GITHUB_TOKEN" | base64 -w0)")
+  fi
+  git "${auth[@]}" -C "$dest" fetch -q --depth 1 origin "$sha"
   git -C "$dest" checkout -q FETCH_HEAD
   rm -rf "$dest/.git"
   echo "$sha" > "$dest/.pinned"
 }
 
-fetch "$ECC_REPO" "$ECC_SHA" vendor/ecc
+GIT_TERMINAL_PROMPT=0 fetch "$ECC_REPO" "$ECC_SHA" vendor/ecc 2>/dev/null \
+  || { echo "our ECC copy is not reachable from here; using the public ECC at the same commit"; fetch "$ECC_UPSTREAM" "$ECC_SHA" vendor/ecc; }
 fetch "$ANTHROPIC_SKILLS_REPO" "$ANTHROPIC_SKILLS_SHA" vendor/anthropic
 fetch "$AGENTKIT_REPO" "$AGENTKIT_SHA" vendor/agentkit
 echo "vendor ready: ECC ${ECC_SHA:0:7}, Anthropic skills ${ANTHROPIC_SKILLS_SHA:0:7}, AgentKit ${AGENTKIT_SHA:0:7}"

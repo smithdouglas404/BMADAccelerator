@@ -9,8 +9,8 @@ const ABOUT = z.array(z.string()).max(10).default([]).describe('The backlog item
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { workspacePath } from "@/lib/workspace";
-import { formatHits, letta, rememberAnswer, rememberDecision, rememberLesson, searchMemory } from "@/lib/memory";
-import { ROLES } from "@/lib/memory/lettaCore";
+import { formatHits, letta, logMemoryEvent, rememberAnswer, rememberCoverage, rememberDecision, rememberFinding, rememberLesson, searchMemory } from "@/lib/memory";
+import { ROLES, RESEARCH_AGENTS, roleFor, specialistRoleKey } from "@/lib/memory/lettaCore";
 import { IMAGE_LIMIT, imagesConfigured, makeImage } from "@/lib/images";
 import { SPEC_BASIS, SPEC_STATUSES, TRACE_TYPES, cleanTrace } from "@/lib/studio/spec";
 import { SPEC_DEFS } from "@/lib/studio/specDefs";
@@ -21,6 +21,8 @@ import { COVERAGE_STATUSES } from "@/lib/studio/coverageCore";
 import { VALIDATION_SIGNALS, colorFor, numberItems, overallReadiness, slugify, specialistByKey, validationScore, workingName, type Validation } from "@/lib/studio/core";
 
 const ROLE_KEYS = ROLES.map((r) => r.key) as [string, ...string[]];
+const ROLE_HELP = `${ROLE_KEYS.join(", ")}, or domain-<field> for a field's expert`;
+const RoleParam = z.string().min(2).max(60).refine((k) => Boolean(roleFor(k)), "unknown role");
 const SIGNAL_KEYS = VALIDATION_SIGNALS.map((s) => s.key) as [string, ...string[]];
 
 function ok(text = "ok") {
@@ -141,17 +143,19 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
       ),
       tool(
         "share_finding",
-        "A specialist speaks in the conversation, visibly, in their own name: what they found or recommend, in two to four plain sentences, then one or two questions from its own skill's open areas, each with numbered options and one marked \"(suggested)\". Use it when a specialist finishes (Socra may share for a research specialist), or to answer someone who replied to a specialist. specialist: business-analyst, architect, engineer, ux or domain; for domain give the field's name in 'title' (for example \"Claims expert\").",
+        "A specialist speaks in the conversation, visibly, in their own name: what they found or recommend, in two to four plain sentences, then one or two questions from its own skill's open areas, each with numbered options and one marked \"(suggested)\". Use it when a specialist finishes (Socra may share for a research specialist), or to answer someone who replied to a specialist. specialist: business-analyst, architect, engineer, ux or domain (or category-researcher, industry-expert, innovation-scout when sharing what a research specialist found); for domain give the field's name in 'title' (for example \"Claims expert\").",
         {
-          specialist: z.enum(["business-analyst", "architect", "engineer", "ux", "domain"]),
+          specialist: z.enum(["business-analyst", "architect", "engineer", "ux", "domain", "category-researcher", "industry-expert", "innovation-scout"]),
           title: z.string().max(60).default(""),
           text: z.string().min(2),
           capability: z.string().default(""),
           about: ABOUT,
         },
         async ({ specialist, title, text, capability, about }) => {
-          const s = specialistByKey(specialist)!;
+          const s = specialistByKey(specialist) ?? { name: RESEARCH_AGENTS[specialist].name };
           const name = specialist === "domain" && title.trim() ? title.trim() : s.name;
+          const roleKey = specialistRoleKey(specialist, title);
+          rememberFinding(await uc(), roleKey, name, text);
           await prisma.message.create({ data: { useCaseId, role: "agent", agent: `${name} · Specialist`, addressed: specialist, content: text, accent: await capKey(capability), about: await aboutNodes(about), turnId: currentTurnId(useCaseId), replyTo: await replyThread() } });
           return ok();
         },
@@ -175,6 +179,11 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
             create: { useCaseId, specialist, area, label, status, note, evidence },
           });
           const s = specialistByKey(specialist)!;
+          if (before?.status !== status && (status === "covered" || status === "assumed")) {
+            const lastDomain = specialist === "domain" ? await prisma.message.findFirst({ where: { useCaseId, addressed: "domain" }, orderBy: { createdAt: "desc" }, select: { agent: true } }) : null;
+            const title = lastDomain?.agent?.split(" · ")[0] ?? "";
+            rememberCoverage(await uc(), specialistRoleKey(specialist, title), title || s.name, label || before?.label || area, status, note);
+          }
           if (before?.status !== status) await recordChange(useCaseId, { node: `coverage:${specialist}:${area}`, kind: before ? "changed" : "added", summary: `${s.name}: ${label || before?.label || area} is ${status}${note ? ` (${note.slice(0, 200)})` : ""}`, before: before?.status ?? "", after: status, by: s.name, fromTurn: true });
           const left = (await teamCoverage(useCaseId)).find((c) => c.key === specialist);
           return ok(left ? `${left.done} of ${left.total} of the ${s.name.toLowerCase()}'s areas answered${left.complete ? ": all answered, stop asking unless something changes them." : "."}` : "ok");
@@ -683,25 +692,31 @@ export function studioTools(useCaseId: string, slug: string, tally: RunTally, op
       tool(
         "search_memory",
         "Search what the Studio learned in earlier products (Mem0): playbooks for a category, decisions owners made, answers, lessons. Never copy another owner's private details.",
-        { query: z.string().min(3), role: z.enum(ROLE_KEYS).optional() },
+        { query: z.string().min(3), role: RoleParam.optional().describe(`Whose memory to search: ${ROLE_HELP}. Leave out to search everyone's.`) },
         async ({ query, role }) => {
           const hits = await searchMemory(query, { role, excludeUseCase: useCaseId, limit: 8 }).catch(() => []);
-          return ok(hits.length ? formatHits(hits) : "Nothing relevant remembered.");
+          // The role's own Letta archive for this customer, by meaning.
+          const customer = (await uc()).customer;
+          const notes = role ? await letta.archiveSearch(role, query, customer, 3).catch(() => []) : [];
+          if (role && notes.length) logMemoryEvent({ role, kind: "recall", store: "letta", useCaseId, count: notes.length, source: "archive", detail: "search_memory" });
+          const archive = notes.length ? `\n\nFrom its own archive (Letta):\n${notes.map((n) => `- ${n.text.slice(0, 800)}`).join("\n")}` : "";
+          return ok(hits.length || notes.length ? `${formatHits(hits)}${archive}`.trim() : "Nothing relevant remembered.");
         },
       ),
       tool(
         "ask_role_memory",
         "Ask a Studio role's long-term memory (Letta) for its experience across earlier products.",
-        { role: z.enum(ROLE_KEYS), question: z.string().min(5) },
+        { role: RoleParam.describe(ROLE_HELP), question: z.string().min(5) },
         async ({ role, question }) => {
           const answer = await letta.askRole(role, question, speaker, "", useCaseId).catch(() => null);
+          if (answer) logMemoryEvent({ role, kind: "ask", store: "letta", useCaseId, source: speaker, detail: question.slice(0, 200) });
           return ok(answer || "That role's memory is not available right now. Carry on without it.");
         },
       ),
       tool(
         "save_lesson",
         "Save a general lesson that would help a future, similar product (a category playbook, a question that unlocked the promise). No owner names, prices or private details.",
-        { role: z.enum(ROLE_KEYS).default("muse"), lesson: z.string().min(10), confidence: z.number().min(0).max(1).default(0.7) },
+        { role: RoleParam.default("muse").describe(`Whose lesson it is (you, if you are a specialist): ${ROLE_HELP}`), lesson: z.string().min(10), confidence: z.number().min(0).max(1).default(0.7) },
         async ({ role, lesson, confidence }) => {
           rememberLesson(await uc(), role, lesson, confidence);
           return ok("Saved.");

@@ -715,3 +715,64 @@ model LlmUsage {
   @@index([sessionId])
   @@index([turnId])
 }
+
+// Settings > Agent memory (Doug, Nov 21): the plain-language reading of one agent's Letta and Mem0 memory,
+// written by the document model from exactly the records listed in `records` (each sentence cites them).
+model MemoryNarrative {
+  id          String   @id @default(cuid())
+  // studio:<role> or app:<useCaseId>:<key>
+  agentRef    String
+  // The filter it was written for ("" = everything this agent holds; else the use case or customer).
+  scope       String   @default("")
+  headline    String   @default("")
+  // [{ text, cites: ["B1", "F3"] }]
+  sentences   Json     @default("[]")
+  gaps        Json     @default("[]")
+  // [{ cite, kind, id, title, when }]: what the model read, so every citation opens a real record.
+  records     Json     @default("[]")
+  fingerprint String   @default("")
+  model       String   @default("")
+  auth        String   @default("")
+  dropped     Int      @default(0)
+  by          String   @default("")
+  ms          Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([agentRef, scope, createdAt])
+}
+
+// Settings > Agent memory (Doug, Nov 21): every time an agent's memory is read or written, so the page can say
+// whether it is used. One row per event; nothing is written in advance.
+model MemoryEvent {
+  id        String   @id @default(cuid())
+  // The memory role (muse, analyst, engineer, domain-claims-expert...) or app:<useCaseId>:<key> for a product's agent.
+  role      String
+  useCaseId String   @default("")
+  // recall (read into a prompt or searched), write (a fact saved), lesson (a lesson saved), reflect (the Letta persona learned), ask (a role was asked)
+  kind      String
+  // mem0 or letta
+  store     String
+  count     Int      @default(1)
+  source    String   @default("")
+  detail    String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([role, createdAt])
+  @@index([kind, createdAt])
+}
+
+// Every time a skill is really used or looked at, so Settings > Skills can show the numbers on each skill (Doug, Nov 21).
+model SkillEvent {
+  id        String   @id @default(cuid())
+  // The skill's name (studio-muse, tdd-workflow ...).
+  skill     String
+  // loaded (put in an agent's instructions), used (an agent read or invoked it in a turn), viewed (opened on the Skills page)
+  kind      String
+  // The agent or person: Socra, a specialist, or a viewer.
+  agent     String   @default("")
+  useCaseId String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([skill, createdAt])
+  @@index([kind, createdAt])
+}

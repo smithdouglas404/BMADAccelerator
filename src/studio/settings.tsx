@@ -1,7 +1,6 @@
 'use client'
 // Settings: models and keys, MCP connectors (for every product or chosen ones), Agent Skills, and memory.
 // Keys and connector secrets go in once, are stored encrypted, and are never shown again (last four only).
-import { Rich } from './rich'
 import { SaveButton, useSaveState } from './savestate'
 import { useEffect, useState } from 'react'
 import { Check, Plug, Plus, Trash2, Upload, Wrench } from 'lucide-react'
@@ -10,14 +9,21 @@ import { StudioTop } from './pages'
 import { ConnectTab } from './connect'
 import { JevValue } from './jev'
 import { NasikoTab } from './nasiko'
+import { AgentMemory } from './memory'
+import { Rich } from './rich'
+import { fmtWhen } from '@/lib/studio/richText'
+import { ECC_COPY } from '../lib/eccCopy'
 
 type KeyStatus = { env: string; name: string; source: 'saved' | 'env' | 'missing'; last4: string }
 type Status = { providers: (KeyStatus & { id: string; models: string[] })[]; other: KeyStatus[]; claudePlan: boolean; roles: { env: string; label: string; note: string; providers: string[]; current: string; saved: boolean }[] }
 type Connector = { id: string; name: string; label: string; transport: string; url: string; command: string; args: string[]; secretNames: string[]; hasSecrets: boolean; enabled: boolean; allProducts: boolean; useCases: string[] }
 type Product = { id: string; name: string }
 
-type LibSkill = { id: string; name: string; description: string; source: 'studio' | 'ecc' | 'yours'; origin: string; alwaysOn: boolean; core: boolean; allProducts: boolean; useCases: string[]; valid: boolean; report: string }
-const SOURCES = [['all', 'All'], ['studio', 'Studio'], ['ecc', 'ECC'], ['yours', 'Yours']] as const
+type LibSkill = { id: string; name: string; description: string; source: 'studio' | 'ecc' | 'yours'; origin: string; alwaysOn: boolean; core: boolean; allProducts: boolean; useCases: string[]; valid: boolean; report: string; usedBy: string[] }
+type Metric = { used: number; viewed: number; lastUsed: string | null; lastViewed: string | null; agents: string[]; useCases: number }
+const NO_METRIC: Metric = { used: 0, viewed: 0, lastUsed: null, lastViewed: null, agents: [], useCases: 0 }
+const SORTS = [['name', 'Name'], ['used', 'Most used'], ['viewed', 'Most viewed'], ['recent', 'Last used'], ['never', 'Never used first']] as const
+const SOURCES = [['all', 'All'], ['studio', 'Ours'], ['ecc', 'ECC'], ['yours', 'Yours']] as const
 const PAGE = 40
 
 export function SettingsPage() {
@@ -33,12 +39,12 @@ export function SettingsPage() {
       <StudioTop active="settings" />
       <div className="page-wrap">
         <div className="page-intro"><div><p className="eyebrow">Settings</p><h1>The plumbing,<br /><em>out of the way.</em></h1><p>Three places to know: AI models and keys (what runs Socra), Tools the Studio uses (outside systems Socra can call), and Connect your assistant (how Muse or Claude reaches the Studio).</p></div></div>
-        <div className="studio-tabs">{([['models', 'AI models and keys'], ['connectors', 'Tools the Studio uses'], ['connect', 'Connect your assistant (Muse, Claude)'], ['skills', 'Skills'], ['memory', 'Memory'], ['jev', 'Jev'], ['nasiko', 'Enterprise Harness']] as const).map(([k, l]) => <button key={k} type="button" className={tab === k ? 'is-active' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
+        <div className="studio-tabs">{([['models', 'AI models and keys'], ['connectors', 'Tools the Studio uses'], ['connect', 'Connect your assistant (Muse, Claude)'], ['skills', 'Skills'], ['memory', 'Agent memory'], ['jev', 'Jev'], ['nasiko', 'Enterprise Harness']] as const).map(([k, l]) => <button key={k} type="button" className={tab === k ? 'is-active' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
         {tab === 'models' && <Models setToast={setToast} />}
         {tab === 'connectors' && <Connectors setToast={setToast} />}
         {tab === 'connect' && <ConnectTab setToast={setToast} />}
         {tab === 'skills' && <Skills setToast={setToast} />}
-        {tab === 'memory' && <Memory />}
+        {tab === 'memory' && <AgentMemory />}
         {tab === 'jev' && <JevValue />}
         {tab === 'nasiko' && <NasikoTab setToast={setToast} />}
       </div>
@@ -153,10 +159,19 @@ function Skills({ setToast }: { setToast: (s: string) => void }) {
   const [rows, setRows] = useState<LibSkill[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [source, setSource] = useState<(typeof SOURCES)[number][0]>('all')
+  useEffect(() => { if (new URLSearchParams(window.location.search).get('source') === 'studio') setSource('studio') }, [])
   const [q, setQ] = useState('')
   const [onOnly, setOnOnly] = useState(false)
   const [open, setOpen] = useState<string | null>(null)
   const [shown, setShown] = useState(PAGE)
+  const [metrics, setMetrics] = useState<Record<string, Metric>>({})
+  const [since, setSince] = useState<string | null>(null)
+  const [sort, setSort] = useState<(typeof SORTS)[number][0]>('name')
+  const [read, setRead] = useState<string | null>(null)
+  const loadMetrics = () => void api<{ since: string | null; metrics: Record<string, Metric> }>('/api/skills/metrics', { cache: 'no-store' }).then((r) => { setMetrics(r.metrics); setSince(r.since) }).catch(() => undefined)
+  useEffect(() => { loadMetrics() }, [])
+  const m = (s: LibSkill) => metrics[s.name] ?? NO_METRIC
+  const openRead = (s: LibSkill) => { const next = read === s.id ? null : s.id; setRead(next); if (next) void api('/api/skills/metrics', { json: { skill: s.name } }).then(loadMetrics).catch(() => undefined) }
   const load = () => void api<LibSkill[]>('/api/skills/library', { cache: 'no-store' }).then(setRows).catch(() => setRows([]))
   useEffect(() => { load(); void api<Product[]>('/api/use-cases', { cache: 'no-store' }).then(setProducts).catch(() => setProducts([])) }, [])
   const upload = async (file: File) => {
@@ -175,29 +190,37 @@ function Skills({ setToast }: { setToast: (s: string) => void }) {
   const count = (k: string) => rows.filter((r) => k === 'all' || r.source === k).length
   const words = q.toLowerCase().split(/\s+/).filter(Boolean)
   const order = (r: LibSkill) => (r.source === 'studio' ? 0 : r.source === 'yours' ? 1 : isOn(r) ? 2 : 3)
-  const list = rows.filter((r) => (source === 'all' || r.source === source) && (!onOnly || isOn(r)) && words.every((w) => `${r.name} ${r.description}`.toLowerCase().includes(w))).sort((a, b) => order(a) - order(b))
+  const list = rows.filter((r) => (source === 'all' || r.source === source) && (!onOnly || isOn(r)) && words.every((w) => `${r.name} ${r.description}`.toLowerCase().includes(w))).sort((a, b) => sort === 'used' ? m(b).used - m(a).used || order(a) - order(b) : sort === 'viewed' ? m(b).viewed - m(a).viewed || order(a) - order(b) : sort === 'recent' ? (m(b).lastUsed ?? '').localeCompare(m(a).lastUsed ?? '') || order(a) - order(b) : sort === 'never' ? Number(m(a).used > 0) - Number(m(b).used > 0) || order(a) - order(b) : order(a) - order(b))
   const where = (s: LibSkill) => s.core ? 'Core · loaded on every Socra turn' : s.alwaysOn ? 'Always on' : s.allProducts ? 'On · every product' : s.useCases.length ? `On · ${s.useCases.length} product${s.useCases.length === 1 ? '' : 's'}` : 'Off'
   return (
     <div className="studio-library">
       <section className="studio-card">
         <div className="stack-header"><div><p className="eyebrow">Skill library · {rows.length}</p><h3>ECC, the Studio’s skills and yours, in one place</h3></div><Wrench size={16} /></div>
-        <p className="studio-muted">ECC (Everything Claude Code) is the open-source skills library, MIT licensed, pinned in the Studio. The Studio’s own skills are written in the same format. Switched on, a skill goes into each product’s workspace, where Socra, its specialists and Claude Code use it.</p>
+        <p className="studio-muted">ECC (Everything Claude Code) is the open-source skills library, MIT licensed. The Studio imports it from <a href={ECC_COPY.url} target="_blank" rel="noreferrer">our own copy</a>, kept apart from the public project, at a pinned version. <a href={ECC_COPY.studioGroupUrl} target="_blank" rel="noreferrer">Our skills</a> sit in their own group there, in the same format. Switched on, a skill goes into each product’s workspace, where Socra, its specialists and Claude Code use it.</p>
+        {source === 'studio' && <p className="studio-muted"><strong>Our skills live in our private copy of ECC:</strong> <a href={ECC_COPY.studioGroupUrl} target="_blank" rel="noreferrer">{ECC_COPY.owner}/{ECC_COPY.repo} · studio-skills</a></p>}
+        <div className="studio-metric-totals">
+          {(['studio', 'ecc'] as const).map((k) => { const group = rows.filter((r) => r.source === k); return <div key={k}><strong>{group.reduce((n, r) => n + m(r).used, 0)} uses · {group.reduce((n, r) => n + m(r).viewed, 0)} views</strong><small>{k === 'studio' ? 'Ours' : 'ECC'}: {group.filter((r) => m(r).used > 0).length} of {group.length} skills used</small></div> })}
+          <div><strong>{rows.filter((r) => m(r).used === 0).length} never used</strong><small>{since ? `Counting since ${fmtWhen(since)}` : 'Counting starts when this version is installed, so everything shows as never used until then'}</small></div>
+        </div>
         <div className="studio-library-tools">
           <div className="studio-tabs" style={{ marginTop: 0 }}>{SOURCES.map(([k, l]) => <button key={k} type="button" className={source === k ? 'is-active' : ''} onClick={() => { setSource(k); setShown(PAGE) }}>{l} · {count(k)}</button>)}</div>
           <input className="studio-library-search" type="search" value={q} onChange={(e) => { setQ(e.target.value); setShown(PAGE) }} placeholder="Search skills, e.g. security, postgres, accessibility" aria-label="Search the skill library" />
+          <label className="studio-toggle">Sort <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}>{SORTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
           <label className="studio-toggle"><input type="checkbox" checked={onOnly} onChange={(e) => setOnOnly(e.target.checked)} /> only what’s on</label>
           <label className="button button-quiet file-button"><Upload size={14} /> Add a skill<input type="file" accept=".skill,.zip,.md" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void upload(f) }} /></label>
         </div>
         <div className="studio-list">{list.slice(0, shown).map((s) => (
           <div key={s.id} className="studio-list-row studio-library-row">
-            <div className="studio-row-main"><strong>{s.name} <span className={`studio-source is-${s.source}`}>{s.source === 'ecc' ? 'ECC' : s.source === 'studio' ? 'Studio' : 'Yours'}</span></strong><small>{s.description || 'No description'}{s.source === 'yours' && !s.valid ? ' · did not pass the check' : ''}</small></div>
+            <div className="studio-row-main"><strong>{s.name} <span className={`studio-source is-${s.source}`}>{s.source === 'ecc' ? 'ECC' : s.source === 'studio' ? 'Ours' : 'Yours'}</span></strong><Rich text={s.description || 'No description'} lines={3} className="studio-muted" />{s.source === 'yours' && !s.valid && <small>did not pass the check</small>}{s.usedBy.length > 0 && <small className="studio-muted">Told to read it: {s.usedBy.join(', ')}</small>}<small className={m(s).used === 0 ? 'studio-warn' : 'studio-ok'}>{m(s).used === 0 ? 'Never used' : `Used ${m(s).used} ${m(s).used === 1 ? 'time' : 'times'}, last ${fmtWhen(m(s).lastUsed)}`} · viewed {m(s).viewed} {m(s).viewed === 1 ? 'time' : 'times'}{m(s).agents.length > 0 ? ` · by ${m(s).agents.join('; ')}` : ''}</small></div>
             <span className={isOn(s) ? 'studio-ok studio-where' : 'studio-muted studio-where'}>{where(s)}</span>
             <div className="studio-review-actions">
+              <button type="button" className="button button-quiet" onClick={() => openRead(s)}>{read === s.id ? 'Close' : 'Read'}</button>
               {s.source === 'ecc' && !s.alwaysOn && <button type="button" className="button button-quiet" onClick={() => setOpen(open === s.id ? null : s.id)}>{open === s.id ? 'Done' : 'Switch on…'}</button>}
               {s.source === 'yours' && <label className="studio-toggle"><input type="checkbox" disabled={!s.valid} checked={s.allProducts} onChange={(e) => void api(`/api/skills/${s.id.slice(6)}`, { method: 'PATCH', json: { enabled: e.target.checked } }).then(load).catch((er: Error) => setToast(er.message))} /> on</label>}
               {s.source === 'yours' && s.report && <details><summary className="studio-muted" style={{ marginTop: 0 }}>Check report</summary><pre className="studio-diff">{s.report}</pre></details>}
               {s.source === 'yours' && <button type="button" className="icon-button subtle" aria-label="Delete skill" onClick={() => void api(`/api/skills/${s.id.slice(6)}`, { method: 'DELETE' }).then(load)}><Trash2 size={13} /></button>}
             </div>
+            {read === s.id && <div className="studio-library-scope"><Rich text={s.description || 'No description'} /><dl className="rich-pairs"><div><dt>Used</dt><dd>{m(s).used === 0 ? 'Never' : `${m(s).used} times${m(s).useCases ? ` across ${m(s).useCases} use case${m(s).useCases === 1 ? '' : 's'}` : ''}, last ${fmtWhen(m(s).lastUsed)}`}</dd></div><div><dt>Viewed</dt><dd>{m(s).viewed === 0 ? 'Never' : `${m(s).viewed} times, last ${fmtWhen(m(s).lastViewed)}`}</dd></div><div><dt>Used by</dt><dd>{m(s).agents.length ? m(s).agents.join(', ') : 'No agent yet'}</dd></div><div><dt>Counting</dt><dd>{since ? `since ${fmtWhen(since)}` : 'starts at install'}</dd></div></dl></div>}
             {open === s.id && <div className="studio-library-scope">
               <label className="studio-toggle"><input type="radio" name={`scope-${s.id}`} checked={!s.allProducts && !s.useCases.length} onChange={() => scope(s, false, [])} /> Off</label>
               <label className="studio-toggle"><input type="radio" name={`scope-${s.id}`} checked={s.allProducts} onChange={() => scope(s, true, [])} /> Every product</label>
@@ -208,23 +231,6 @@ function Skills({ setToast }: { setToast: (s: string) => void }) {
         ))}</div>
         {list.length === 0 && <p className="studio-muted">No skill matches that.</p>}
         {list.length > shown && <button type="button" className="button button-quiet" style={{ marginTop: 12 }} onClick={() => setShown(shown + PAGE * 2)}>Show more ({list.length - shown} left)</button>}
-      </section>
-    </div>
-  )
-}
-
-function Memory() {
-  const [m, setM] = useState<{ mem0: { configured: boolean; up: boolean }; letta: { up: boolean; note?: string }; roles: { key: string; name: string; lessons: string }[] } | null>(null)
-  useEffect(() => { void api<typeof m>('/api/memory', { cache: 'no-store' }).then(setM).catch(() => setM(null)) }, [])
-  return (
-    <div className="studio-settings-grid">
-      <section className="studio-card">
-        <div className="stack-header"><div><p className="eyebrow">Memory</p><h3>Self-hosted Mem0 and Letta</h3></div><Wrench size={16} /></div>
-        {!m ? <p className="studio-muted">Reading memory status…</p> : <div className="studio-list">
-          <div className="studio-list-row"><div className="studio-row-main"><strong>Mem0 (long-term)</strong><small>{m.mem0.up ? 'running' : m.mem0.configured ? 'configured, not answering' : 'not configured'}</small></div><span className={m.mem0.up ? 'studio-ok' : 'studio-warn'}>{m.mem0.up ? 'up' : 'down'}</span></div>
-          <div className="studio-list-row"><div className="studio-row-main"><strong>Letta (agents’ working memory)</strong><small>{m.letta.up ? 'running' : m.letta.note || 'not answering'}</small></div><span className={m.letta.up ? 'studio-ok' : 'studio-warn'}>{m.letta.up ? 'up' : 'down'}</span></div>
-          {m.roles?.filter((r) => r.lessons).map((r) => <div key={r.key} className="studio-list-row"><div className="studio-row-main"><strong>{r.name}</strong><Rich text={r.lessons} lines={5} /></div></div>)}
-        </div>}
       </section>
     </div>
   )

@@ -7,7 +7,13 @@
  */
 import { guessTokens, recordCall } from "@/lib/llm/ledger";
 import {
+  HUMAN_BLOCK_LABEL,
   LESSONS_BLOCK_LABEL,
+  appendPlaybookLine,
+  customerTag,
+  keepPassages,
+  playbookLabel,
+  type ArchivePassage,
   MEM0_APP_ID,
   ROLES,
   SHARED_BLOCK_LABEL,
@@ -20,6 +26,7 @@ import {
   questionMessage,
   renderPortfolio,
   roleFor,
+  domainRole,
   statusBlock,
   toolCalls,
   toolSources,
@@ -28,6 +35,7 @@ import {
   type PortfolioRow,
   type Role,
 } from "./lettaCore";
+import type { Block as MindBlock, Passage as MindPassage } from "./inspectCore";
 
 const base = () => (process.env.LETTA_BASE_URL ?? "").replace(/\/+$/, "");
 const key = () => process.env.LETTA_API_KEY ?? "";
@@ -71,6 +79,93 @@ async function sharedBlock(): Promise<Block | undefined> {
 
 const agentIds = new Map<string, string>();
 
+const HUMAN_BLOCK = { label: HUMAN_BLOCK_LABEL, value: "No one noted yet.", limit: 3000, description: "What this role has learned about the people it works with: their role, how they decide, what they care about. The role edits it." };
+
+/** Whether Letta's sleep-time (background reflection) agent could be switched on: "on", "unsupported" (the server refused) or "unknown" (not tried yet). */
+let sleeptime: "on" | "unsupported" | "unknown" = "unknown";
+export const sleeptimeState = () => sleeptime;
+
+type Ctx = { model: string; embedding: string; toolIds: string[]; sharedId: string; secrets: Record<string, string> };
+let ctx: Ctx | null = null;
+
+/** Creates an agent with Letta's sleep-time reflection agent on; if the server refuses the option, creates it without and remembers that. */
+async function createAgent(body: Record<string, unknown>): Promise<Agent> {
+  if (sleeptime !== "unsupported") {
+    try {
+      const a = await letta<Agent>("POST", "/v1/agents/", { ...body, enable_sleeptime: true });
+      sleeptime = "on";
+      return a;
+    } catch (e) {
+      if (!/ 4\d\d /.test(e instanceof Error ? e.message : "")) throw e;
+      sleeptime = "unsupported";
+      console.warn("letta: sleep-time agent not accepted, creating without it");
+    }
+  }
+  return letta<Agent>("POST", "/v1/agents/", body);
+}
+
+/** Brings an agent made earlier up to date: the human block, and the sleep-time agent when the server accepts it. Never throws. */
+async function upgradeAgent(id: string): Promise<void> {
+  try {
+    const have = rows<{ label: string }>(await letta("GET", `/v1/agents/${id}/core-memory/blocks`)).some((b) => b.label === HUMAN_BLOCK_LABEL);
+    if (!have) {
+      const b = await letta<Block>("POST", "/v1/blocks/", { ...HUMAN_BLOCK, tags: [TAG] });
+      await letta("PATCH", `/v1/agents/${id}/core-memory/blocks/attach/${b.id}`);
+    }
+  } catch (e) {
+    console.warn("letta human block", e instanceof Error ? e.message : e);
+  }
+  if (sleeptime === "unsupported") return;
+  try {
+    await letta("PATCH", `/v1/agents/${id}`, { enable_sleeptime: true });
+    sleeptime = "on";
+  } catch (e) {
+    if (/ 4\d\d /.test(e instanceof Error ? e.message : "")) sleeptime = "unsupported";
+  }
+}
+
+/** Creates (or finds) one role's Letta agent. Existing agents keep their memory; only a missing one is made. */
+async function ensureRoleAgent(role: Role, c: Ctx): Promise<string> {
+  const tags = [TAG, `${TAG}-role:${role.key}`, `app:${MEM0_APP_ID}`];
+  const existing = await findAgent(role);
+  if (existing) {
+    agentIds.set(role.key, existing.id);
+    return existing.id;
+  }
+  const a = await createAgent({
+    name: role.agentName,
+    description: `${role.name}, ${role.title} in the Working Backwards Studio: memory across products`,
+    model: c.model,
+    embedding: c.embedding,
+    memory_blocks: [
+      { label: "persona", value: role.persona, limit: 8000, read_only: true },
+      { label: `${role.key.replace(/-/g, "_")}_status`, value: statusBlock(), limit: 3000, description: "This role's working state. Update it with your memory tools." },
+      { label: LESSONS_BLOCK_LABEL, value: "none yet", limit: 6000, description: "The lessons this role learned across use cases, best first. Written by the app from Mem0." },
+      HUMAN_BLOCK,
+    ],
+    block_ids: [c.sharedId],
+    tool_ids: c.toolIds,
+    include_base_tools: true,
+    tags,
+    secrets: c.secrets,
+  });
+  agentIds.set(role.key, a.id);
+  return a.id;
+}
+
+/** The field experts made so far (Claims expert, Clinical expert...), found by name in Letta. */
+export async function domainRoles(): Promise<Role[]> {
+  if (!lettaConfigured()) return [];
+  const out: Role[] = [];
+  const list = rows<Agent>(await letta("GET", `/v1/agents/?tags=${encodeURIComponent(`${TAG}`)}&limit=200`).catch(() => []));
+  for (const a of list) {
+    const key = a.name.startsWith("bacc-") ? a.name.slice(5) : "";
+    const r = key.startsWith("domain-") ? domainRole(key) : undefined;
+    if (r) out.push(r);
+  }
+  return out;
+}
+
 /**
  * Creates or refreshes the six role agents, their tools and the shared block. Safe to run again:
  * existing agents keep their memory. Returns the model it used, or why it did nothing.
@@ -90,7 +185,7 @@ export async function setupLetta(): Promise<{ ok: boolean; note: string }> {
     toolIds.push(t.id);
   }
   // PATCH tool_ids replaces the whole list, so the built-in memory tools must be in it.
-  for (const name of ["core_memory_replace", "core_memory_append", "conversation_search"]) {
+  for (const name of ["core_memory_replace", "core_memory_append", "conversation_search", "archival_memory_insert", "archival_memory_search"]) {
     const t = rows<{ id: string; name: string }>(await letta("GET", `/v1/tools/?name=${name}&limit=5`)).find((x) => x.name === name);
     if (t) toolIds.push(t.id);
   }
@@ -111,6 +206,7 @@ export async function setupLetta(): Promise<{ ok: boolean; note: string }> {
   if (process.env.MEM0_BASE_URL) secrets.MEM0_BASE_URL = process.env.MEM0_BASE_URL;
   if (key()) secrets.LETTA_SERVER_PASSWORD = key();
 
+  ctx = { model, embedding, toolIds, sharedId: shared.id, secrets };
   for (const role of ROLES) {
     const tags = [TAG, `${TAG}-role:${role.key}`, `app:${MEM0_APP_ID}`];
     const existing = await findAgent(role);
@@ -120,25 +216,19 @@ export async function setupLetta(): Promise<{ ok: boolean; note: string }> {
       await letta("PATCH", `/v1/agents/${existing.id}`, { tool_ids: toolIds, tags, secrets, ...(switchModel ? { model } : {}) });
       await letta("PATCH", `/v1/agents/${existing.id}/core-memory/blocks/attach/${shared.id}`).catch(() => undefined);
       agentIds.set(role.key, existing.id);
+      await upgradeAgent(existing.id);
       continue;
     }
-    const a = await letta<Agent>("POST", "/v1/agents/", {
-      name: role.agentName,
-      description: `${role.name}, ${role.title} in the Working Backwards Studio: memory across products`,
-      model,
-      embedding,
-      memory_blocks: [
-        { label: "persona", value: role.persona, limit: 8000, read_only: true },
-        { label: `${role.key}_status`, value: statusBlock(), limit: 3000, description: "This role's working state. Update it with your memory tools." },
-        { label: LESSONS_BLOCK_LABEL, value: "none yet", limit: 6000, description: "The lessons this role learned across use cases, best first. Written by the app from Mem0." },
-      ],
-      block_ids: [shared.id],
-      tool_ids: toolIds,
-      include_base_tools: true,
-      tags,
-      secrets,
-    });
+    await ensureRoleAgent(role, ctx);
+  }
+  // Field experts made earlier keep their memory; refresh their tools like the fixed roles.
+  for (const role of await domainRoles()) {
+    const a = await findAgent(role);
+    if (!a) continue;
+    await letta("PATCH", `/v1/agents/${a.id}`, { tool_ids: toolIds, secrets }).catch(() => undefined);
+    await letta("PATCH", `/v1/agents/${a.id}/core-memory/blocks/attach/${shared.id}`).catch(() => undefined);
     agentIds.set(role.key, a.id);
+    await upgradeAgent(a.id);
   }
   return { ok: true, note: `model ${model}, embedding ${embedding}` };
 }
@@ -177,6 +267,11 @@ async function agentId(role: Role): Promise<string | null> {
   if (agentIds.has(role.key)) return agentIds.get(role.key)!;
   const a = await findAgent(role);
   if (a) agentIds.set(role.key, a.id);
+  // A field's expert is made the first time its field is named, with the same memory as every other agent.
+  if (!a && role.key.startsWith("domain-") && ctx) return ensureRoleAgent(role, ctx).catch((e) => {
+    console.warn(`letta ${role.key} not created`, e instanceof Error ? e.message : e);
+    return null;
+  });
   return a?.id ?? null;
 }
 
@@ -189,6 +284,19 @@ async function modelOf(id: string): Promise<string> {
   const m = a?.llm_config?.model ?? a?.model ?? "";
   if (m) models.set(id, m);
   return m;
+}
+
+/** A role's Letta agent id, without creating it. */
+export async function roleAgentId(roleKey: string): Promise<string | null> {
+  const role = roleFor(roleKey);
+  if (!role || !lettaConfigured()) return null;
+  return agentIds.get(role.key) ?? (await findAgent(role).catch(() => undefined))?.id ?? null;
+}
+
+/** Makes sure a role has its Letta agent now (used when a specialist first speaks). */
+export async function ensureRole(roleKey: string): Promise<boolean> {
+  const role = roleFor(roleKey);
+  return role ? (await agentId(role)) !== null : false;
 }
 
 async function send(id: string, content: string, who: { role: string; useCaseId?: string } = { role: "" }): Promise<LettaMessage[]> {
@@ -244,7 +352,7 @@ export async function askRole(roleKey: string, question: string, fromTitle: stri
 export async function topLessons(): Promise<{ role: Role; lessons: string }[]> {
   if (!(await ensureLetta())) return [];
   const out: { role: Role; lessons: string }[] = [];
-  for (const role of ROLES) {
+  for (const role of [...ROLES, ...(await domainRoles())]) {
     const id = await agentId(role);
     if (!id) continue;
     const b = await letta<Block>("GET", `/v1/agents/${id}/core-memory/blocks/${LESSONS_BLOCK_LABEL}`).catch(() => null);
@@ -287,4 +395,95 @@ export async function lettaStatus(): Promise<{ up: boolean; agents: { role: stri
   const agents = [];
   for (const role of ROLES) agents.push({ role: role.key, name: role.name, id: ok ? await agentId(role) : null });
   return { up: true, agents, note: ok ? undefined : "role agents not set up yet (see server log)" };
+}
+
+/** Letta's raw answer for the memory page: an agent's blocks and archival passages, read without a model call. */
+async function mindOf(id: string): Promise<{ blocks: MindBlock[]; passages: MindPassage[] }> {
+  const blocks = rows<MindBlock>(await letta("GET", `/v1/agents/${id}/core-memory/blocks`));
+  const passages = rows<MindPassage>(await letta("GET", `/v1/agents/${id}/archival-memory?limit=50`).catch(() => []));
+  return { blocks, passages };
+}
+
+/** A Studio role's Letta mind (persona, status, top lessons, the shared portfolio), for Settings > Agent memory. */
+export async function roleMind(roleKey: string) {
+  const role = roleFor(roleKey);
+  if (!role || !lettaConfigured()) return null;
+  const a = await findAgent(role);
+  if (!a) return null;
+  return { id: a.id, name: a.name, ...(await mindOf(a.id)) };
+}
+
+/** The Letta agents the shared agent service keeps for one app agent: one per person it has helped. */
+export async function serviceMinds(useCaseId: string, key: string) {
+  if (!lettaConfigured()) return [];
+  const list = rows<Agent>(await letta("GET", `/v1/agents/?tags=${encodeURIComponent(`uc:${useCaseId}`)}&tags=${encodeURIComponent(`agent:${key}`)}&match_all_tags=true&limit=50`));
+  const prefix = `svc-${useCaseId}-${key}-`;
+  const out = [];
+  for (const a of list.filter((x) => x.name.startsWith(prefix))) out.push({ id: a.id, name: a.name, ...(await mindOf(a.id)) });
+  return out;
+}
+
+
+// ---- Archival notes: each role's own long notes, saved by the app and searched each turn --------------------
+
+/** Saves a note in a role's own archive, tagged with the customer and use case so another customer never sees it. */
+export async function archiveWrite(roleKey: string, text: string, opts: { customer?: string; useCaseId?: string; source?: string }): Promise<boolean> {
+  const role = roleFor(roleKey);
+  if (!role || !text.trim()) return false;
+  const id = await agentId(role);
+  if (!id) return false;
+  try {
+    await letta("POST", `/v1/agents/${id}/archival-memory`, { text: text.slice(0, 6000), tags: [customerTag(opts.customer), ...(opts.useCaseId ? [`use-case:${opts.useCaseId}`] : []), ...(opts.source ? [`source:${opts.source}`] : [])] });
+    return true;
+  } catch (e) {
+    console.warn(`letta archive ${roleKey}`, e instanceof Error ? e.message : e);
+    return false;
+  }
+}
+
+/** The best archive notes of a role for this customer, by meaning. */
+export async function archiveSearch(roleKey: string, query: string, customer: string, limit = 3): Promise<ArchivePassage[]> {
+  const role = roleFor(roleKey);
+  if (!role || !query.trim()) return [];
+  const id = await agentId(role);
+  if (!id) return [];
+  try {
+    const found = rows<ArchivePassage>(await letta("GET", `/v1/agents/${id}/archival-memory?search=${encodeURIComponent(query.slice(0, 500))}&limit=${limit * 4}`));
+    return keepPassages(found, customer, limit);
+  } catch {
+    return [];
+  }
+}
+
+// ---- Customer playbook: one standalone block per customer that holds that customer's decisions --------------
+
+async function playbookBlock(customer: string): Promise<Block | undefined> {
+  const label = playbookLabel(customer);
+  return rows<Block>(await letta("GET", `/v1/blocks/?label=${encodeURIComponent(label)}&limit=5`)).find((b) => b.label === label);
+}
+
+/** Adds a line to a customer's playbook (created on first use). It is read by the app each turn, never attached to the cross-customer roles. */
+export async function playbookAppend(customer: string, line: string): Promise<boolean> {
+  if (!(await ensureLetta())) return false;
+  try {
+    const b = await playbookBlock(customer);
+    if (!b) {
+      await letta("POST", "/v1/blocks/", { label: playbookLabel(customer), value: appendPlaybookLine("", line), tags: [TAG, "bacc-playbook"], limit: 6000, description: `What was decided for ${customer || "this workspace"}, newest first. Written by the app.` });
+      return true;
+    }
+    await letta("PATCH", `/v1/blocks/${b.id}`, { value: appendPlaybookLine(b.value, line) });
+    return true;
+  } catch (e) {
+    console.warn("letta playbook", e instanceof Error ? e.message : e);
+    return false;
+  }
+}
+
+export async function playbookRead(customer: string): Promise<string> {
+  if (!(await ensureLetta())) return "";
+  try {
+    return (await playbookBlock(customer))?.value?.trim() ?? "";
+  } catch {
+    return "";
+  }
 }

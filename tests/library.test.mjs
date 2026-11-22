@@ -45,7 +45,7 @@ test("the ECC catalog lists skills by folder name, and the pinned copy has them 
 test("Settings lists one library with ECC, Studio and your skills, and products get switched-on ECC skills", async () => {
   const settings = await fs.readFile(path.join(process.cwd(), "src/studio/settings.tsx"), "utf8");
   assert.match(settings, /\/api\/skills\/library/);
-  assert.match(settings, /\['studio', 'Studio'\], \['ecc', 'ECC'\], \['yours', 'Yours'\]/);
+  assert.match(settings, /\['studio', 'Ours'\], \['ecc', 'ECC'\], \['yours', 'Yours'\]/);
   const provision = await fs.readFile(path.join(process.cwd(), "src/lib/provision.ts"), "utf8");
   assert.match(provision, /eccSkillsFor\(useCaseId\)/);
 });
