@@ -98,8 +98,10 @@ test("Nasiko gets the right provider, model, agent and session for every kind of
   assert.equal(nasiko.usageAgentName("Document reader", "document"), "studio-document-reader");
   const run = { id: "r1", useCaseId: "", productName: "", agent: "Mem0 · recall", kind: "memory", model: "text-embedding-3-small", provider: "openai", inputTokens: 40, outputTokens: 0, cacheTokens: 0, at: new Date("2026-11-22T10:00:00Z"), ms: 12 };
   const ev = nasiko.usageEvent(run, "id1", "studio-mem0-recall");
-  assert.equal(ev.event_id, "studio-usage-r1");
-  assert.equal(ev.session.id, "studio-system");
+  assert.match(ev.event_id, /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  assert.equal(ev.source.agent_id, "id1");
+  assert.equal(ev.session.id, "id1:mem0-recall:system");
+  assert.equal(ev.session.title, undefined);
   assert.equal(ev.turn.llm_calls[0].provider, "openai");
   assert.equal(ev.turn.llm_calls[0].model, "text-embedding-3-small");
   assert.equal(ev.turn.llm_calls[0].input_tokens, 40);
