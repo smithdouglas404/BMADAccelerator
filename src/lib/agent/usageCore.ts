@@ -40,7 +40,7 @@ export type Rollup = {
 /** Sums the records per agent, per kind of call and per product, biggest first. Baselines (first sight of a resumed session) are not calls of ours. `estimatedUsd` is the part of the cost that is an estimate, not reported by the provider. */
 export function rollup(rows: Row[]): Rollup {
   const real = rows.filter((r) => !r.baseline);
-  const group = <K extends string>(key: (r: Row) => string, name: K, split?: (r: Row) => string) => {
+  const group = <K extends string>(key: (r: Row) => string, name: K, pair = false) => {
     const m = new Map<string, Group>();
     for (const r of real) {
       const g = m.get(key(r)) ?? { runs: 0, tokens: 0, inputTokens: 0, outputTokens: 0, cacheTokens: 0, usd: 0, failed: 0, estimatedUsd: 0 };
@@ -54,7 +54,7 @@ export function rollup(rows: Row[]): Rollup {
       if (r.costSource === "estimated") g.estimatedUsd += r.costUsd;
       m.set(key(r), g);
     }
-    return [...m.entries()].map(([k, g]) => ({ ...(split ? { agent: k.split("\u0000")[0], useCaseId: k.split("\u0000")[1] } : { [name]: k }), ...g })).sort((a, b) => b.usd - a.usd || b.runs - a.runs);
+    return [...m.entries()].map(([k, g]) => ({ ...(pair ? { agent: k.split("|")[0], useCaseId: k.split("|").slice(1).join("|") } : { [name]: k }), ...g })).sort((a, b) => b.usd - a.usd || b.runs - a.runs);
   };
   const first = rows.map((r) => new Date(r.at).getTime()).sort((a, b) => a - b)[0];
   return {
@@ -67,6 +67,6 @@ export function rollup(rows: Row[]): Rollup {
     byAgent: group((r) => r.agent, "agent") as Rollup["byAgent"],
     byKind: group((r) => r.kind, "kind") as Rollup["byKind"],
     byProduct: group((r) => r.useCaseId, "useCaseId") as Rollup["byProduct"],
-    byAgentProduct: group((r) => `${r.agent}\u0000${r.useCaseId}`, "agent", () => "") as unknown as Rollup["byAgentProduct"],
+    byAgentProduct: group((r) => `${r.agent}|${r.useCaseId}`, "agent", true) as unknown as Rollup["byAgentProduct"],
   };
 }
