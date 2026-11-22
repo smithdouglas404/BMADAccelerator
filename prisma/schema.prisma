@@ -72,6 +72,15 @@ model UseCase {
   previewPort       Int       @default(0)
   // Archived use cases leave the home list but keep everything; an admin can restore them.
   archivedAt        DateTime?
+  // Who started the use case (the one person allowed to archive it once RBAC is on; see lib/studio/archive.ts).
+  createdBy         String    @default("")
+  // What was captured when it was archived (Doug, Nov 22): approved for production or rejected, with comments,
+  // the estimated cost to implement, and the benefits and metrics that must be tracked and delivered.
+  archivedBy        String    @default("")
+  archiveOutcome    String    @default("") // approved | rejected | "" (not recorded)
+  archiveComments   String    @default("")
+  archiveCostEstimate String  @default("")
+  archiveBenefits   String    @default("")
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 

@@ -2,16 +2,17 @@
 // The pages around the Studio: every product, a new product in a few lines (spoken or typed, plus any
 // documents), and the phone capture page. Same system as the team's screens: their classes and tokens.
 import { useEffect, useState, type ReactNode } from 'react'
-import { ArrowRight, Check, Mic, Plus, Settings2, Upload } from 'lucide-react'
+import { Archive, ArrowRight, Check, Mic, Plus, Settings2, Upload } from 'lucide-react'
 import { api, ago } from './live'
 import { useVoice } from './vibe'
 import { useMe } from './flow'
 import { ASSISTANT_NAME, PRODUCT_LINE } from '@/lib/brand'
+import { ArchiveDialog } from './archived'
 import { IDLE_DAYS } from '@/lib/studio/journey'
 
 type ProductRow = { id: string; name: string; statement: string; category: string; stageLabel: string; customer: string; businessArea: string; lastView: string; readiness: number; versions: number; thoughts: number; decisions: number; busy: boolean; updatedAt: string; progress?: number; nextStep?: { label: string; view: string; gain: number } | null; needsYou?: number; idleDays?: number }
 
-export function StudioTop({ active }: { active?: 'home' | 'new' | 'settings' | 'capture' }) {
+export function StudioTop({ active }: { active?: 'home' | 'new' | 'settings' | 'capture' | 'archived' }) {
   return (
     <header className="studio-page-top">
       <a href="/" className="brand-lockup" style={{ padding: 0, textDecoration: 'none' }}>
@@ -21,6 +22,7 @@ export function StudioTop({ active }: { active?: 'home' | 'new' | 'settings' | '
       <nav>
         <a href="/" className={active === 'home' ? 'is-active' : ''}>Products</a>
         <a href="/new" className={active === 'new' ? 'is-active' : ''}>New product</a>
+        <a href="/archived" className={active === 'archived' ? 'is-active' : ''}>Archived</a>
         <a href="/capture" className={active === 'capture' ? 'is-active' : ''}>Capture</a>
         <a href="/settings" className={active === 'settings' ? 'is-active' : ''}><Settings2 size={12} /> Settings</a>
       </nav>
@@ -28,7 +30,7 @@ export function StudioTop({ active }: { active?: 'home' | 'new' | 'settings' | '
   )
 }
 
-function Shell({ active, children }: { active: 'home' | 'new' | 'settings' | 'capture'; children: ReactNode }) {
+function Shell({ active, children }: { active: 'home' | 'new' | 'settings' | 'capture' | 'archived'; children: ReactNode }) {
   return <div className="studio-page"><StudioTop active={active} />{children}</div>
 }
 
@@ -37,14 +39,15 @@ export const BUSINESS_AREAS = ['Finance', 'IT', 'HR', 'Operations', 'Sales', 'Ma
 export function HomePage() {
   const [rows, setRows] = useState<ProductRow[] | null>(null)
   const [error, setError] = useState('')
+  const [archiving, setArchiving] = useState<ProductRow | null>(null)
   const [customer, setCustomer] = useState('')
   const customers = [...new Set((rows ?? []).map((r) => r.customer || 'No customer yet'))].sort()
   const shown = (rows ?? []).filter((r) => !customer || (r.customer || 'No customer yet') === customer)
-  useEffect(() => {
-    void api<ProductRow[]>('/api/use-cases', { cache: 'no-store' }).then(setRows).catch((e: Error) => setError(e.message))
-  }, [])
+  const load = () => void api<ProductRow[]>('/api/use-cases', { cache: 'no-store' }).then(setRows).catch((e: Error) => setError(e.message))
+  useEffect(load, [])
   return (
     <Shell active="home">
+      {archiving && <ArchiveDialog id={archiving.id} name={archiving.name} onClose={() => setArchiving(null)} onDone={() => { setArchiving(null); load() }} />}
       <div className="page-wrap">
         <div className="page-intro">
           <div><p className="eyebrow eyebrow-with-dot"><span className="status-dot" />Every product you are shaping</p><h1>Make the product <em>legible</em><br />before you make it real.</h1><p>Say what you want in a few lines. Socra finds what kind of product it is, lays down everything the leading products of that kind have, and asks only what it can’t know.</p></div>
@@ -65,7 +68,9 @@ export function HomePage() {
         <div className="studio-products">
           {rows?.length === 0 && <div className="empty-column">No use cases yet. Start one in a few lines.</div>}
           {shown.map((r) => (
-            <a key={r.id} className="studio-product" href={`/use-cases/${r.id}${r.nextStep ? `?view=${r.nextStep.view}` : r.lastView ? `?view=${r.lastView}` : ''}`}>
+            <div key={r.id} className="studio-product-wrap">
+            <button type="button" className="studio-archive-button" aria-label={`Archive ${r.name}`} title="Archive this use case" onClick={() => setArchiving(r)}><Archive size={13} /> Archive</button>
+            <a className="studio-product" href={`/use-cases/${r.id}${r.nextStep ? `?view=${r.nextStep.view}` : r.lastView ? `?view=${r.lastView}` : ''}`}>
               <span className="eyebrow">{[r.customer, r.businessArea].filter(Boolean).join(' · ') || r.category || r.stageLabel}</span>
               <h3>{r.name}</h3>
               <p>{r.statement}</p>
@@ -75,6 +80,7 @@ export function HomePage() {
               <div className="studio-product-meta"><span>{r.progress ?? r.readiness}% along</span><span>{r.readiness}% pilot-ready</span><span>{r.versions} versions</span><span>{r.thoughts} thoughts</span><span>{r.busy ? 'working…' : `updated ${ago(r.updatedAt)}`}</span></div>
               <span className="studio-product-resume">{r.nextStep ? 'Take the next step' : 'Pick up where you left off'} <ArrowRight size={12} /></span>
             </a>
+            </div>
           ))}
         </div>
       </div>

@@ -32,6 +32,7 @@ import { PATCH as agentRoute } from "@/app/api/use-cases/[id]/agents/[key]/route
 import { POST as agentApprovalRoute } from "@/app/api/use-cases/[id]/agents/approvals/[aid]/route";
 import { POST as feedbackRoute } from "@/app/api/use-cases/[id]/feedback/route";
 import { POST as retryRoute } from "@/app/api/use-cases/[id]/retry/route";
+import { POST as archiveRoute } from "@/app/api/use-cases/[id]/archive/route";
 import { POST as syncRoute } from "@/app/api/use-cases/[id]/sync/route";
 
 // Runs the catalog's tools. Every write goes through the same route the Studio's own screens use, so the
@@ -656,12 +657,9 @@ async function run(tool: ToolName, input: Record<string, unknown>, uc: Awaited<R
       return call(retryRoute, { id: uc!.id }, "POST", {});
     case "sync":
       return call(syncRoute, { id: uc!.id }, "POST", { kind: s("to") });
-    case "archive_use_case": {
-      const archive = input.action === "archive";
-      if (archive) await stopPreview(uc!.id).catch(() => undefined);
-      await prisma.useCase.update({ where: { id: uc!.id }, data: { archivedAt: archive ? new Date() : null, updatedAt: uc!.updatedAt } });
-      return archive ? { archived: uc!.name, restore: "archive_use_case with action restore brings it back." } : { restored: uc!.name };
-    }
+    case "archive_use_case":
+      // Same route the Studio's Archive button uses; the connector may archive without a closeout.
+      return call(archiveRoute, { id: uc!.id }, "POST", { action: input.action, closeout: false, by: by(access, client), outcome: s("outcome"), comments: s("comments"), cost: s("cost"), benefits: s("benefits") });
     case "delete_use_case": {
       if (String(input.confirm_name ?? "").trim() !== uc!.name.trim()) throw new ToolError(`confirm_name must be the use case's exact name: “${uc!.name}”. Nothing was deleted.`);
       await stopPreview(uc!.id).catch(() => undefined);

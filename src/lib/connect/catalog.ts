@@ -310,7 +310,15 @@ export const TOOLS = {
     title: "Archive or restore a use case",
     description: "Archive a use case (hidden from the home list, nothing is lost, can be restored) or restore an archived one. Archiving needs confirm. Admin only.",
     need: "admin",
-    input: z.object({ use_case_id: id, action: z.enum(["archive", "restore"]), confirm }),
+    input: z.object({
+      use_case_id: id,
+      action: z.enum(["archive", "restore"]),
+      outcome: z.enum(["approved", "rejected"]).optional().describe("Archiving: was it approved for production, or rejected."),
+      comments: z.string().max(4000).optional().describe("Archiving: the reason, especially for a rejection."),
+      cost: z.string().max(200).optional().describe("Archiving: the estimated cost to implement."),
+      benefits: z.string().max(6000).optional().describe("Archiving: the benefits and the metrics that must be tracked and delivered."),
+      confirm,
+    }),
   }),
   delete_use_case: tool({
     title: "Delete a use case for good",
