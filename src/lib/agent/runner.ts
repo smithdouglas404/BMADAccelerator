@@ -16,6 +16,7 @@ import { recallForTurn, searchMemory, startMemoryJobs } from "@/lib/memory";
 import { resumeBrief } from "@/lib/studio/resume";
 import { withContext } from "@/lib/memory/lettaCore";
 import { noteGateTurn } from "@/lib/jev";
+import { recordUsage } from "@/lib/agent/usage";
 
 // One Socra turn at a time per product. Queued events (messages, captures, pulled-forward
 // recommendations, annotations, build notes) are combined into the next turn, in order.
@@ -227,6 +228,8 @@ async function runSdkTurnOnce(opts: {
   model?: string;
   effort?: "low" | "medium" | "high";
   speaker?: string;
+  /** What the run is, for the usage record: a conversation turn (default) or a build. */
+  kind?: "turn" | "build";
   /** Stop the run when nothing has happened for this long (a command stuck waiting for input). */
   idleMs?: number;
 }) {
@@ -301,6 +304,9 @@ async function runSdkTurnOnce(opts: {
           await opts.onStatus(s);
         }
       }
+    }
+    if (m.type === "result") {
+      await recordUsage({ useCaseId: opts.useCaseId, turnId: opts.kind === "build" ? "" : currentTurnId(opts.useCaseId), sessionId, agent: opts.kind === "build" ? "Claude Code" : "Socra", kind: opts.kind ?? "turn", auth, resumed: Boolean(opts.resume), result: m });
     }
     if (m.type === "result" && m.subtype !== "success" && !stalled) {
       throw new Error(`Agent stopped: ${m.subtype}`);

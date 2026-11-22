@@ -677,3 +677,29 @@ model NasikoLink {
   syncedAt    DateTime?
   updatedAt   DateTime  @updatedAt
 }
+
+// What each Claude run used and cost, from the numbers Claude Code reports at the end of a run. An estimate, not a bill.
+model LlmUsage {
+  id           String   @id @default(cuid())
+  useCaseId    String
+  turnId       String   @default("")
+  sessionId    String   @default("")
+  agent        String // Socra (a turn, with the specialists it sent out) | Claude Code (a build)
+  kind         String   @default("turn") // turn | build
+  model        String   @default("")
+  auth         String   @default("") // plan | key
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  cacheTokens  Int      @default(0)
+  costUsd      Float    @default(0)
+  cumCostUsd   Float    @default(0)
+  cumInput     Int      @default(0)
+  cumOutput    Int      @default(0)
+  cumCache     Int      @default(0)
+  baseline     Boolean  @default(false) // first sight of a resumed session: its earlier cost is not ours to count
+  ms           Int      @default(0)
+  at           DateTime @default(now())
+
+  @@index([useCaseId, at])
+  @@index([sessionId])
+}
