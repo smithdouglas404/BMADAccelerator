@@ -21,7 +21,7 @@ set -uo pipefail
 MODE="${1:-}"
 CODE_BRANCH="${SOCRA_BRANCH:-mac-studio}"
 # Release of THIS script (the laptop fixes). Settings > Update compares it with the newest one on GitHub.
-SCRIPT_REV="10"
+SCRIPT_REV="11"
 
 HOME_DIR="$HOME/SocraStudio"
 
@@ -365,11 +365,11 @@ export function UpdatePanel() {
 }
 TSX
 perl -0pi -e '
-  s{(import \{ JevValue \} from \x27\./jev\x27\n)}{$1import { UpdatePanel } from \x27./updatepanel\x27\n};
-  s{\| \x27jev\x27>}{| \x27jev\x27 | \x27update\x27>};
-  s{t === \x27jev\x27\)}{t === \x27jev\x27 || t === \x27update\x27)};
-  s{\[\x27jev\x27, \x27Jev\x27\]\]}{[\x27jev\x27, \x27Jev\x27], [\x27update\x27, \x27Update\x27]]};
-  s{(\{tab === \x27jev\x27 && <JevValue />\})}{$1\n        {tab === \x27update\x27 && <UpdatePanel />}};
+  s{\A}{import { UpdatePanel } from \x27./updatepanel\x27\n} unless /^import[^\n]*\bUpdatePanel\b/m;
+  s{(useState<[^>]*?)>\(\x27models\x27\)}{$1 | \x27update\x27>(\x27models\x27)};
+  s{(if \(t === \x27[a-z]+\x27(?: \|\| t === \x27[a-z]+\x27)*)\) setTab}{$1 || t === \x27update\x27) setTab};
+  s{(\[\x27[a-z]+\x27, \x27[^\x27]*\x27\])\] as const\)}{$1, [\x27update\x27, \x27Update\x27]] as const)};
+  s{(\{tab === \x27models\x27 &&)}{\{tab === \x27update\x27 && <UpdatePanel />\}\n        $1};
 ' "$APP/src/studio/settings.tsx"
 grep -q "<UpdatePanel />" "$APP/src/studio/settings.tsx" && grep -q "import { UpdatePanel }" "$APP/src/studio/settings.tsx" \
   || { echo "(Couldn't add the Update tab to this version; updates still work from Terminal.)"; rm -f "$APP/src/studio/updatepanel.tsx"; }
