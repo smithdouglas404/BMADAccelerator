@@ -211,6 +211,12 @@ export async function runSdkTurn(opts: TurnOpts) {
   }
 }
 
+/** Whether a result message is a finished run: a result can say "success" and still be an error the model service returned. */
+function runOutcome(m: { subtype: string; is_error?: boolean; result?: unknown }) {
+  const ok = m.subtype === "success" && !m.is_error;
+  return { ok, error: ok ? "" : m.subtype !== "success" ? `stopped: ${m.subtype}` : String(m.result ?? "the model service returned an error").slice(0, 300) };
+}
+
 async function runSdkTurnOnce(opts: {
   useCaseId: string;
   slug: string;
@@ -268,6 +274,7 @@ async function runSdkTurnOnce(opts: {
     },
   });
   let sessionId = "";
+  let recorded = false;
   let lastStatus = "";
   const limited = (resetsAt?: number) => {
     q.interrupt().catch(() => undefined);
@@ -306,13 +313,19 @@ async function runSdkTurnOnce(opts: {
       }
     }
     if (m.type === "result") {
-      await recordUsage({ useCaseId: opts.useCaseId, turnId: opts.kind === "build" ? "" : currentTurnId(opts.useCaseId), sessionId, agent: opts.kind === "build" ? "Claude Code" : "Socra", kind: opts.kind ?? "turn", auth, resumed: Boolean(opts.resume), result: m });
+      recorded = true;
+      await recordUsage({ useCaseId: opts.useCaseId, turnId: opts.kind === "build" ? "" : currentTurnId(opts.useCaseId), sessionId, agent: opts.kind === "build" ? "Claude Code" : "Socra", kind: opts.kind ?? "turn", auth, resumed: Boolean(opts.resume), result: m, ...runOutcome(m) });
     }
     if (m.type === "result" && m.subtype !== "success" && !stalled) {
       throw new Error(`Agent stopped: ${m.subtype}`);
     }
   }
   } catch (e) {
+    // A run that ended without a result (limit reached, stalled, crashed) still happened: record it as a failed run, so retries show.
+    if (!recorded) {
+      recorded = true;
+      await recordUsage({ useCaseId: opts.useCaseId, turnId: opts.kind === "build" ? "" : currentTurnId(opts.useCaseId), sessionId: "", agent: opts.kind === "build" ? "Claude Code" : "Socra", kind: opts.kind ?? "turn", auth, resumed: false, result: {}, ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
     if (!stalled) throw e;
   } finally {
     if (watchdog) clearInterval(watchdog);

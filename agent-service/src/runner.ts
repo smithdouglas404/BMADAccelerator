@@ -3,6 +3,7 @@ import { z } from "zod";
 import { DEFAULT_MODEL, KEY_FOR, memoryScope, systemPrompt, type AgentConfig, type ToolConfig } from "./config.ts";
 import type { Store, UseCaseRow } from "./store.ts";
 import type { Letta, Mem0 } from "./memory.ts";
+import { inRun, noteUsage, tokensFromRaw } from "./usage.ts";
 
 // One agent run. AgentKit does the thinking and the tools; Letta keeps the persona and its memory of
 // the person; Mem0 keeps long-term facts; a person approves what the configuration says needs approval.
@@ -40,9 +41,11 @@ function modelFor(a: AgentConfig) {
   const key = process.env[KEY_FOR[a.model.provider]];
   if (!key) return null;
   const model = a.model.name || process.env[`AGENT_SERVICE_${a.model.provider.toUpperCase()}_MODEL`] || DEFAULT_MODEL[a.model.provider];
-  if (a.model.provider === "anthropic") return anthropic({ model: model as never, apiKey: key, defaultParameters: { max_tokens: 2048 } });
-  if (a.model.provider === "openai") return openai({ model: model as never, apiKey: key });
-  return gemini({ model: model as never, apiKey: key });
+  // An optional gateway address per provider (for example a LiteLLM proxy later): AGENT_SERVICE_ANTHROPIC_BASE_URL and so on.
+  const baseUrl = process.env[`AGENT_SERVICE_${a.model.provider.toUpperCase()}_BASE_URL`] || undefined;
+  if (a.model.provider === "anthropic") return anthropic({ model: model as never, apiKey: key, ...(baseUrl ? { baseUrl } : {}), defaultParameters: { max_tokens: 2048 } });
+  if (a.model.provider === "openai") return openai({ model: model as never, apiKey: key, ...(baseUrl ? { baseUrl } : {}) });
+  return gemini({ model: model as never, apiKey: key, ...(baseUrl ? { baseUrl } : {}) });
 }
 
 function zodFor(t: ToolConfig) {
@@ -74,6 +77,12 @@ async function callApp(uc: UseCaseRow, tool: string, input: unknown, runId: stri
 }
 
 export async function runAgent(d: Deps, runId: string) {
+  const run0 = await d.store.run(runId);
+  // Everything the run does (its own thinking, Letta, Mem0) is noted under this use case, run and agent.
+  return inRun({ useCase: run0?.use_case ?? "", run: runId, agent: run0?.agent ?? "" }, () => runAgentInner(d, runId));
+}
+
+async function runAgentInner(d: Deps, runId: string) {
   const { store, mem0, letta } = d;
   const once = <T>(id: string, fn: () => Promise<T>) => (d.step ? d.step.run(id, fn) : fn());
   let calls = 0; // step ids must be the same on every replay, so they count calls in order
@@ -156,7 +165,16 @@ export async function runAgent(d: Deps, runId: string) {
         },
       });
       const agent = createAgent({ name: a.name, description: a.purpose, system: systemPrompt(a, mind), model, tools: [...tools, remember] });
-      const result = await agent.run(run.input, d.step ? { step: d.step as never } : undefined);
+      const t0 = Date.now();
+      const name = a.model.name || process.env[`AGENT_SERVICE_${a.model.provider.toUpperCase()}_MODEL`] || DEFAULT_MODEL[a.model.provider];
+      const result = await agent.run(run.input, d.step ? { step: d.step as never } : undefined).catch(async (e) => {
+        await noteUsage({ kind: "agent", purpose: `${a.name} thinks`, provider: a.model.provider, model: name, input: 0, output: 0, cache: 0, estimated: true, ok: false, error: (e as Error).message, ms: Date.now() - t0 });
+        throw e;
+      });
+      // The provider's own answer says what was used; when it does not, the text in and out is counted (an estimate).
+      const used = tokensFromRaw(result.raw);
+      const outText = JSON.stringify(result.output ?? "");
+      await noteUsage({ kind: "agent", purpose: `${a.name} thinks`, provider: a.model.provider, model: used?.model || name, input: used?.input ?? Math.ceil((run.input.length + systemPrompt(a, mind).length) / 4), output: used?.output ?? Math.ceil(outText.length / 4), cache: used?.cache ?? 0, estimated: !used, ok: true, error: "", ms: Date.now() - t0, key: `${runId}:agent` });
       output = result.output
         .map((m) => (m.type === "text" ? (typeof m.content === "string" ? m.content : m.content.map((c) => c.text).join("")) : ""))
         .join("\n")

@@ -5,6 +5,7 @@
  * in tool_ids), the same /messages/stream call, and the same 429 back-off. Every call degrades: when
  * Letta is missing or down, the accelerator carries on without it.
  */
+import { guessTokens, recordCall } from "@/lib/llm/ledger";
 import {
   LESSONS_BLOCK_LABEL,
   MEM0_APP_ID,
@@ -12,6 +13,7 @@ import {
   SHARED_BLOCK_LABEL,
   TAG,
   assistantText,
+  lettaUsage,
   parsePortfolio,
   pickEmbedding,
   pickModel,
@@ -178,7 +180,19 @@ async function agentId(role: Role): Promise<string | null> {
   return a?.id ?? null;
 }
 
-async function send(id: string, content: string): Promise<LettaMessage[]> {
+/** The model a Letta agent runs on, for the usage record (cached). */
+const models = new Map<string, string>();
+async function modelOf(id: string): Promise<string> {
+  const hit = models.get(id);
+  if (hit) return hit;
+  const a = await letta<{ llm_config?: { model?: string }; model?: string }>("GET", `/v1/agents/${id}`).catch(() => null);
+  const m = a?.llm_config?.model ?? a?.model ?? "";
+  if (m) models.set(id, m);
+  return m;
+}
+
+async function send(id: string, content: string, who: { role: string; useCaseId?: string } = { role: "" }): Promise<LettaMessage[]> {
+  const t0 = Date.now();
   // The streaming endpoint, not /messages: self-hosted Letta answers /messages with a 500 (load_agent).
   const res = await fetch(`${base()}/v1/agents/${id}/messages/stream`, {
     method: "POST",
@@ -186,7 +200,11 @@ async function send(id: string, content: string): Promise<LettaMessage[]> {
     body: JSON.stringify({ messages: [{ role: "user", content }], stream_tokens: false }),
     signal: AbortSignal.timeout(300_000),
   });
-  if (!res.ok) throw new Error(`Letta POST messages/stream -> ${res.status} ${(await res.text()).slice(0, 300)}`);
+  if (!res.ok) {
+    const err = `Letta POST messages/stream -> ${res.status} ${(await res.text()).slice(0, 300)}`;
+    await recordCall({ agent: `Letta · ${who.role}`, kind: "letta", purpose: "agent memory run", provider: "letta", model: await modelOf(id), input: 0, output: 0, ms: Date.now() - t0, ok: false, error: err }, { useCaseId: who.useCaseId }, { estimated: true });
+    throw new Error(err);
+  }
   const out: LettaMessage[] = [];
   for (const line of (await res.text()).split("\n")) {
     if (!line.startsWith("data: ") || line === "data: [DONE]") continue;
@@ -194,23 +212,31 @@ async function send(id: string, content: string): Promise<LettaMessage[]> {
     if (m.message_type === "error_message") throw new Error(`Letta agent error: ${m.message ?? ""} ${m.detail ?? ""}`.trim());
     out.push(m);
   }
+  // Letta reports what its model used across the run's steps; when it reports nothing, the text sent and received is counted instead (an estimate).
+  const used = lettaUsage(out);
+  const said = assistantText(out);
+  await recordCall(
+    { agent: `Letta · ${who.role}`, kind: "letta", purpose: `agent memory run${used?.steps ? ` (${used.steps} step${used.steps === 1 ? "" : "s"})` : ""}`, provider: "letta", model: await modelOf(id), input: used?.input ?? guessTokens(content), output: used?.output ?? guessTokens(said), cache: used?.cache ?? 0, ms: Date.now() - t0 },
+    { useCaseId: who.useCaseId },
+    { estimated: !used },
+  );
   return out;
 }
 
 /** Sends a role a message and returns what it said and which tools it called. Null when Letta is unavailable. */
-export async function tellRole(roleKey: string, content: string): Promise<{ text: string; tools: string[] } | null> {
+export async function tellRole(roleKey: string, content: string, useCaseId = ""): Promise<{ text: string; tools: string[] } | null> {
   const role = roleFor(roleKey);
   if (!role) return null;
   const id = await agentId(role);
   if (!id) return null;
-  const messages = await send(id, content);
+  const messages = await send(id, content, { role: role.name, useCaseId });
   return { text: assistantText(messages), tools: toolCalls(messages) };
 }
 
 /** The app or a Claude agent asks a Letta role what it remembers. */
-export async function askRole(roleKey: string, question: string, fromTitle: string, context = ""): Promise<string | null> {
+export async function askRole(roleKey: string, question: string, fromTitle: string, context = "", useCaseId = ""): Promise<string | null> {
   const msg = questionMessage(fromTitle, question);
-  const r = await tellRole(roleKey, context.trim() ? `<retrieved_context>\n${context.trim()}\n</retrieved_context>\n\n${msg}` : msg);
+  const r = await tellRole(roleKey, context.trim() ? `<retrieved_context>\n${context.trim()}\n</retrieved_context>\n\n${msg}` : msg, useCaseId);
   return r ? r.text : null;
 }
 

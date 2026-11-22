@@ -6,6 +6,7 @@ import { serve } from "inngest/node";
 import { parseAgent, UseCaseConfig } from "./config.ts";
 import { Store } from "./store.ts";
 import { Letta, Mem0 } from "./memory.ts";
+import { setUsageSink } from "./usage.ts";
 import { APPROVAL_EVENT, runAgent, type Deps } from "./runner.ts";
 
 // The shared agent service. The Studio registers each use case and its agents (admin key); a generated
@@ -20,6 +21,7 @@ import { APPROVAL_EVENT, runAgent, type Deps } from "./runner.ts";
 
 export function createService(opts: { store: Store; mem0?: Mem0; letta?: Letta; adminKey: string; inngest?: boolean; pollMs?: number }) {
   const { store, adminKey } = opts;
+  setUsageSink((n) => store.addUsage(n));
   const mem0 = opts.mem0 ?? new Mem0();
   const letta = opts.letta ?? new Letta();
   const base: Deps = { store, mem0, letta, pollMs: opts.pollMs };
@@ -69,6 +71,11 @@ export function createService(opts: { store: Store; mem0?: Mem0; letta?: Letta; 
           const b = (await body(req)) as Record<string, unknown>;
           for (const k of ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY"]) if (typeof b[k] === "string" && b[k]) process.env[k] = b[k] as string;
           return json(res, 200, { ok: true });
+        }
+        if (p === "/v1/admin/usage" && m === "GET") {
+          // Every model call the service has made, in order, for the Studio's ledger. ?after=<seq> continues where it stopped.
+          const q = new URL(req.url ?? "", "http://x").searchParams;
+          return json(res, 200, { rows: await store.usageAfter(Number(q.get("after") ?? 0) || 0, Number(q.get("limit") ?? 500) || 500) });
         }
         const parts = p.split("/"); // ["", "v1", "admin", "use-cases", uc, "agents", key]
         const uc = parts[4] ?? "";

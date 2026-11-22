@@ -86,3 +86,39 @@ test("register, run, approve, history: a demo run waits for a person and finishe
     await store.close();
   }
 });
+
+test("every model call the service makes is noted, in order, once, for the Studio's ledger", { skip: !installed || !db }, async () => {
+  const { Store } = await import("../agent-service/src/store.ts");
+  const { createService } = await import("../agent-service/src/server.ts");
+  const { Mem0, Letta } = await import("../agent-service/src/memory.ts");
+  const { noteUsage, inRun } = await import("../agent-service/src/usage.ts");
+  const store = new Store(db);
+  await store.init();
+  await store.pool.query("truncate llm_usage");
+  const { handler } = createService({ store, adminKey: "admin-test", mem0: new Mem0(""), letta: new Letta("") });
+  const server = http.createServer((q, s) => void handler(q, s));
+  await new Promise((r) => server.listen(0, r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const get = (p, key = "admin-test") => fetch(base + p, { headers: { "X-Admin-Key": key } }).then(async (r) => ({ status: r.status, body: await r.json() }));
+  try {
+    const n = { kind: "agent", purpose: "x thinks", provider: "anthropic", model: "claude-haiku-5-5", input: 10, output: 5, cache: 0, estimated: false, ok: true, error: "", ms: 3 };
+    await inRun({ useCase: "uc-test-1", run: "run_1", agent: "triage" }, async () => {
+      await noteUsage({ ...n, key: "run_1:agent" });
+      await noteUsage({ ...n, key: "run_1:agent" }); // a replay of the same call: recorded once
+      await noteUsage({ ...n, kind: "memory", provider: "openai", model: "text-embedding-3-small", estimated: true });
+    });
+    assert.equal((await get("/v1/admin/usage", "wrong")).status, 401);
+    const all = (await get("/v1/admin/usage?after=0")).body.rows;
+    assert.equal(all.length, 2);
+    assert.deepEqual(all.map((r) => [r.use_case, r.run, r.agent, r.kind]), [["uc-test-1", "run_1", "triage", "agent"], ["uc-test-1", "run_1", "triage", "memory"]]);
+    assert.equal(all[1].estimated, true);
+    const rest = (await get(`/v1/admin/usage?after=${all[0].seq}`)).body.rows;
+    assert.equal(rest.length, 1);
+    assert.equal(rest[0].kind, "memory");
+    assert.equal((await get(`/v1/admin/usage?after=${all[1].seq}`)).body.rows.length, 0);
+  } finally {
+    server.close();
+    await store.pool.query("truncate llm_usage");
+    await store.close();
+  }
+});

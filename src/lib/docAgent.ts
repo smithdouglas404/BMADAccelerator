@@ -6,6 +6,21 @@ import { prisma } from "@/lib/db";
 import { convertToText } from "@/lib/provision";
 import { query, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { authEnv, authOrder, claudeConfigured, type Auth } from "@/lib/agent/auth";
+import { anthropicUsage, tracked } from "@/lib/llm/ledger";
+import { recordUsage } from "@/lib/agent/usage";
+
+/** Who a small model job is for, so its tokens and cost are recorded (src/lib/llm/ledger.ts): the product, who ran it and why. */
+export type JobCtx = { useCaseId?: string; agent: string; kind: "document" | "speech" | "writer"; purpose: string };
+
+/** One small job on the Claude plan: a result message is the whole record of it. */
+function planRecord(ctx: JobCtx, m: { session_id?: string; subtype?: string; is_error?: boolean; result?: unknown } & Record<string, unknown>) {
+  return recordUsage({ useCaseId: ctx.useCaseId ?? "", sessionId: m.session_id ?? "", agent: ctx.agent, kind: ctx.kind, purpose: ctx.purpose, auth: "plan", resumed: false, result: m as never, ok: m.subtype === "success" && !m.is_error, error: m.subtype === "success" ? (m.is_error ? String(m.result ?? "error").slice(0, 300) : "") : `stopped: ${m.subtype}` });
+}
+
+/** One small job on the API key: the Messages API call, recorded from the usage it reports. */
+function keyCall<T extends { model?: string }>(ctx: JobCtx, run: () => PromiseLike<T>): Promise<T> {
+  return tracked({ agent: ctx.agent, kind: ctx.kind, purpose: ctx.purpose, provider: "anthropic", model: docModel() }, { useCaseId: ctx.useCaseId }, async () => run(), (r) => anthropicUsage(r as never));
+}
 
 /** Socra, its team and Claude Code. Sonnet: about half Opus's price, strong enough for planning and building. */
 export const agentModel = () => process.env.BACC_MODEL || "claude-sonnet-5-5";
@@ -54,9 +69,10 @@ ${truncated ? "\nThe document is long; you are seeing the first part only.\n" : 
 ${text}
 </document>`;
 
+  const ctx: JobCtx = { useCaseId: doc.useCaseId, agent: "Document reader", kind: "document", purpose: `reads ${doc.fileName}` };
   let parsed: z.infer<typeof Suggestion> | null = null;
   for (const auth of authOrder()) {
-    parsed = await (auth === "plan" ? suggestWithPlan(prompt) : suggestWithKey(prompt)).catch((e) => {
+    parsed = await (auth === "plan" ? suggestWithPlan(prompt, "plan", ctx) : suggestWithKey(prompt, ctx)).catch((e) => {
       console.error(`document agent (${auth})`, e);
       return null;
     });
@@ -96,19 +112,19 @@ ${text}
 }
 
 /** The API key path: one Messages API call with a structured answer. */
-async function suggestWithKey(prompt: string) {
-  const response = await new Anthropic().messages.parse({
+async function suggestWithKey(prompt: string, ctx: JobCtx) {
+  const response = await keyCall(ctx, () => new Anthropic().messages.parse({
     model: docModel(),
     max_tokens: 6000,
     output_config: { effort: "low", format: zodOutputFormat(Suggestion) },
     messages: [{ role: "user", content: prompt }],
-  });
+  }));
   if (response.stop_reason === "refusal") return null;
   return response.parsed_output ?? null;
 }
 
 /** The plan path: the same request through Claude Code signed in with the owner's subscription, no tools. */
-async function suggestWithPlan(prompt: string, auth: Auth = "plan") {
+async function suggestWithPlan(prompt: string, auth: Auth, ctx: JobCtx) {
   const q = query({
     prompt,
     options: {
@@ -124,6 +140,7 @@ async function suggestWithPlan(prompt: string, auth: Auth = "plan") {
   });
   for await (const m of q as AsyncIterable<SDKMessage>) {
     if (m.type === "result") {
+      await planRecord(ctx, m);
       if (m.subtype !== "success") throw new Error(`document agent stopped: ${m.subtype}`);
       const r = Suggestion.safeParse(m.structured_output);
       return r.success ? r.data : null;
@@ -139,7 +156,8 @@ const Cleaned = z.object({ text: z.string() });
  * speaker's meaning and wording otherwise kept. The low-cost model does it when Claude is signed in; the
  * plain clean-up (tidySpeech) is the floor and the fallback. The words as spoken are kept separately.
  */
-export async function cleanSpeech(raw: string): Promise<string> {
+export async function cleanSpeech(raw: string, useCaseId = ""): Promise<string> {
+  const ctx: JobCtx = { useCaseId, agent: "Speech cleaner", kind: "speech", purpose: "cleans spoken words into written language" };
   const { tidySpeech } = await import("@/lib/studio/core");
   const floor = tidySpeech(raw);
   if (!claudeConfigured() || raw.trim().split(/\s+/).length < 6) return floor;
@@ -152,13 +170,14 @@ export async function cleanSpeech(raw: string): Promise<string> {
           options: { model: docModel(), tools: [], maxTurns: 2, effort: "low", persistSession: false, settingSources: [], outputFormat: { type: "json_schema", schema: z.toJSONSchema(Cleaned, { target: "draft-7" }) as Record<string, unknown> }, env: authEnv(auth) },
         });
         for await (const m of q as AsyncIterable<SDKMessage>) {
+          if (m.type === "result") await planRecord(ctx, m);
           if (m.type === "result" && m.subtype === "success") {
             const r = Cleaned.safeParse(m.structured_output);
             if (r.success && r.data.text.trim()) return r.data.text.trim();
           }
         }
       } else {
-        const response = await new Anthropic().messages.parse({ model: docModel(), max_tokens: 8000, output_config: { effort: "low", format: zodOutputFormat(Cleaned) }, messages: [{ role: "user", content: prompt }] });
+        const response = await keyCall(ctx, () => new Anthropic().messages.parse({ model: docModel(), max_tokens: 8000, output_config: { effort: "low", format: zodOutputFormat(Cleaned) }, messages: [{ role: "user", content: prompt }] }));
         const t = response.parsed_output?.text?.trim();
         if (t) return t;
       }
@@ -173,7 +192,8 @@ export async function cleanSpeech(raw: string): Promise<string> {
  * One structured answer from the low-cost model (plan first, then the key), or null when Claude isn't signed
  * in or every way failed. Used by small single-shot jobs such as the PRFAQ writer.
  */
-export async function lowCostAnswer<T>(prompt: string, schema: z.ZodType<T>, maxTokens = 12000): Promise<T | null> {
+export async function lowCostAnswer<T>(prompt: string, schema: z.ZodType<T>, maxTokens = 12000, who: { useCaseId?: string; agent?: string; purpose?: string } = {}): Promise<T | null> {
+  const ctx: JobCtx = { useCaseId: who.useCaseId, agent: who.agent ?? "Writer", kind: "writer", purpose: who.purpose ?? "a small written answer" };
   for (const auth of authOrder()) {
     try {
       if (auth === "plan") {
@@ -183,13 +203,14 @@ export async function lowCostAnswer<T>(prompt: string, schema: z.ZodType<T>, max
         });
         for await (const m of q as AsyncIterable<SDKMessage>) {
           if (m.type === "result") {
+            await planRecord(ctx, m);
             if (m.subtype !== "success") throw new Error(`low-cost answer stopped: ${m.subtype}`);
             const r = schema.safeParse(m.structured_output);
             if (r.success) return r.data;
           }
         }
       } else {
-        const response = await new Anthropic().messages.parse({ model: docModel(), max_tokens: maxTokens, output_config: { effort: "low", format: zodOutputFormat(schema) }, messages: [{ role: "user", content: prompt }] });
+        const response = await keyCall(ctx, () => new Anthropic().messages.parse({ model: docModel(), max_tokens: maxTokens, output_config: { effort: "low", format: zodOutputFormat(schema) }, messages: [{ role: "user", content: prompt }] }));
         if (response.stop_reason !== "refusal" && response.parsed_output) return response.parsed_output as T;
       }
     } catch (e) {

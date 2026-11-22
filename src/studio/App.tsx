@@ -264,7 +264,7 @@ function Studio({ live, reload }: { live: Live; reload: () => Promise<void> }) {
       setToast(re ? `Reply sent to ${re.label.split(' · ')[0]}; the answer appears under it` : r.picked?.length ? `Option ${r.picked.join(' and ')} chosen and carried forward. You can undo it.` : r.approved ? 'Approved and carried forward. You can undo it.' : 'Thought held in the backlog. Socra and the team are looking at it')
     })
   }
-  const composerVoice = useVoice(live.connections.voice, (text, spoken) => sendMessage(text, spoken), setToast, { clean: true })
+  const composerVoice = useVoice(live.connections.voice, (text, spoken) => sendMessage(text, spoken), setToast, { clean: true, useCaseId: live.id })
 
   const captureIdea = () => {
     const text = capture.trim()
