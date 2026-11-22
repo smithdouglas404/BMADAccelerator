@@ -79,7 +79,7 @@ Each area says when it is answered enough, what the prototype gets from the answ
 
 Speak once per turn, through `share_finding`, in this shape:
 
-```
+```text
 <one line: what you understood, in their words>
 
 <question 1, naming what they said and what good practice does>
@@ -97,10 +97,12 @@ Business rules go into the PRD as plain if-then lines with their numbers ("If a 
 ## Examples
 
 **Thin input, a booking product.** They said: "People book a slot and we confirm it."
+
 - Generic (don't): "What are the business rules for bookings?"
 - Targeted: "You said you confirm each booking. Who confirms, and how fast? Most booking products confirm instantly and let staff cancel within a set time, because people book elsewhere if they wait. 1. Confirm instantly, staff can cancel within 2 hours (suggested) 2. Staff confirm each one by hand 3. Instant for regulars, by hand for new people"
 
 **A rule with a number, a lending product.** They said: "Big loans need a second look."
+
 - Targeted: "You said big loans need a second look. Above what amount, and who looks? Lenders usually set one threshold and a named role, so nothing waits on a person who is away. 1. Above <amount>, any senior officer (suggested) 2. Above <amount>, the branch manager only 3. Every loan gets a second look"
 
 **Enough.** When they answer "the first one, 10,000", record `rules` as covered with "the owner: above 10,000 a senior officer approves", write the rule into the PRD, and move on; don't ask about tiers unless they bring them up.

@@ -34,6 +34,7 @@ Map every agentic idea to AgentKit's own concepts, using its names, so the owner
 - **No AI for the sake of AI.** A fixed rule (if this, then that; a rules table; a lookup) is plain code, with no model. Suggest an agent only for workflows with several steps, messages to people, alerts or notifications, recommendations or insights. When the product has none, the pilot must not claim AI it doesn't use.
 - **Agents suggest; people and plain code decide.** An agent in a generated app never makes the choice for the user. It shows what is possible as a numbered list (each option with a code that stays the same), explains options in plain words, and the user picks by code. Rules that must hold (allergies, prices, stock) stay in plain, tested code.
 - **People stay in charge of what matters.** Money, safety, legal, anything sent to a customer, anything hard to undo: a person in the loop, with what they see, what they can do (approve, edit, reject), and what happens if they don't answer. Each becomes a Studio recommendation of kind "hitl" so the owner decides.
+- **Every agent gets a Letta persona by default**, with Mem0 for its long-term facts, registered in the shared agent service as configuration, not coded per app. Only a person's explicit no switches the persona off (see studio-letta-memory and studio-mem0-memory).
 - **It's a pilot.** One Node service with AgentKit, its local Inngest dev server, SQLite or one Postgres, model keys from the environment (`AGENT_PROVIDER`, `AGENT_MODEL`), and a labelled demo mode when no key is set. Name what production would add, but don't build it.
 
 ## In the Studio
@@ -41,3 +42,11 @@ Map every agentic idea to AgentKit's own concepts, using its names, so the owner
 - The Product Engineer records each workflow as a recommendation of kind "workflow" with its AgentKit shape in the note, and each person-in-the-loop point as kind "hitl"; the owner pulls them forward and Socra asks about them.
 - What the owner accepts goes into the package's `AGENT_KIT_ROUTING.json` and `TECHNICAL_REQUIREMENTS.md`, and Claude Code builds it.
 - After a build, check: does each accepted workflow exist, built with AgentKit; does every person-in-the-loop step actually wait and show the person what to approve; does the demo mode say it is a demo; is progress visible while an agent works.
+
+## Integration
+
+- **studio-product-engineer**: shapes each workflow and person-in-the-loop point that this skill then builds.
+- **studio-trd**: workflows and agents are written into the TRD using this skill's model.
+- **studio-solution-architect**: hosting, state and model choices for the pilot service.
+- **studio-letta-memory**, **studio-mem0-memory**: the persona and long-term facts every agent gets.
+- **studio-muse**: Socra opens this skill when an item may need an agentic workflow.

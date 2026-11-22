@@ -25,10 +25,10 @@ Letta (self-hosted, open source) is what gives an agent a stable identity across
 
 ## How It Works
 
-1. **Recall first, once.** Read `<retrieved_context>` before asking anything. Use what fits and say where it came from ("from this customer's decision on ClaimSnap"). Never copy another customer's details: the playbook and archive notes shown are this customer's only.
-2. **Search before you ask a person.** `mcp__studio__search_memory` with your role (`analyst`, `architect`, `engineer`, `ux`, `validator`, `muse`, or `domain-<field>` such as `domain-claims-expert`) searches your Mem0 facts and your own archive for this customer. Use a focused query.
-3. **Ask a role, not the owner, for experience.** `mcp__studio__ask_role_memory` puts a question to another role's Letta mind ("what do owners of claims products usually correct after seeing the screens?"). Its answer is advice from past products, not a decision.
-4. **Save a lesson once the conversation teaches one.** `mcp__studio__save_lesson` with your own role: a general lesson with a confidence 0 to 1 ("claims tools: show why a claim is paused, not only that it is"). No names, prices or private details: lessons cross customers.
+1. **Recall first, once.** Read `<retrieved_context>` before asking anything. Use what fits and say where it came from ("from this customer's decision on their booking product"). Never copy another customer's details: the playbook and archive notes shown are this customer's only.
+2. **Search before you ask a person.** `mcp__studio__search_memory` with your role (`analyst`, `architect`, `engineer`, `ux`, `validator`, `muse`, or `domain-<field>` such as `domain-lending-expert`) searches your Mem0 facts and your own archive for this customer. Use a focused query.
+3. **Ask a role, not the owner, for experience.** `mcp__studio__ask_role_memory` puts a question to another role's Letta mind ("what do owners of booking products usually correct after seeing the screens?"). Its answer is advice from past products, not a decision.
+4. **Save a lesson once the conversation teaches one.** `mcp__studio__save_lesson` with your own role: a general lesson with a confidence 0 to 1 ("booking tools: show why a booking is on hold, not only that it is"). No names, prices or private details: lessons cross customers.
 5. **Let the app keep the rest.** Your findings go into your archive and Mem0, approved decisions and answers go into the customer's playbook, and a gate or finished build sends your role a message so its persona learns. You do not copy these by hand.
 6. **Keep the human block honest.** When a message names a person and shows how they decide ("Dana approves anything over the limit herself"), add one short line to your `human` block with `core_memory_append`. Nothing private to one customer goes in a role's human block that another customer's product would read: keep it to how the person works.
 7. **Say what you could not do.** If Letta is down the Studio carries on; say plainly when you answered without it.
@@ -37,7 +37,7 @@ Letta (self-hosted, open source) is what gives an agent a stable identity across
 
 A lesson, as saved:
 
-```
+```text
 role: <your role key>
 lesson: <one general sentence a future product can act on>
 confidence: <0 to 1>
@@ -45,22 +45,22 @@ confidence: <0 to 1>
 
 A note to a person that used memory:
 
-```
+```text
 From <where: this customer's playbook | a Mem0 fact from <product> | my archive | <role>'s experience>: <what it says>. <How it changes what I suggest.>
 ```
 
 ## Examples
 
-**The business analyst, on a claims product.** Retrieved context holds the customer's playbook: "ClaimSnap: supervisors approve every payout above the limit". The analyst does not ask who approves; it asks what the limit is and whether it differs by claim type, then saves the answer as a finding (which lands in its archive) and, at the gate, the playbook records the figure.
+**The business analyst, on a lending product.** Retrieved context holds the customer's playbook: "supervisors approve every loan above the limit". The analyst does not ask who approves; it asks what the limit is and whether it differs by loan type, then saves the answer as a finding (which lands in its archive) and, at the gate, the playbook records the figure.
 
-**The domain expert, a new field.** First time a field is named ("Claims expert"), the Studio makes that expert its own Letta mind with the same memory as every other role. On its second claims product it searches `domain-claims-expert` first and arrives with "deadlines, vocabulary and risks" already in hand.
+**The domain expert, a new field.** First time a field is named ("Lending expert"), the Studio makes that expert its own Letta mind with the same memory as every other role. On its second lending product it searches `domain-lending-expert` first and arrives with "deadlines, vocabulary and risks" already in hand.
 
-**A lesson worth saving.** The owner corrected the same thing in three products: waiting time starts when the claim is received, not when it is assigned. Save: "claims tools: ask early when the waiting clock starts", confidence 0.8.
+**A lesson worth saving.** The owner corrected the same thing in three products: waiting time starts when the request is received, not when it is assigned. Save: "service tools: ask early when the waiting clock starts", confidence 0.8.
 
 ## Anti-Patterns
 
 - Saving one client's details as a lesson (lessons are general).
-- Searching with a vague query ("claims") instead of the question you need answered.
+- Searching with a vague query ("lending") instead of the question you need answered.
 - Treating a role's advice as a decision: only a person decides money, legal, privacy, secrets, deleting data or contacting outsiders.
 - Editing `top_lessons` or the persona: the app writes those.
 - Hiding that memory was empty or unavailable.

@@ -35,23 +35,23 @@ Mem0 (self-hosted, open source) holds what was said, decided and learned, search
 
 When you rely on a fact:
 
-```
+```text
 From <product> (<date>, <kind>): <the fact in the record's own words, shortened>.
 ```
 
 When nothing is found:
 
-```
+```text
 Not in memory: <the question>. <Asking the person | marking an assumption>.
 ```
 
 ## Examples
 
-**An answered question.** The owner said last month that the Overdue badge counts business days and pauses while the claimant is asked for more time. A new claims product for the same customer does not ask again; it says "From ClaimSnap: Overdue counts business days and pauses while the claimant is asked for more time. Same here?" and asks only to confirm.
+**An answered question.** The owner said last month that an "overdue" flag counts business days and pauses while the customer is asked for more time. A new product for the same customer does not ask again; it says "From <earlier product> (<date>, qa): overdue counts business days and pauses while the customer is asked for more time. Same here?" and asks only to confirm.
 
-**A stale figure.** A research fact about average settlement time expired last quarter. The agent finds it is past its date, re-checks the source, and saves the new figure with a new expiry.
+**A stale figure.** A research fact about average delivery time expired last quarter. The agent finds it is past its date, re-checks the source, and saves the new figure with a new expiry.
 
-**Nothing found.** "Not in memory: how this customer wants disputes escalated. I'm asking you, with two options and my suggestion first."
+**Nothing found.** "Not in memory: how this customer wants refunds escalated. I'm asking you, with two options and my suggestion first."
 
 ## Anti-Patterns
 

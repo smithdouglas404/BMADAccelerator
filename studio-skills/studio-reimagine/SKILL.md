@@ -96,3 +96,10 @@ Never end on a summary alone, never ask two questions at once, never make them r
 - Never let a reinvention quietly drop the floor: new ideas sit on top of the proven basics.
 - Never push one idea after they've said no.
 - Never open with "why are you different?" or a list of ideas when the person is an expert still describing their world; ask how theirs differs from what others do, and listen.
+
+## Integration
+
+- **studio-muse**: Socra loads this skill first on every turn.
+- **studio-prfaq**, **studio-prd**, **studio-trd**: the floor goes into the PRD and TRD, never the PRFAQ; the person's differences are protected everywhere.
+- **studio-competitor-teardown**, **studio-research-numbers**: where the floor and its numbers come from.
+- **studio-business-analyst**, **studio-solution-architect**, **studio-ux-designer**, **studio-product-engineer**, **studio-domain-expert**: every specialist reads this skill before it works.

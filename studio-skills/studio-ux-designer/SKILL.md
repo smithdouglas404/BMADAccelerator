@@ -77,7 +77,7 @@ Each area says when it is answered enough, what the prototype gets from the answ
 
 Speak once per turn, through `share_finding`, in this shape:
 
-```
+```text
 <one line: what you understood, in their words>
 
 <question 1, naming what they said and what good practice does>
@@ -95,10 +95,12 @@ Layout options are one line each ("1. A list of today's jobs with the next one o
 ## Examples
 
 **The first screen, an inspection product.** They said: "Inspectors are out on site all day."
+
 - Generic (don't): "What should the home screen look like?"
 - Targeted: "You said inspectors are on site all day, so it's phone first. What should they see when they open it? The leading field apps open on today's work, not a dashboard. 1. Today's inspections, next one on top, one tap to start (suggested) 2. A map of today's sites 3. A dashboard of numbers"
 
 **A moment that matters, a claims or support product.** They said: "People are stressed when they write in."
+
 - Targeted: "You said people are stressed when they write in. Right after they submit, what should they see? The best products say what happens next and when. 1. A clear 'we've got it, here's what happens next and by when' (suggested) 2. A reference number only 3. Straight back to the home screen"
 
 **Enough.** Once the first screen and the two anxious moments are agreed, the rest of the screens follow the category's patterns, recorded as assumed.

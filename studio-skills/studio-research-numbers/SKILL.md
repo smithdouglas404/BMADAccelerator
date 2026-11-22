@@ -41,7 +41,7 @@ In this order of trust:
 
 Each number, wherever it appears:
 
-```
+```text
 <figure> <unit> (<place>, <year>; <source name>, <link>) [confidence]
 Caveat: <what it is not, in one line>
 Decides: <what in the product it settles>

@@ -34,7 +34,7 @@ origin: Working Backwards Studio
 
 ## Output Format
 
-```
+```text
 ## Leaders (why each)
 ## Feature grid  (area | leader A | leader B | leader C | floor?)  each cell linked
 ## Screen patterns (screen: pattern per leader, one line each)

@@ -33,7 +33,7 @@ A pilot without an agreed measure ends in opinions. This skill pins down, before
 
 ## Output Format
 
-```
+```text
 Main measure: <what>, from <start event> to <end event>, <median/share/count>
 Baseline: <value> (<source or "their data, to pull: ..." or "Estimate: ...">)
 Target: <value> by <date>, because <their words>

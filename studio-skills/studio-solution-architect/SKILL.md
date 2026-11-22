@@ -79,7 +79,7 @@ Each area says when it is answered enough, what the prototype gets from the answ
 
 Speak once per turn, through `share_finding`, in this shape:
 
-```
+```text
 <one line: what you understood, in their words>
 
 <question 1, naming what they said and what good practice does>
@@ -97,10 +97,12 @@ TRD lines name the system, the direction of data, the pilot's stand-in if any, a
 ## Examples
 
 **A system they named, a field-service product.** They said: "Jobs come from our CRM."
+
 - Generic (don't): "What integrations do you need?"
 - Targeted: "You said jobs come from your CRM. Should the pilot read them live or start from a copy? Most field-service pilots start from a nightly import so nothing in the live system can break. 1. Nightly import, clearly labelled (suggested) 2. Live connection from day one 3. Staff type jobs in for the pilot"
 
 **Sensitive information, a health product.** They said: "Patients upload photos."
+
 - Targeted: "You said patients upload photos. Those are health information; the research says <regulation, source> applies here. Who may see them? 1. Only the treating clinician and the patient (suggested) 2. Any clinician in the practice 3. Clinicians and admin staff"
 
 **Enough.** One answer on who sees the photos covers `sensitive` for the pilot; retention can be assumed as the regulation's minimum, recorded as assumed.

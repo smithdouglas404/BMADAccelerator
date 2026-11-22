@@ -77,7 +77,7 @@ Each area says when it is answered enough, what the prototype gets from the answ
 
 Speak once per turn, through `share_finding`, in this shape:
 
-```
+```text
 <one line: what you understood, in their words>
 
 <question 1, naming what they said and what good practice does>
@@ -95,10 +95,12 @@ Build moves have a plain title, their capability, the decision they trace to and
 ## Examples
 
 **The thin slice, an ordering product.** They said: "We want ordering, delivery tracking, loyalty and reports."
+
 - Generic (don't): "What is the MVP?"
 - Targeted: "You listed ordering, tracking, loyalty and reports. Which one journey should the first prototype do end to end? Pilots that prove one journey well get a yes faster than four half-done ones. 1. Order to delivered, with tracking (suggested) 2. Ordering only 3. Loyalty first"
 
 **People in the loop, any product that sends messages.** They said: "It should chase people automatically."
+
 - Targeted: "You said it should chase people automatically. Should a person see a message before it goes out? Most teams keep a person on the first message and automate the reminders after. 1. A person approves the first, reminders go on their own (suggested) 2. All automatic 3. A person approves every one"
 
 **Enough.** When the slice and the checkpoints are agreed, the rest is assumed from the category and the build can start.
