@@ -72,6 +72,16 @@ if lsof -nP -iTCP:8480 -sTCP:LISTEN >/dev/null 2>&1 && ! podman ps --format '{{.
   fail "Something else on this laptop uses port 8480."
 fi
 
+# The Studio first: a build that ran out of memory can take it down.
+if ! curl -fsS --max-time 5 http://localhost:3000 >/dev/null 2>&1; then
+  echo "The Studio isn't answering; starting it before the Nasiko build."
+  ( cd "$APP" && podman compose up -d >/dev/null 2>&1 )
+  for _ in $(seq 1 36); do curl -fsS --max-time 5 http://localhost:3000 >/dev/null 2>&1 && break; sleep 5; done
+fi
+# Memory: Nasiko's server compile needs about 3 GB on its own. Under 6 GB in the machine, it can be killed (signal 9).
+MEM=$(podman machine inspect "$MACH" --format '{{.Resources.Memory}}' 2>/dev/null | head -1)
+[ -n "$MEM" ] && [ "$MEM" -lt 6000 ] 2>/dev/null && echo "Note: machine $MACH has ${MEM} MB. Building with 1 job to stay inside it (slow, maybe an hour)."
+
 say "Step 3: Nasiko (the first build takes several minutes: it compiles Nasiko's server)"
 cd "$APP" || fail "no $APP"
 CA="$APP/corp-ca.pem"
@@ -81,6 +91,7 @@ run_nasiko() {
   NASIKO_DOCKER_SOCK="$SOCK" \
   NASIKO_EXTRA_HOST="nasiko.local:127.0.0.1" \
   NASIKO_CA_FILE="$CA" \
+  NASIKO_CARGO_JOBS="${NASIKO_CARGO_JOBS:-1}" \
   NASIKO_URL_FROM_STUDIO="http://host.containers.internal:8480" \
   STUDIO_FOR_NASIKO="http://host.containers.internal:3000" \
   bash scripts/nasiko-up.sh 2>&1 | tee "$HOME_DIR/nasiko-build.txt"
