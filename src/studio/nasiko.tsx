@@ -23,7 +23,7 @@ type Info = {
   studioAgents: { name: string; displayName: string; kind: string; product: string; description: string }[]
   mcp: { id: string; name: string; displayName: string; url: string; auth: string; status: string; error: string; connected: boolean; tools: { name: string; description: string }[] }[]
 }
-type Sync = { ok: boolean; created: number; updated: number; failed: { name: string; why: string }[]; total: number; note: string }
+type Sync = { ok: boolean; created: number; updated: number; removed?: number; failed: { name: string; why: string }[]; total: number; note: string }
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : 'never')
 
@@ -55,9 +55,9 @@ export function NasikoTab({ setToast }: { setToast: (s: string) => void }) {
     setBusy('')
     load()
   }
-  const register = async () => {
+  const register = async (prune = false) => {
     setBusy('sync')
-    try { const r = await api<Sync>('/api/nasiko/sync', { method: 'POST' }); setSync(r); setToast(r.note) } catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
+    try { const r = await api<Sync>('/api/nasiko/sync', { method: 'POST', json: prune ? { prune: true } : {} }); setSync(r); setToast(r.note) } catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
     setBusy('')
     load()
   }
@@ -70,6 +70,9 @@ export function NasikoTab({ setToast }: { setToast: (s: string) => void }) {
   const disconnect = async () => { await api('/api/nasiko', { method: 'DELETE' }).catch(() => undefined); setForm({ url: '', username: '', password: '' }); setSync(null); load() }
   const h = info.health
   const registered = new Set(info.agents.map((a) => a.name))
+  // Agents Nasiko holds that this Studio no longer lists (their product was archived or deleted).
+  const known = new Set(info.studioAgents.map((a) => a.name))
+  const stale = info.agents.filter((a) => !known.has(a.name))
   const missing = info.studioAgents.filter((a) => !registered.has(a.name))
 
   return (
@@ -101,8 +104,9 @@ export function NasikoTab({ setToast }: { setToast: (s: string) => void }) {
         <div className="stack-header"><div><p className="eyebrow">Agents · {info.agents.length} of {info.studioAgents.length} registered</p><h3>The Studio’s agents in the harness</h3></div><RefreshCw size={16} /></div>
         <Rich text={'Each agent is registered by its address with the open A2A agent card, so any harness that speaks A2A can use it, here or elsewhere. Calls come back to the Studio, so the answers keep the Studio’s rules. Note: this version of Nasiko cannot yet forward its own proxy calls to an agent that is only registered by address (it answers 503), so they are listed and ready, but not routed through Nasiko’s access rules and traces yet.'} />
         <div className="studio-review-actions" style={{ margin: '8px 0' }}>
-          <button type="button" className="button button-primary" disabled={!info.signedIn || busy !== ''} onClick={() => void register()}>{busy === 'sync' ? 'Registering…' : missing.length ? `Register ${missing.length} agent${missing.length === 1 ? '' : 's'}` : 'Update all'}</button>
+          <button type="button" className="button button-primary" disabled={!info.signedIn || busy !== ''} onClick={() => void register(false)}>{busy === 'sync' ? 'Registering…' : missing.length ? `Register ${missing.length} agent${missing.length === 1 ? '' : 's'}` : 'Update all'}</button>
           {!info.signedIn && <small className="studio-muted">Connect first.</small>}
+          {info.signedIn && stale.length > 0 && <button type="button" className="button button-quiet" disabled={busy !== ''} title="Removes agents of archived or deleted products from Nasiko. Other agents are untouched." onClick={() => void register(true)}><Trash2 size={13} /> Remove {stale.length} from archived products</button>}
           {info.link.syncedAt && <small className="studio-muted">Last registered {when(info.link.syncedAt)}</small>}
         </div>
         {sync && <Rich text={sync.failed.length ? `${sync.note}\n${sync.failed.map((f) => `- ${f.name}: ${f.why}`).join('\n')}` : sync.note} />}
