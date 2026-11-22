@@ -29,7 +29,9 @@ if [ ! -f "$dest/.pinned" ] || [ "$(cat "$dest/.pinned")" != "$NASIKO_SHA" ]; th
 fi
 
 # Small container machines (a laptop's 4 GB Podman machine): compile Nasiko's server with fewer parallel jobs so the build isn't killed for memory.
-if [ -n "${NASIKO_CARGO_JOBS:-}" ] && ! grep -q "CARGO_BUILD_JOBS" "$dest/server/Dockerfile"; then
+if [ -n "${NASIKO_CARGO_JOBS:-}" ] && grep -q "CARGO_BUILD_JOBS" "$dest/server/Dockerfile"; then
+  perl -pi -e "s/CARGO_BUILD_JOBS=\\d+/CARGO_BUILD_JOBS=$NASIKO_CARGO_JOBS/" "$dest/server/Dockerfile"
+elif [ -n "${NASIKO_CARGO_JOBS:-}" ]; then
   awk -v j="$NASIKO_CARGO_JOBS" '{print} /^FROM rust:/{print "ENV CARGO_BUILD_JOBS=" j}' "$dest/server/Dockerfile" > "$dest/server/Dockerfile.tmp" && mv "$dest/server/Dockerfile.tmp" "$dest/server/Dockerfile"
 fi
 
