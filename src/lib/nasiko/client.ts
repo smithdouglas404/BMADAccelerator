@@ -171,7 +171,7 @@ export type Spend = { totalCost: number; operations: number; range: string; agen
 
 /** TokenOps for the last 7 days: what each agent cost, from Nasiko's own records. */
 export async function spend(range: "24h" | "7d" | "30d" = "7d"): Promise<Reply<Spend | null>> {
-  const r = await nasiko<{ data?: { summary?: { total_cost?: number; total_operations?: number }; agents?: { agent_name: string; total_cost: number; operations: number }[] } }>("GET", `/api/finops/dashboard?range=${range}`);
+  const r = await nasiko<{ data?: { summary?: { total_cost?: number; total_operations?: number }; agents?: { agent_name: string; total_cost: number; operations: number }[] } }>("GET", `/api/observability/finops/dashboard?range=${range}`);
   const d = r.body?.data;
   if (!r.ok || !d) return { ...r, body: null };
   return { ...r, body: { totalCost: d.summary?.total_cost ?? 0, operations: d.summary?.total_operations ?? 0, range, agents: (d.agents ?? []).map((a) => ({ name: a.agent_name, cost: a.total_cost, operations: a.operations })) } };
