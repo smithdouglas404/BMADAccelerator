@@ -124,7 +124,13 @@ services:
       # Each use case's generated app gets its own port, so its own link.
       # Change the range in .env if another program already uses one of these ports.
       - "${BACC_PREVIEW_PORT_BASE:-4100}-${BACC_PREVIEW_PORT_LAST:-4129}:${BACC_PREVIEW_PORT_BASE:-4100}-${BACC_PREVIEW_PORT_LAST:-4129}"
+    # Per-agent LiteLLM virtual keys (git-ignored, written by scripts/litellm-keys.sh). Optional: without them every call goes direct.
+    env_file:
+      - path: .env.litellm.keys
+        required: false
     environment:
+      # The LiteLLM gateway (loopback port 4000 on the Mac). Not reachable or no key: the call goes direct, as before.
+      LITELLM_BASE_URL: ${LITELLM_BASE_URL:-http://host.docker.internal:4000}
       DATABASE_URL: postgresql://bacc:bacc@db:5432/bacc
       BACC_PREVIEW_PORT_BASE: ${BACC_PREVIEW_PORT_BASE:-4100}
       BACC_PREVIEW_PORT_LAST: ${BACC_PREVIEW_PORT_LAST:-4129}
