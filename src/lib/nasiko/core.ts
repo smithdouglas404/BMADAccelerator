@@ -208,7 +208,7 @@ export function usageEvent(r: UsageRun, integrationId: string, integrationName: 
 /** What Nasiko said about each event. It answers 200 even when it rejects, so the verdict is read from the body. Unknown shapes count as not stored. */
 export function intakeVerdicts(body: unknown): Map<string, string> {
   const out = new Map<string, string>();
-  const list = Array.isArray(body) ? body : Array.isArray((body as { events?: unknown })?.events) ? (body as { events: unknown[] }).events : Array.isArray((body as { results?: unknown })?.results) ? (body as { results: unknown[] }).results : [];
+  const list = Array.isArray(body) ? body : Array.isArray((body as { events?: unknown })?.events) ? (body as { events: unknown[] }).events : Array.isArray((body as { results?: unknown })?.results) ? (body as { results: unknown[] }).results : Array.isArray((body as { data?: { results?: unknown } })?.data?.results) ? (body as { data: { results: unknown[] } }).data.results : [];
   for (const e of list as { event_id?: string; status?: string }[]) if (e && typeof e.event_id === "string") out.set(e.event_id, String(e.status ?? ""));
   return out;
 }
