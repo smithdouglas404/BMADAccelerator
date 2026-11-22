@@ -21,7 +21,7 @@ set -uo pipefail
 MODE="${1:-}"
 CODE_BRANCH="${SOCRA_BRANCH:-mac-studio}"
 # Release of THIS script (the laptop fixes). Settings > Update compares it with the newest one on GitHub.
-SCRIPT_REV="12"
+SCRIPT_REV="13"
 
 HOME_DIR="$HOME/SocraStudio"
 
@@ -220,9 +220,12 @@ if ! podman compose version 2>/dev/null | grep -qi "docker compose"; then
   export PODMAN_COMPOSE_PROVIDER="$HOME_DIR/bin/docker-compose"
   podman compose version 2>/dev/null | grep -qi "docker compose" || fail "The compose tool didn't work. Details are in $LOG."
 fi
-# 3000 must be free (the Studio never moves off it).
-if lsof -nP -iTCP:3000 -sTCP:LISTEN >/dev/null 2>&1 && ! podman ps --format '{{.Ports}}' | grep -q ':3000->'; then
-  fail "Something else on this laptop is already using port 3000. Quit it (Docker Desktop, another dev server) and run this again."
+# 3000 must be free, or held by Podman itself (the Studio already running here, which this run replaces).
+# Only a program that is not part of Podman's own forwarding counts as "something else".
+OTHER=$(lsof -nP -iTCP:3000 -sTCP:LISTEN -Fc 2>/dev/null | sed -n 's/^c//p' | sort -u \
+  | grep -viE '^(gvproxy|vfkit|krunkit|qemu.*|podman.*|conmon|slirp4netns|passt)$' | head -3 | tr '\n' ' ')
+if [ -n "$OTHER" ] && ! podman ps --format '{{.Ports}}' 2>/dev/null | grep -q ':3000->'; then
+  fail "Something else on this laptop is using port 3000 ($OTHER). Quit it (Docker Desktop, another dev server) and run this again."
 fi
 echo "Podman is ready."
 
