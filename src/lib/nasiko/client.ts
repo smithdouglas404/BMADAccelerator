@@ -66,7 +66,7 @@ let token: string | null = null;
 
 const timeout = (ms = 10_000) => AbortSignal.timeout(ms);
 
-async function note(error: string) {
+export async function note(error: string) {
   await prisma.nasikoLink.update({ where: { id: "global" }, data: error ? { lastError: error.slice(0, 300) } : { lastError: "", lastOkAt: new Date() } }).catch(() => undefined);
 }
 

@@ -2,7 +2,7 @@
 // Settings > Enterprise Harness (powered by Nasiko): the link to your self-hosted Nasiko (an open runtime for agents: one registry, access, cost and
 // traces). Everything shown is read from the real Nasiko server and the Studio's own records.
 import { useEffect, useState } from 'react'
-import { Check, Plug, RefreshCw, Trash2 } from 'lucide-react'
+import { Check, Loader2, Plug, RefreshCw, Trash2 } from 'lucide-react'
 import { api, previewUrl } from './live'
 import { Rich } from './rich'
 
@@ -31,6 +31,8 @@ export function NasikoTab({ setToast }: { setToast: (s: string) => void }) {
   const [info, setInfo] = useState<Info | null>(null)
   const [form, setForm] = useState({ url: '', username: '', password: '' })
   const [busy, setBusy] = useState('')
+  // The result of the last Save and test, shown right under the button (a toast alone can scroll out of sight or vanish).
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null)
   const [sync, setSync] = useState<Sync | null>(null)
   const load = () => void api<Info>('/api/nasiko', { cache: 'no-store' }).then((i) => { setInfo(i); setForm((f) => ({ url: f.url || i.link.url, username: f.username || i.link.username, password: '' })) }).catch((e: Error) => setToast(e.message))
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -38,10 +40,18 @@ export function NasikoTab({ setToast }: { setToast: (s: string) => void }) {
 
   const connect = async () => {
     setBusy('connect')
+    setResult(null)
     try {
       const r = await api<{ signIn: string }>('/api/nasiko', { method: 'PUT', json: { url: form.url, username: form.username, password: form.password || undefined } })
-      setToast(r.signIn === 'ok' ? 'Connected. The Studio signed in to Nasiko and will sign in again by itself every week.' : r.signIn)
-    } catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
+      const ok = r.signIn === 'ok'
+      const text = ok ? 'Connected. The Studio signed in to Nasiko and will sign in again by itself every week.' : r.signIn
+      setResult({ ok, text })
+      setToast(text)
+    } catch (e) {
+      const text = e instanceof Error ? e.message : String(e)
+      setResult({ ok: false, text: text || 'The Studio did not get an answer. Try again.' })
+      setToast(text)
+    }
     setBusy('')
     load()
   }
@@ -76,13 +86,15 @@ export function NasikoTab({ setToast }: { setToast: (s: string) => void }) {
         <div className="studio-kv">
           <label>Address of your Nasiko server<input value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="http://host.docker.internal:8480" /></label>
           <label>User name<input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} placeholder="admin" autoComplete="off" /></label>
-          <label>Password (stored encrypted, never shown again{info.link.passwordSet ? `; saved one ends ${info.link.last4}` : ''})<input type="password" autoComplete="off" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder={info.link.passwordSet ? 'Leave empty to keep the saved one' : 'Set up by scripts/nasiko-up.sh'} /></label>
+          <label>Password (stored encrypted, never shown again{info.link.passwordSet ? `; saved one ends ${info.link.last4}` : ''})<input type="password" autoComplete="off" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder={info.link.passwordSet ? 'Leave empty to keep the saved one' : 'The password your Nasiko gave you'} /></label>
           <div className="studio-review-actions">
-            <button type="button" className="button button-primary" disabled={!form.url.trim() || !form.username.trim() || (!form.password && !info.link.passwordSet) || busy !== ''} onClick={() => void connect()}><Check size={14} /> {busy === 'connect' ? 'Connecting…' : 'Save and test'}</button>
+            <button type="button" className="button button-primary" disabled={!form.url.trim() || !form.username.trim() || (!form.password && !info.link.passwordSet) || busy !== ''} onClick={() => void connect()}>{busy === 'connect' ? <><Loader2 size={14} className="studio-spin" /> Connecting…</> : <><Check size={14} /> Save and test</>}</button>
             {info.link.url && <button type="button" className="button button-quiet" onClick={() => void disconnect()}><Trash2 size={13} /> Disconnect</button>}
           </div>
+          {result && <p role="status" className={result.ok ? 'studio-ok' : 'studio-warn'}>{result.ok ? 'Connected. ' : 'Not connected: '}{result.ok ? result.text.replace(/^Connected\.\s*/, '') : result.text}</p>}
         </div>
-        {!info.link.url && <Rich text={'Your Nasiko is not running yet. To start it on this computer, run scripts/nasiko-up.sh from the Studio folder. It starts Nasiko in Docker on port 8480, creates its passwords and fills in this card.'} />}
+        <Rich text={'Where is your Nasiko? On this computer, the address is http://host.docker.internal:8480. On another computer (for example the Mac that runs it), use the address that computer gives it, such as https://p8480.<your domain>. The Studio checks the address from inside its own container, so “localhost” will not work.'} />
+        {!info.link.url && <Rich text={'No Nasiko is linked yet. To start one on this computer, run scripts/nasiko-up.sh from the Studio folder: it starts Nasiko in Docker on port 8480, creates its passwords and fills in this card. If Nasiko already runs on another computer, enter its address, user name and password above instead.'} />}
       </section>
 
       <section className="studio-card">
