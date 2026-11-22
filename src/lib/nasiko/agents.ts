@@ -102,14 +102,14 @@ export function studioBaseForNasiko() {
   return (process.env.NASIKO_STUDIO_URL || "http://host.docker.internal:3000").replace(/\/+$/, "");
 }
 
-export type SyncResult = { ok: boolean; created: number; updated: number; failed: { name: string; why: string }[]; total: number; note: string };
+export type SyncResult = { ok: boolean; created: number; updated: number; removed: number; failed: { name: string; why: string }[]; total: number; note: string };
 
 /** Registers every Studio agent in Nasiko's catalog by its address; updates the ones already there. Safe to run again. */
-export async function syncToNasiko(studioBase?: string): Promise<SyncResult> {
+export async function syncToNasiko(studioBase?: string, opts: { prune?: boolean } = {}): Promise<SyncResult> {
   const specs = await allSpecs();
   const base = (studioBase || studioBaseForNasiko()).replace(/\/+$/, "");
   const existing = await listAgents();
-  if (!existing.ok) return { ok: false, created: 0, updated: 0, failed: [], total: specs.length, note: existing.error };
+  if (!existing.ok) return { ok: false, created: 0, updated: 0, removed: 0, failed: [], total: specs.length, note: existing.error };
   const byName = new Map(existing.body.map((a) => [a.name, a]));
   let created = 0;
   let updated = 0;
@@ -123,7 +123,20 @@ export async function syncToNasiko(studioBase?: string): Promise<SyncResult> {
     if (r.ok) { if (have) updated++; else created++; }
     else failed.push({ name: s.name, why: r.error });
   }
+  // Agents the Studio no longer has (their product was archived or deleted) leave Nasiko, but only when asked (prune): another Studio
+  // sharing this Nasiko must never wipe agents it does not know. Only names starting "studio-" are ever removed, and only when every
+  // registration above went through and this Studio has its own team agents to compare with.
+  let removed = 0;
+  if (opts.prune && failed.length === 0 && specs.length > 0) {
+    const keep = new Set(specs.map((s) => s.name));
+    for (const a of existing.body) {
+      if (!a.name.startsWith("studio-") || keep.has(a.name)) continue;
+      const r = await nasiko("DELETE", `/api/agents/${a.id}`);
+      if (r.ok) removed++;
+      else failed.push({ name: a.name, why: `could not remove: ${r.error}` });
+    }
+  }
   await prisma.nasikoLink.update({ where: { id: "global" }, data: { syncedAt: new Date() } });
   const l = await getLink();
-  return { ok: failed.length === 0, created, updated, failed, total: specs.length, note: failed.length ? `${failed.length} of ${specs.length} could not be registered. First: ${failed[0].why}` : `${specs.length} agents registered in Nasiko at ${l.url}.` };
+  return { ok: failed.length === 0, created, updated, removed, failed, total: specs.length, note: failed.length ? `${failed.length} could not be registered or removed. First: ${failed[0].name}: ${failed[0].why}` : `${specs.length} agents registered in Nasiko at ${l.url}${removed ? `; ${removed} removed that no longer belong to an active product` : ""}.` };
 }
