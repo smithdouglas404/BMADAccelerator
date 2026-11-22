@@ -23,6 +23,11 @@ fi
 # Run in the background so closing Terminal doesn't stop it.
 if [ -z "${NASIKO_DETACHED:-}" ]; then
   [ -d "$HOME_DIR" ] || { echo "~/SocraStudio isn't here, so the Studio isn't installed on this laptop yet."; exit 1; }
+  # One run at a time: two builds at once starve the Podman machine.
+  if [ -f "$HOME_DIR/.nasiko-pid" ] && kill -0 "$(cat "$HOME_DIR/.nasiko-pid" 2>/dev/null)" 2>/dev/null; then
+    echo "Already running (process $(cat "$HOME_DIR/.nasiko-pid")). Not starting a second one. Check it with:  bash $0 check"
+    exit 0
+  fi
   rm -f "$RESULT"; : > "$OUT"
   NASIKO_DETACHED=1 nohup bash "$0" >>"$OUT" 2>&1 < /dev/null &
   disown 2>/dev/null || true
@@ -30,6 +35,7 @@ if [ -z "${NASIKO_DETACHED:-}" ]; then
   exit 0
 fi
 
+echo $$ > "$HOME_DIR/.nasiko-pid"
 fail() { echo; echo "STOPPED: $*"; echo "failed: $*" > "$RESULT"; exit 1; }
 say() { echo; echo "=== $* ($(date +%H:%M:%S))"; }
 
