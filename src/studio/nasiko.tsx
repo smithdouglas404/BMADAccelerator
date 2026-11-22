@@ -36,6 +36,9 @@ export function NasikoTab({ setToast }: { setToast: (s: string) => void }) {
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null)
   const [sync, setSync] = useState<Sync | null>(null)
   const [usage, setUsage] = useState<Usage | null>(null)
+  const [sentInfo, setSentInfo] = useState<{ sent: number; pending: number } | null>(null)
+  const loadSent = () => void api<{ sent: number; pending: number }>('/api/nasiko/usage', { cache: 'no-store' }).then(setSentInfo).catch(() => undefined)
+  useEffect(() => { loadSent() }, [])
   useEffect(() => { void api<Usage>('/api/usage', { cache: 'no-store' }).then(setUsage).catch(() => undefined) }, [])
   const load = () => void api<Info>('/api/nasiko', { cache: 'no-store' }).then((i) => { setInfo(i); setForm((f) => ({ url: f.url || i.link.url, username: f.username || i.link.username, password: '' })) }).catch((e: Error) => setToast(e.message))
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -63,6 +66,12 @@ export function NasikoTab({ setToast }: { setToast: (s: string) => void }) {
     try { const r = await api<Sync>('/api/nasiko/sync', { method: 'POST', json: prune ? { prune: true } : {} }); setSync(r); setToast(r.note) } catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
     setBusy('')
     load()
+  }
+  const sendUsage = async () => {
+    setBusy('usage')
+    try { const r = await api<{ sent: number; pending: number; error: string }>('/api/nasiko/usage', { method: 'POST' }); setToast(r.error ? `Not sent: ${r.error}` : `${r.sent} run${r.sent === 1 ? '' : 's'} sent to Nasiko.`) } catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
+    setBusy('')
+    loadSent()
   }
   const connectMcp = async () => {
     setBusy('mcp')
@@ -139,7 +148,11 @@ export function NasikoTab({ setToast }: { setToast: (s: string) => void }) {
 
       <section className="studio-card">
         <div className="stack-header"><div><p className="eyebrow">Model use · recorded by the Studio</p><h3>What the Studio’s agents used</h3></div></div>
-        <Rich text={'Every Socra turn and every build is recorded when it ends, from the numbers Claude Code reports (an estimate, not a bill). Socra’s figure includes the specialists she sent out. Not recorded yet: document reading, cleaning up spoken words, Letta and Mem0 (OpenAI) memory calls. Jev keeps its own record on Settings > Jev. None of this passes through Nasiko, so Nasiko’s own cost page stays empty.'} />
+        <Rich text={'Every Socra turn and every build is recorded when it ends, from the numbers Claude Code reports (an estimate, not a bill). Socra’s figure includes the specialists she sent out. Not recorded yet: document reading, cleaning up spoken words, Letta and Mem0 (OpenAI) memory calls. Jev keeps its own record on Settings > Jev. The Studio also sends each run to Nasiko’s usage intake, which prices it from the model name, so the runs show in Nasiko’s own usage pages too (sign-in on Nasiko needed to see them).'} />
+        <div className="studio-review-actions" style={{ margin: '8px 0' }}>
+          <button type="button" className="button button-quiet" disabled={!info.signedIn || busy !== ''} onClick={() => void sendUsage()}>{busy === 'usage' ? 'Sending…' : 'Send to Nasiko now'}</button>
+          {sentInfo && <small className="studio-muted">{sentInfo.sent} sent to Nasiko · {sentInfo.pending} waiting{!info.signedIn ? ' (connect first)' : ''}</small>}
+        </div>
         {!usage || usage.runs === 0 ? <p className="studio-muted">Nothing recorded yet. The next time Socra answers or a build runs, it shows here.</p> : <>
           <p><strong>${usage.totalUsd.toFixed(2)}</strong> over {usage.runs} run{usage.runs === 1 ? '' : 's'} · {usage.tokens.toLocaleString()} tokens{usage.since ? ` · since ${when(usage.since)}` : ''}</p>
           <div className="studio-list">{usage.byAgent.map((a) => <div key={a.agent} className="studio-list-row"><div className="studio-row-main"><strong>{a.agent}</strong><small>{a.runs} run{a.runs === 1 ? '' : 's'} · {a.tokens.toLocaleString()} tokens</small></div><span>${a.usd.toFixed(2)}</span></div>)}</div>

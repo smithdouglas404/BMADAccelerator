@@ -696,6 +696,7 @@ model LlmUsage {
   cumInput     Int      @default(0)
   cumOutput    Int      @default(0)
   cumCache     Int      @default(0)
+  sentToNasiko Boolean  @default(false)
   baseline     Boolean  @default(false) // first sight of a resumed session: its earlier cost is not ours to count
   ms           Int      @default(0)
   at           DateTime @default(now())

@@ -96,7 +96,7 @@ export async function login(): Promise<string> {
 export type Reply<T = unknown> = { ok: boolean; status: number; body: T; error: string };
 
 /** A call to Nasiko's API as the Studio's account. Signs in first (and again after 6 days, or on a 401). Never throws. */
-export async function nasiko<T = unknown>(method: string, path: string, body?: unknown): Promise<Reply<T>> {
+export async function nasiko<T = unknown>(method: string, path: string, body?: unknown, extraHeaders?: Record<string, string>): Promise<Reply<T>> {
   const l = await getLink();
   if (!l.enabled) return { ok: false, status: 0, body: null as T, error: "Nasiko is switched off here." };
   if (!l.url) return { ok: false, status: 0, body: null as T, error: "Nasiko is not set up yet." };
@@ -104,7 +104,7 @@ export async function nasiko<T = unknown>(method: string, path: string, body?: u
     try {
       const res = await fetch(`${l.url}${path}`, {
         method,
-        headers: { Authorization: `Bearer ${token}`, ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
+        headers: { Authorization: `Bearer ${token}`, Cookie: `access_token=${token}`, ...(extraHeaders ?? {}), ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
         body: body === undefined ? undefined : JSON.stringify(body),
         signal: timeout(20_000),
       });

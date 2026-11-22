@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { pushPendingUsage } from "@/lib/nasiko/usage";
 import { totalsOf, usageDelta, type ResultLike } from "@/lib/agent/usageCore";
 
 // Records what each Claude run used and cost (the pure parts, and why a resumed session is counted once, are in usageCore.ts).
@@ -13,6 +14,7 @@ export async function recordUsage(o: { useCaseId: string; turnId?: string; sessi
     await prisma.llmUsage.create({
       data: { useCaseId: o.useCaseId, turnId: o.turnId ?? "", sessionId: o.sessionId, agent: o.agent, kind: o.kind, model, auth: o.auth, inputTokens: delta.input, outputTokens: delta.output, cacheTokens: delta.cache, costUsd: delta.cost, cumCostUsd: totals.cost, cumInput: totals.input, cumOutput: totals.output, cumCache: totals.cache, baseline, ms: o.result.duration_ms ?? 0 },
     });
+    void pushPendingUsage().catch(() => undefined);
   } catch (e) {
     console.warn("usage not recorded", e instanceof Error ? e.message : e);
   }
