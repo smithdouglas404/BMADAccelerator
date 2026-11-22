@@ -10,7 +10,7 @@ import type { ViewId } from './data'
 import { api, initials, type Live, type StudioMessage } from './live'
 import { journey, needsTriage, hasDetail, questionTally } from '@/lib/studio/journey'
 
-type Act = (fn: () => Promise<unknown>, ok?: string) => Promise<void>
+type Act = (fn: () => Promise<unknown>, ok?: string, opts?: { rethrow?: boolean }) => Promise<void>
 
 /** The Studio's views: the team's ten plus a full-width place to try the product and mark it up. 'trd' is the
  *  Living specification opened on its technical tab, so the TRD has its own place under Technology. */

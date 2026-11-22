@@ -1,6 +1,7 @@
 'use client'
 // Settings: models and keys, MCP connectors (for every product or chosen ones), Agent Skills, and memory.
 // Keys and connector secrets go in once, are stored encrypted, and are never shown again (last four only).
+import { SaveButton, useSaveState } from './savestate'
 import { useEffect, useState } from 'react'
 import { Check, Plug, Plus, Trash2, Upload, Wrench } from 'lucide-react'
 import { api } from './live'
@@ -47,19 +48,20 @@ export function SettingsPage() {
 
 function KeyRow({ k, onSaved, setToast }: { k: KeyStatus; onSaved: (s: Status) => void; setToast: (s: string) => void }) {
   const [value, setValue] = useState('')
+  const { state: saveState, run } = useSaveState()
   const save = async () => {
-    try {
+    const ok = await run(async () => {
       onSaved(await api<Status>('/api/settings/models', { method: 'PUT', json: { action: 'key', env: k.env, value } }))
       setValue('')
-      setToast(`${k.name} saved. It is stored encrypted and never shown again.`)
-    } catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
+    })
+    if (ok) setToast(`${k.name} saved. It is stored encrypted and never shown again.`)
   }
   const remove = async () => onSaved(await api<Status>('/api/settings/models', { method: 'PUT', json: { action: 'removeKey', env: k.env } }))
   return (
     <div className="studio-list-row">
       <div className="studio-row-main"><strong>{k.name}</strong><small>{k.source === 'missing' ? 'not set' : `set (${k.source === 'saved' ? 'here' : '.env'}) · ends ${k.last4}`}</small></div>
       {k.source === 'saved' ? <button type="button" className="button button-quiet button-small" onClick={() => void remove()}>Remove</button> : <span />}
-      <div className="studio-review-actions"><input className="studio-input" style={{ marginTop: 0, flex: 1 }} type="password" autoComplete="off" value={value} onChange={(e) => setValue(e.target.value)} placeholder={k.source === 'missing' ? 'Paste the key here (never in chat)' : 'Replace the key'} /><button type="button" className="button button-primary button-small" disabled={!value.trim()} onClick={() => void save()}>Save</button></div>
+      <div className="studio-review-actions"><input className="studio-input" style={{ marginTop: 0, flex: 1 }} type="password" autoComplete="off" value={value} onChange={(e) => setValue(e.target.value)} placeholder={k.source === 'missing' ? 'Paste the key here (never in chat)' : 'Replace the key'} /><SaveButton state={saveState} label="Save" disabled={!value.trim()} onClick={() => void save()} /></div>
     </div>
   )
 }

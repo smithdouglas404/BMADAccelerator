@@ -12,6 +12,7 @@ import { ASSISTANT_NAME } from '@/lib/brand'
 import { api, ago, type Live } from './live'
 import type { Me, StudioView } from './flow'
 import { DocumentPanel } from './sources'
+import { SaveButton, useSaveState } from './savestate'
 import { ItemQuestions, ItemTraceability, useItemTrace } from './itemtrace'
 
 type Status = 'queued' | 'ready' | 'building' | 'review' | 'done'
@@ -204,7 +205,7 @@ function CardPanel({ live, me, id, by, guide, start = false, onClose, onMove, se
   const [d, setD] = useState<CardDetail | null>(null)
   const [error, setError] = useState('')
   const [draft, setDraft] = useState<Partial<CardDetail['move']>>({})
-  const [saving, setSaving] = useState(false)
+  const { state: saveState, run: runSave, reset: resetSave } = useSaveState()
   const [uploading, setUploading] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
   // A double-click opens the card on its first click; its second click must not land on the backdrop and close it.
@@ -228,13 +229,11 @@ function CardPanel({ live, me, id, by, guide, start = false, onClose, onMove, se
   const save = async () => {
     if (!m || !dirty) return
     if (!String(val('title')).trim()) { setToast('A card needs a title.'); return }
-    setSaving(true)
-    try {
+    const ok = await runSave(async () => {
       await api(`/api/use-cases/${live.id}/moves/${id}`, { method: 'PATCH', json: { ...draft, by } })
       setDraft({}); await load()
-      setToast(`Saved. ${ASSISTANT_NAME} will carry the change into the spec.`)
-    } catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
-    finally { setSaving(false) }
+    })
+    if (ok) setToast(`Saved. ${ASSISTANT_NAME} will carry the change into the spec.`)
   }
   const attach = async (list: FileList | null) => {
     const files = Array.from(list ?? [])
@@ -275,7 +274,7 @@ function CardPanel({ live, me, id, by, guide, start = false, onClose, onMove, se
         </div>
         <label className="studio-card-field"><span>Decision it traces to</span><textarea rows={2} value={val('decision')} onChange={(e) => setDraft({ ...draft, decision: e.target.value })} placeholder="The decision or promise this card delivers" /></label>
         <label className="studio-card-field"><span>Details and acceptance criteria</span><textarea ref={details} rows={8} value={promptShown} onChange={(e) => setDraft({ ...draft, prompt: e.target.value })} placeholder="What it does, for whom, and how we'll know it works" /></label>
-        <div className="studio-card-actions"><button className="button button-primary button-small" type="button" disabled={!dirty || saving} onClick={() => void save()}><Check size={13} /> {saving ? 'Saving…' : 'Save changes'}</button>{dirty && <button className="button button-quiet button-small" type="button" onClick={() => setDraft({})}>Undo edits</button>}</div>
+        <div className="studio-card-actions"><SaveButton state={saveState} disabled={!dirty} onClick={() => void save()} />{dirty && <button className="button button-quiet button-small" type="button" onClick={() => { setDraft({}); resetSave() }}>Undo edits</button>}</div>
 
         <section className="studio-card-section"><div className="studio-card-section-head"><span className="eyebrow"><Paperclip size={11} /> Files · {d!.files.length}</span><button className="text-button" type="button" disabled={uploading} onClick={() => fileInput.current?.click()}><Upload size={12} /> {uploading ? 'Attaching…' : 'Attach files'}</button><input ref={fileInput} type="file" multiple hidden onChange={(e) => void attach(e.target.files)} /></div>
           {d!.files.length === 0 ? <p className="studio-card-empty">Drop screens, specs, data or recordings here. {ASSISTANT_NAME} reads them as evidence for this card.</p> :
