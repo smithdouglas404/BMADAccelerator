@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db";
 import { convertToText } from "@/lib/provision";
 import { query, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { authEnv, authOrder, claudeConfigured, type Auth } from "@/lib/agent/auth";
-import { anthropicUsage, tracked } from "@/lib/llm/ledger";
+import { anthropicUsage, tracked, withAnthropic } from "@/lib/llm/ledger";
 import { recordUsage } from "@/lib/agent/usage";
 
 /** Who a small model job is for, so its tokens and cost are recorded (src/lib/llm/ledger.ts): the product, who ran it and why. */
@@ -18,8 +18,8 @@ function planRecord(ctx: JobCtx, m: { session_id?: string; subtype?: string; is_
 }
 
 /** One small job on the API key: the Messages API call, recorded from the usage it reports. */
-function keyCall<T extends { model?: string }>(ctx: JobCtx, run: () => PromiseLike<T>): Promise<T> {
-  return tracked({ agent: ctx.agent, kind: ctx.kind, purpose: ctx.purpose, provider: "anthropic", model: docModel() }, { useCaseId: ctx.useCaseId }, async () => run(), (r) => anthropicUsage(r as never));
+function keyCall<T extends { model?: string }>(ctx: JobCtx, run: (client: Anthropic) => PromiseLike<T>): Promise<T> {
+  return tracked({ agent: ctx.agent, kind: ctx.kind, purpose: ctx.purpose, provider: "anthropic", model: docModel() }, { useCaseId: ctx.useCaseId }, async () => withAnthropic(ctx.agent, ctx.kind, run), (r) => anthropicUsage(r as never));
 }
 
 /** Socra, its team and Claude Code. Sonnet: about half Opus's price, strong enough for planning and building. */
@@ -113,7 +113,7 @@ ${text}
 
 /** The API key path: one Messages API call with a structured answer. */
 async function suggestWithKey(prompt: string, ctx: JobCtx) {
-  const response = await keyCall(ctx, () => new Anthropic().messages.parse({
+  const response = await keyCall(ctx, (client) => client.messages.parse({
     model: docModel(),
     max_tokens: 6000,
     output_config: { effort: "low", format: zodOutputFormat(Suggestion) },
@@ -177,7 +177,7 @@ export async function cleanSpeech(raw: string, useCaseId = ""): Promise<string> 
           }
         }
       } else {
-        const response = await keyCall(ctx, () => new Anthropic().messages.parse({ model: docModel(), max_tokens: 8000, output_config: { effort: "low", format: zodOutputFormat(Cleaned) }, messages: [{ role: "user", content: prompt }] }));
+        const response = await keyCall(ctx, (client) => client.messages.parse({ model: docModel(), max_tokens: 8000, output_config: { effort: "low", format: zodOutputFormat(Cleaned) }, messages: [{ role: "user", content: prompt }] }));
         const t = response.parsed_output?.text?.trim();
         if (t) return t;
       }
@@ -210,7 +210,7 @@ export async function lowCostAnswer<T>(prompt: string, schema: z.ZodType<T>, max
           }
         }
       } else {
-        const response = await keyCall(ctx, () => new Anthropic().messages.parse({ model: docModel(), max_tokens: maxTokens, output_config: { effort: "low", format: zodOutputFormat(schema) }, messages: [{ role: "user", content: prompt }] }));
+        const response = await keyCall(ctx, (client) => client.messages.parse({ model: docModel(), max_tokens: maxTokens, output_config: { effort: "low", format: zodOutputFormat(schema) }, messages: [{ role: "user", content: prompt }] }));
         if (response.stop_reason !== "refusal" && response.parsed_output) return response.parsed_output as T;
       }
     } catch (e) {

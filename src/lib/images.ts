@@ -1,6 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
-import { guessTokens, recordCall } from "@/lib/llm/ledger";
+import { guessTokens, openaiFetch, recordCall } from "@/lib/llm/ledger";
 
 // AI images for generated apps, made with OpenAI's image model on the owner's OPENAI_API_KEY.
 // The key stays in the accelerator: Generate asks for an image through a tool and gets back a file.
@@ -17,9 +17,9 @@ export async function makeImage(prompt: string, size: ImageSize, file: string, u
   let lastError = "";
   for (const model of MODELS) {
     const t0 = Date.now();
-    const r = await fetch(`${(process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/+$/, "")}/images/generations`, {
+    const r = await openaiFetch("Image maker", "image", "/images/generations", {
       method: "POST",
-      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model, prompt, size, n: 1, quality: process.env.BACC_IMAGE_QUALITY || "medium", output_format: format }),
       signal: AbortSignal.timeout(180_000),
     });

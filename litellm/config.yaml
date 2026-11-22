@@ -1,0 +1,19 @@
+# LiteLLM gateway for the Studio's API-key model calls (one place for per-agent keys, budgets and spend).
+# Models are listed under the exact names the Studio already uses; prices are US dollars per token, the same
+# figures as src/lib/llm/ledgerCore.ts (LiteLLM's own table may not know a newer model).
+model_list:
+  - model_name: claude-haiku-5-5
+    litellm_params: { model: anthropic/claude-haiku-5-5, api_key: os.environ/ANTHROPIC_API_KEY, input_cost_per_token: 0.000001, output_cost_per_token: 0.000005 }
+  - model_name: claude-sonnet-5-5
+    litellm_params: { model: anthropic/claude-sonnet-5-5, api_key: os.environ/ANTHROPIC_API_KEY, input_cost_per_token: 0.000003, output_cost_per_token: 0.000015 }
+  - model_name: gpt-4.1-mini
+    litellm_params: { model: openai/gpt-4.1-mini, api_key: os.environ/OPENAI_API_KEY, input_cost_per_token: 0.0000004, output_cost_per_token: 0.0000016 }
+  - model_name: text-embedding-3-small
+    litellm_params: { model: openai/text-embedding-3-small, api_key: os.environ/OPENAI_API_KEY, input_cost_per_token: 0.00000002 }
+  - model_name: gpt-image-2
+    litellm_params: { model: openai/gpt-image-2, api_key: os.environ/OPENAI_API_KEY }
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+litellm_settings:
+  drop_params: true

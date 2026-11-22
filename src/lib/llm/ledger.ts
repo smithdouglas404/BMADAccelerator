@@ -1,17 +1,19 @@
+import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/db";
 import { pushPendingUsage } from "@/lib/nasiko/usage";
 import { currentCauses, currentTurnId } from "@/lib/studio/truthlog";
-import { costOf, estimateTokens, nextAttempt, type Call } from "@/lib/llm/ledgerCore";
+import { costOf, estimateTokens, gatewayIsDown, gatewayKeyFor, nextAttempt, type Call } from "@/lib/llm/ledgerCore";
 import { totalsOf, usageDelta, type ResultLike } from "@/lib/agent/usageCore";
 
 // THE ONE PLACE every model call the Studio makes is recorded (Doug, Nov 22): LlmUsage, shown on Settings > Enterprise Harness
 // and sent to Nasiko's usage intake. Each call site hands its numbers to recordCall (or wraps the call in tracked); nothing
 // else writes the table. Recording never throws: a record must not stop a call.
 //
-// LiteLLM, later (Doug, Nov 22): if the Studio's model calls are routed through a LiteLLM gateway, this file is the only
-// place that changes: point the SDK base URLs at the gateway and read its per-call usage (or its spend log) here instead
-// of at each call site. The call sites already hand over provider, model and tokens in one shape (Call, in ledgerCore.ts).
-// Not built now.
+// The LiteLLM gateway (Doug, Nov 22): when LITELLM_BASE_URL is set and an agent has its own virtual key (LITELLM_KEY_<AGENT>,
+// for example LITELLM_KEY_DOCUMENT_READER), that agent's API-key calls go through LiteLLM, which keeps spend and a budget per
+// key. Recording stays here, so the Studio ledger (and Nasiko's usage intake) still see every call. When the gateway is
+// not there (down, no connection), the call goes direct with the Studio's own key, exactly as before; a refusal the gateway
+// gives on purpose (a spent budget) is not gone around. The Max-login Claude Code runs never use it.
 
 // Calls come in bursts (a turn recalls memory several times), so the send to Nasiko waits a moment and goes once.
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -115,5 +117,47 @@ export async function recordClaudeRun(o: { useCaseId: string; turnId?: string; s
     );
   } catch (e) {
     console.warn("usage not recorded", e instanceof Error ? e.message : e);
+  }
+}
+
+
+// ---- the LiteLLM gateway ----
+
+/** The gateway address, or null when the gateway is not set up. */
+export const gatewayUrl = () => (process.env.LITELLM_BASE_URL || "").replace(/\/+$/, "") || null;
+
+/** The gateway's address and this agent's own key, or null when the call should go direct. */
+export function gatewayFor(agent: string, kind: string): { baseUrl: string; key: string } | null {
+  const baseUrl = gatewayUrl();
+  const key = baseUrl ? gatewayKeyFor(agent, kind, process.env) : null;
+  return baseUrl && key ? { baseUrl, key } : null;
+}
+
+/** Runs an Anthropic Messages call under the agent's own LiteLLM key; with no gateway, or when it is down, with the Studio's own key. */
+export async function withAnthropic<T>(agent: string, kind: string, run: (client: Anthropic) => PromiseLike<T>): Promise<T> {
+  const g = gatewayFor(agent, kind);
+  if (!g) return run(new Anthropic());
+  try {
+    return await run(new Anthropic({ baseURL: g.baseUrl, apiKey: g.key, maxRetries: 0, timeout: 120_000 }));
+  } catch (e) {
+    if (!gatewayIsDown(e)) throw e;
+    console.warn("LiteLLM gateway not reachable; calling Anthropic directly");
+    return run(new Anthropic());
+  }
+}
+
+/** An OpenAI-style request (pictures, and anything else on that wire): through the gateway under the agent's key, else direct. */
+export async function openaiFetch(agent: string, kind: string, path: string, init: Omit<RequestInit, "headers"> & { headers?: Record<string, string> }): Promise<Response> {
+  const direct = () => fetch(`${(process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/+$/, "")}${path}`, { ...init, headers: { ...init.headers, Authorization: `Bearer ${process.env.OPENAI_API_KEY}` } });
+  const g = gatewayFor(agent, kind);
+  if (!g) return direct();
+  try {
+    const r = await fetch(`${g.baseUrl}/v1${path}`, { ...init, headers: { ...init.headers, Authorization: `Bearer ${g.key}` } });
+    if (r.status === 502 || r.status === 503 || r.status === 504) throw Object.assign(new Error("gateway answered " + r.status), { status: r.status });
+    return r;
+  } catch (e) {
+    if (!gatewayIsDown(e)) throw e;
+    console.warn("LiteLLM gateway not reachable; calling OpenAI directly");
+    return direct();
   }
 }
