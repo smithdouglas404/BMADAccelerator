@@ -21,7 +21,7 @@ set -uo pipefail
 MODE="${1:-}"
 CODE_BRANCH="${SOCRA_BRANCH:-mac-studio}"
 # Release of THIS script (the laptop fixes). Settings > Update compares it with the newest one on GitHub.
-SCRIPT_REV="13"
+SCRIPT_REV="14"
 
 HOME_DIR="$HOME/SocraStudio"
 
@@ -454,11 +454,11 @@ done
 [ "$GOOD" -ge 2 ] || fail "The Studio did NOT answer on localhost:3000 after 4 minutes. It may still be starting. Wait a few minutes and run the check line; if it still says not answering, send me that screen."
 
 # The updater behind Settings > Update: a tiny local service (127.0.0.1:3099 only), started by macOS at login.
+# The script that is running is already the newest one (the line and the updater both fetch it at an exact commit);
+# it is never re-downloaded here, because a cached branch copy could replace it with an older one.
 # Its file is refreshed on every run (a running updater notices and restarts itself); the login service is set up
 # only from a normal run, never while the updater itself is running this update.
 mkdir -p "$HOME_DIR/bin" "$HOME/Library/LaunchAgents"
-curl -fsSL --max-time 30 "https://raw.githubusercontent.com/smithdouglas404/BMADAccelerator/claude/project-thread-i43blx/scripts/laptop/start-on-laptop.sh" -o "$HOME_DIR/bin/socra.sh.new" \
-  && grep -q "^SCRIPT_REV=" "$HOME_DIR/bin/socra.sh.new" && mv "$HOME_DIR/bin/socra.sh.new" "$HOME_DIR/bin/socra.sh"
   cat > "$HOME_DIR/bin/updater.pl" <<'PERL'
 #!/usr/bin/perl
 # Socra Studio updater for the laptop. Runs on the laptop itself (not in Podman), started by launchd.
@@ -478,7 +478,8 @@ my $RES  = "$DIR/.update.result";
 my $VER  = "$DIR/.version";
 my $SREV = "$DIR/.script-rev";
 my $STARTED = (stat($0))[9] // 0;   # when this file last changed; a newer file means "restart me"
-my $SCRIPT_URL = "https://raw.githubusercontent.com/smithdouglas404/BMADAccelerator/claude/project-thread-i43blx/scripts/laptop/start-on-laptop.sh";
+my $SCRIPT_BRANCH = "claude/project-thread-i43blx";
+my $RAW = "https://raw.githubusercontent.com/smithdouglas404/BMADAccelerator";
 my @ORIGINS = ("http://localhost:3000", "http://127.0.0.1:3000");
 $ENV{PATH} = "/opt/podman/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
 
@@ -491,16 +492,30 @@ sub slurp { my $f = shift; open(my $h, '<', $f) or return ''; local $/; my $s = 
 sub jstr { my $s = shift // ''; $s =~ s/\\/\\\\/g; $s =~ s/"/\\"/g; $s =~ s/\r//g; $s =~ s/\n/\\n/g; $s =~ s/\t/  /g; $s =~ s/[\x00-\x1f]//g; "\"$s\"" }
 sub running { my $p = slurp($PIDF); $p =~ s/\D//g; return ($p && kill(0, $p)) ? $p : 0 }
 sub latest_sha {
-  if (time - $latest_at > 60) {
+  if (time - $latest_at > 300) {
     my $j = `curl -fsS --max-time 10 https://api.github.com/repos/smithdouglas404/BMADAccelerator/branches/mac-studio 2>/dev/null`;
     if ($j =~ /"commit"\s*:\s*\{\s*"sha"\s*:\s*"([0-9a-f]{40})"/) { $latest = $1; $latest_at = time }
   }
   $latest
 }
+# raw.githubusercontent.com keeps a branch address cached for minutes, so a branch URL can hand back an OLD script.
+# Ask the API which commit the branch is at, then fetch the script at that exact commit (never stale).
+my ($sscript_sha, $sscript_sha_at) = ('', 0);
+sub script_sha {
+  my $force = shift;
+  if ($force || time - $sscript_sha_at > 300 || !$sscript_sha) {
+    my $j = `curl -fsS --max-time 10 https://api.github.com/repos/smithdouglas404/BMADAccelerator/branches/$SCRIPT_BRANCH 2>/dev/null`;
+    if ($j =~ /"commit"\s*:\s*\{\s*"sha"\s*:\s*"([0-9a-f]{40})"/) { $sscript_sha = $1; $sscript_sha_at = time }
+  }
+  $sscript_sha
+}
 sub latest_script_rev {
-  if (time - $slatest_at > 60) {
-    my $t = `curl -fsS --max-time 10 '$SCRIPT_URL' 2>/dev/null`;
-    if ($t =~ /^SCRIPT_REV="?(\d+)"?/m) { $slatest = $1; $slatest_at = time }
+  if (time - $slatest_at > 300) {
+    my $sha = script_sha(0);
+    if ($sha) {
+      my $t = `curl -fsS --max-time 10 '$RAW/$sha/scripts/laptop/start-on-laptop.sh' 2>/dev/null`;
+      if ($t =~ /^SCRIPT_REV="?(\d+)"?/m) { $slatest = $1; $slatest_at = time }
+    }
   }
   $slatest
 }
@@ -524,8 +539,10 @@ sub start_update {
     POSIX::setsid();
     $ENV{SOCRA_UPDATER} = 1;
     open(STDIN, '<', '/dev/null'); open(STDOUT, '>', $LOG); open(STDERR, '>&', \*STDOUT);
-    # Fresh copy of the script first, so fixes to the updater reach the laptop too.
-    system("curl -fsSL --max-time 30 '$SCRIPT_URL' -o '$DIR/bin/socra.sh.new' && mv '$DIR/bin/socra.sh.new' '$DIR/bin/socra.sh'");
+    # Fresh copy of the script first, fetched at the exact newest commit (see script_sha), so fixes reach the laptop.
+    my $sha = script_sha(1);
+    my $got = $sha ? system("curl -fsSL --max-time 30 '$RAW/$sha/scripts/laptop/start-on-laptop.sh' -o '$DIR/bin/socra.sh.new' && grep -q '^SCRIPT_REV=' '$DIR/bin/socra.sh.new' && mv '$DIR/bin/socra.sh.new' '$DIR/bin/socra.sh'") : 1;
+    print "(Couldn't fetch the newest script; using the one already here.)\n" if $got;
     my $rc = system('/bin/bash', "$DIR/bin/socra.sh", 'update');
     open(my $r, '>', $RES); print $r ($rc == 0 ? "done\n" : "failed\n"); close $r;
     unlink $PIDF; POSIX::_exit(0);
