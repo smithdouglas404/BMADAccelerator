@@ -50,11 +50,16 @@ echo "The Studio has the Nasiko pieces and answers on localhost:3000."
 
 say "Step 2: Podman"
 command -v podman >/dev/null || fail "podman isn't installed."
-podman machine start >/dev/null 2>&1 || true
-podman info >/dev/null 2>&1 || fail "Podman isn't answering. Start Podman Desktop (or: podman machine start) and run this again."
+# Never start or create a machine here: use the one that is already running (this laptop's is "podman-smith").
+podman info >/dev/null 2>&1 || fail "Podman isn't answering. Start Podman Desktop and run this again."
+MACH=$(podman machine list --format '{{.Name}}|{{.Running}}' 2>/dev/null | tr -d '*' | awk -F'|' '$2=="true"{print $1; exit}')
+[ -n "$MACH" ] || MACH=$(podman system connection list --format '{{.Name}} {{.Default}}' 2>/dev/null | awk '$2=="true"{sub(/-root$/,"",$1); print $1; exit}')
+[ -n "$MACH" ] || fail "I can't tell which Podman machine is running. Send Claude the output of: podman machine list"
+echo "Podman machine in use: $MACH"
+mssh() { podman machine ssh "$MACH" "$@"; }
 podman compose version >/dev/null 2>&1 || fail "'podman compose' isn't available."
 # The container socket INSIDE Podman's machine. Our 12 agents run in the Studio, so Nasiko doesn't need it; if none is found an empty file stands in.
-SOCK=$(podman machine ssh 'ls /run/user/*/podman/podman.sock /run/podman/podman.sock 2>/dev/null | head -1' 2>/dev/null | tr -d '\r' | head -1)
+SOCK=$(mssh 'ls /run/user/*/podman/podman.sock /run/podman/podman.sock 2>/dev/null | head -1' 2>/dev/null | tr -d '\r' | head -1)
 [ -n "$SOCK" ] || SOCK=/dev/null
 echo "Container socket: $SOCK"
 if lsof -nP -iTCP:8480 -sTCP:LISTEN >/dev/null 2>&1 && ! podman ps --format '{{.Ports}}' | grep -q ':8480->'; then
@@ -77,21 +82,21 @@ run_nasiko() {
 }
 diag() {
   echo "--- Podman's machine: disk and storage"
-  podman machine ssh 'df -h /var /var/lib/containers 2>/dev/null; echo; dmesg 2>/dev/null | grep -iE "i/o error|overlay|ext4|xfs|no space" | tail -n 8' 2>&1 | tail -n 25
+  mssh 'df -h /var /var/lib/containers 2>/dev/null; echo; dmesg 2>/dev/null | grep -iE "i/o error|overlay|ext4|xfs|no space" | tail -n 8' 2>&1 | tail -n 25
   podman system df 2>&1 | head -n 8
 }
 
-# A failed storage mount ("input/output error" while mounting a build container) is Podman's machine storage, not Nasiko.
-# Try 1. If that error comes back: clear only unused build leftovers and dangling images (nothing the Studio uses) and try again.
-# Try 3: restart Podman's machine, bring the Studio back up, and try again.
-if ! run_nasiko; then
+# Podman's machine sometimes refuses to mount a build container with "overlayfs: Cannot mount volatile when upperdir has an unseen error.
+# Sync upperdir fs to clear state" (shows up as "input/output error"). Syncing the machine's disk clears it, so do that before every try.
+flush() { mssh 'sync; sync' >/dev/null 2>&1; }
+if ! { flush; run_nasiko; }; then
   if grep -qi "input/output error\|no space left" "$HOME_DIR/nasiko-build.txt"; then
-    say "Podman's storage reported an error. Cleaning unused leftovers and trying again"
+    say "Podman's storage reported an error. Syncing its disk and trying again"
     diag
-    podman image prune -f >/dev/null 2>&1; podman builder prune -f >/dev/null 2>&1 || true
-    if ! run_nasiko; then
-      say "Still failing. Restarting Podman's machine (the Studio comes back up after it), then trying again"
-      podman machine stop >/dev/null 2>&1; sleep 5; podman machine start >/dev/null 2>&1; sleep 15
+    flush; podman builder prune -f >/dev/null 2>&1 || true
+    if ! { flush; run_nasiko; }; then
+      say "Still failing. Restarting the Podman machine $MACH (the Studio goes down for a minute and comes back), then trying again"
+      podman machine stop "$MACH" >/dev/null 2>&1; sleep 5; podman machine start "$MACH" >/dev/null 2>&1; sleep 15
       ( cd "$APP" && podman compose up -d >/dev/null 2>&1 ) || echo "(could not restart the Studio; run: bash ~/SocraStudio/bin/socra.sh check)"
       for _ in $(seq 1 30); do curl -fsS --max-time 5 http://localhost:3000 >/dev/null 2>&1 && break; sleep 5; done
       run_nasiko || { diag; fail "Nasiko did not come up. The last output is in $HOME_DIR/nasiko-build.txt. Send it to Claude."; }
