@@ -38,4 +38,4 @@ server {
 }
 ```
 
-This block is now in connector-gate/preview-router.conf (plus `extra_hosts` on `preview-router` in docker-compose.yml). It goes live only when the router is restarted (`docker compose --profile public up -d preview-router`), which needs the owner's OK. Security note: the public Studio has no sign-in on the Mac, so Nasiko's own admin password would be the only lock on a runtime whose server holds the Docker socket. Put Cloudflare Access (email sign-in) in front of `p8480` before opening it.
+This block is now in connector-gate/preview-router.conf (plus `extra_hosts` on `preview-router` in docker-compose.yml). It goes live only when the router is restarted (`docker compose --profile public up -d preview-router`), which needs the owner's OK. Security note: the public Studio has no sign-in on the Mac, so Nasiko's own admin password would be the only lock on a runtime whose server holds the Docker socket. Doug chose (Nov 22) to leave Cloudflare Access off; Nasiko's own user and its generated 24-character password are the lock. Cloudflare Access can be added later without code changes.
