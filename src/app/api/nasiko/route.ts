@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { clearLink, getLink, health, listAgents, login, publicLink, saveLink, spend } from "@/lib/nasiko/client";
+import { clearLink, getLink, health, listAgents, login, note, publicLink, saveLink, spend } from "@/lib/nasiko/client";
 import { allSpecs } from "@/lib/nasiko/agents";
 import { listConnectors } from "@/lib/nasiko/mcp";
 
@@ -36,7 +36,8 @@ export async function PUT(req: NextRequest) {
   }
   // Prove the sign-in right away, so a wrong password is said here and not on the next page load.
   const link = await getLink();
-  const why = link.url && link.username && link.cipher ? await login() : "";
+  const why = link.url && link.username && link.cipher ? await login() : "Add the address, the user name and the password, then try again.";
+  await note(why);
   return NextResponse.json({ link: publicLink(await getLink()), signIn: why || "ok" });
 }
 
