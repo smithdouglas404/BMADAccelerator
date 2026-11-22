@@ -80,34 +80,47 @@ if lsof -nP -iTCP:8480 -sTCP:LISTEN >/dev/null 2>&1 && ! podman ps --format '{{.
   fail "Something else on this laptop uses port 8480."
 fi
 
+# A server image built on the Mac (arm64) can be loaded instead of compiling here: put nasiko-server-arm64.tar.gz in ~/Downloads (AirDrop it), or set NASIKO_IMAGE_FILE.
+IMGFILE="${NASIKO_IMAGE_FILE:-$HOME/Downloads/nasiko-server-arm64.tar.gz}"
+if [ -f "$IMGFILE" ]; then
+  say "Loading the prebuilt Nasiko server image ($IMGFILE). Nothing is compiled on this laptop"
+  gunzip -c "$IMGFILE" | podman load >>"$OUT" 2>&1 || fail "The image file didn't load. See $OUT."
+  podman image exists localhost/bacc-nasiko-server:latest || podman image exists bacc-nasiko-server:latest || fail "The loaded file didn't contain bacc-nasiko-server. Ask Claude to re-export it."
+  export NASIKO_NO_BUILD=1
+  if ! curl -fsS --max-time 5 http://localhost:3000 >/dev/null 2>&1; then
+    ( cd "$APP" && podman compose up -d >>"$OUT" 2>&1 ); for _ in $(seq 1 60); do curl -fsS --max-time 5 http://localhost:3000 >/dev/null 2>&1 && break; sleep 5; done
+  fi
+else
 # Memory first. Nasiko's server compile needs about 3 GB by itself; with the Studio running in the same machine it needs ~6 GB.
-# Raise the machine to 8 GB (or as much as leaves 4 GB for macOS), once. This restarts the machine, so the Studio is brought back right after.
-HOSTMB=$(( $(sysctl -n hw.memsize 2>/dev/null || echo 0) / 1048576 ))
-WANT=8192; [ "$HOSTMB" -gt 0 ] && [ $((HOSTMB - 4096)) -lt "$WANT" ] && WANT=$((HOSTMB - 4096))
-CURMB=$(podman machine inspect "$MACH" --format '{{.Resources.Memory}}' 2>/dev/null | head -1)
-echo "This Mac: ${HOSTMB} MB. Podman machine $MACH: ${CURMB:-?} MB. Target: ${WANT} MB."
-if [ -n "$CURMB" ] && [ "$CURMB" -lt "$WANT" ] 2>/dev/null && [ "$WANT" -ge 6000 ]; then
-  say "Raising $MACH from ${CURMB} MB to ${WANT} MB (restarts the machine; the Studio comes back right after)"
-  podman machine stop "$MACH" >>"$OUT" 2>&1
-  podman machine set --memory "$WANT" "$MACH" >>"$OUT" 2>&1 || echo "(could not change the memory: see above)"
-  podman machine start "$MACH" >>"$OUT" 2>&1 || fail "The Podman machine did not start again. Run: podman machine start $MACH"
-  sleep 10
+  # Raise the machine to 8 GB (or as much as leaves 4 GB for macOS), once. This restarts the machine, so the Studio is brought back right after.
+  HOSTMB=$(( $(sysctl -n hw.memsize 2>/dev/null || echo 0) / 1048576 ))
+  WANT=8192; [ "$HOSTMB" -gt 0 ] && [ $((HOSTMB - 4096)) -lt "$WANT" ] && WANT=$((HOSTMB - 4096))
   CURMB=$(podman machine inspect "$MACH" --format '{{.Resources.Memory}}' 2>/dev/null | head -1)
-  echo "Machine memory now: ${CURMB:-?} MB"
+  echo "This Mac: ${HOSTMB} MB. Podman machine $MACH: ${CURMB:-?} MB. Target: ${WANT} MB."
+  if [ -n "$CURMB" ] && [ "$CURMB" -lt "$WANT" ] 2>/dev/null && [ "$WANT" -ge 6000 ]; then
+    say "Raising $MACH from ${CURMB} MB to ${WANT} MB (restarts the machine; the Studio comes back right after)"
+    podman machine stop "$MACH" >>"$OUT" 2>&1
+    podman machine set --memory "$WANT" "$MACH" >>"$OUT" 2>&1 || echo "(could not change the memory: see above)"
+    podman machine start "$MACH" >>"$OUT" 2>&1 || fail "The Podman machine did not start again. Run: podman machine start $MACH"
+    sleep 10
+    CURMB=$(podman machine inspect "$MACH" --format '{{.Resources.Memory}}' 2>/dev/null | head -1)
+    echo "Machine memory now: ${CURMB:-?} MB"
+  fi
+  # The Studio first: it should be answering before and after any build.
+  if ! curl -fsS --max-time 5 http://localhost:3000 >/dev/null 2>&1; then
+    echo "Starting the Studio (podman compose up -d)..."
+    ( cd "$APP" && podman compose up -d >>"$OUT" 2>&1 )
+    for _ in $(seq 1 60); do curl -fsS --max-time 5 http://localhost:3000 >/dev/null 2>&1 && break; sleep 5; done
+  fi
+  curl -fsS --max-time 5 http://localhost:3000 >/dev/null 2>&1 && echo "The Studio answers on localhost:3000." || echo "(The Studio is not answering yet; continuing with Nasiko anyway. Check later: bash ~/SocraStudio/bin/socra.sh check)"
+  # Compile jobs: 2 with 6 GB or more, otherwise 1.
+  if [ -n "$CURMB" ] && [ "$CURMB" -ge 6000 ] 2>/dev/null; then JOBS=2; else JOBS=1; fi
+  export NASIKO_CARGO_JOBS="${NASIKO_CARGO_JOBS:-$JOBS}"
+  echo "Building Nasiko with $NASIKO_CARGO_JOBS compile job(s)."
+  
 fi
-# The Studio first: it should be answering before and after any build.
-if ! curl -fsS --max-time 5 http://localhost:3000 >/dev/null 2>&1; then
-  echo "Starting the Studio (podman compose up -d)..."
-  ( cd "$APP" && podman compose up -d >>"$OUT" 2>&1 )
-  for _ in $(seq 1 60); do curl -fsS --max-time 5 http://localhost:3000 >/dev/null 2>&1 && break; sleep 5; done
-fi
-curl -fsS --max-time 5 http://localhost:3000 >/dev/null 2>&1 && echo "The Studio answers on localhost:3000." || echo "(The Studio is not answering yet; continuing with Nasiko anyway. Check later: bash ~/SocraStudio/bin/socra.sh check)"
-# Compile jobs: 2 with 6 GB or more, otherwise 1.
-if [ -n "$CURMB" ] && [ "$CURMB" -ge 6000 ] 2>/dev/null; then JOBS=2; else JOBS=1; fi
-export NASIKO_CARGO_JOBS="${NASIKO_CARGO_JOBS:-$JOBS}"
-echo "Building Nasiko with $NASIKO_CARGO_JOBS compile job(s)."
 
-say "Step 3: Nasiko (the first build takes several minutes: it compiles Nasiko's server)"
+say "Step 3: starting Nasiko"
 cd "$APP" || fail "no $APP"
 CA="$APP/corp-ca.pem"
 [ -f "$CA" ] || echo "(no corp-ca.pem found; if the build fails with a certificate error, that is why)"
@@ -116,7 +129,7 @@ run_nasiko() {
   NASIKO_DOCKER_SOCK="$SOCK" \
   NASIKO_EXTRA_HOST="nasiko.local:127.0.0.1" \
   NASIKO_CA_FILE="$CA" \
-  NASIKO_CARGO_JOBS="$NASIKO_CARGO_JOBS" \
+  NASIKO_CARGO_JOBS="${NASIKO_CARGO_JOBS:-}" \
   NASIKO_URL_FROM_STUDIO="http://host.containers.internal:8480" \
   STUDIO_FOR_NASIKO="http://host.containers.internal:3000" \
   bash scripts/nasiko-up.sh 2>&1 | tee "$HOME_DIR/nasiko-build.txt"

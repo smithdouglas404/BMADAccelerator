@@ -56,7 +56,12 @@ if [ ! -f .env.nasiko ]; then
   echo "Created .env.nasiko with fresh passwords."
 fi
 
-$COMPOSE -p bacc-nasiko -f docker-compose.nasiko.yml --env-file .env.nasiko up -d --build
+if [ -n "${NASIKO_NO_BUILD:-}" ]; then
+  # The server image was built elsewhere and loaded here (podman load): start without compiling anything.
+  $COMPOSE -p bacc-nasiko -f docker-compose.nasiko.yml --env-file .env.nasiko up -d --no-build
+else
+  $COMPOSE -p bacc-nasiko -f docker-compose.nasiko.yml --env-file .env.nasiko up -d --build
+fi
 
 printf "Waiting for Nasiko on port %s" "$PORT"
 for _ in $(seq 1 90); do
