@@ -14,6 +14,7 @@ type Info = {
   agents: { id: string; name: string; displayName: string; status: string; version: string }[]
   spend: { totalCost: number; operations: number; range: string; agents: { name: string; cost: number; operations: number }[] } | null
   studioAgents: { name: string; displayName: string; kind: string; product: string; description: string }[]
+  mcp: { id: string; name: string; displayName: string; url: string; auth: string; status: string; error: string; connected: boolean; tools: { name: string; description: string }[] }[]
 }
 type Sync = { ok: boolean; created: number; updated: number; failed: { name: string; why: string }[]; total: number; note: string }
 
@@ -40,6 +41,12 @@ export function NasikoTab({ setToast }: { setToast: (s: string) => void }) {
   const register = async () => {
     setBusy('sync')
     try { const r = await api<Sync>('/api/nasiko/sync', { method: 'POST' }); setSync(r); setToast(r.note) } catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
+    setBusy('')
+    load()
+  }
+  const connectMcp = async () => {
+    setBusy('mcp')
+    try { const r = await api<{ ok: boolean; note: string }>('/api/nasiko/mcp', { method: 'POST' }); setToast(r.note) } catch (e) { setToast(e instanceof Error ? e.message : String(e)) }
     setBusy('')
     load()
   }
@@ -72,7 +79,7 @@ export function NasikoTab({ setToast }: { setToast: (s: string) => void }) {
 
       <section className="studio-card">
         <div className="stack-header"><div><p className="eyebrow">Agents · {info.agents.length} of {info.studioAgents.length} registered</p><h3>The Studio’s agents in Nasiko</h3></div><RefreshCw size={16} /></div>
-        <Rich text={'Each agent is registered by its address with the open A2A agent card, so any harness that speaks A2A can use it, here or elsewhere. Calls come back to the Studio, so the answers keep the Studio’s rules.'} />
+        <Rich text={'Each agent is registered by its address with the open A2A agent card, so any harness that speaks A2A can use it, here or elsewhere. Calls come back to the Studio, so the answers keep the Studio’s rules. Note: this version of Nasiko cannot yet forward its own proxy calls to an agent that is only registered by address (it answers 503), so they are listed and ready, but not routed through Nasiko’s access rules and traces yet.'} />
         <div className="studio-review-actions" style={{ margin: '8px 0' }}>
           <button type="button" className="button button-primary" disabled={!info.signedIn || busy !== ''} onClick={() => void register()}>{busy === 'sync' ? 'Registering…' : missing.length ? `Register ${missing.length} agent${missing.length === 1 ? '' : 's'}` : 'Update all'}</button>
           {!info.signedIn && <small className="studio-muted">Connect first.</small>}
@@ -83,6 +90,22 @@ export function NasikoTab({ setToast }: { setToast: (s: string) => void }) {
           <div key={a.name} className="studio-list-row">
             <div className="studio-row-main"><strong>{a.displayName}</strong><small>{a.name}{a.product ? ` · ${a.product}` : ''}</small><Rich text={a.description} lines={2} /></div>
             <span className={registered.has(a.name) ? 'studio-ok' : 'studio-muted'}>{registered.has(a.name) ? 'in Nasiko' : 'not yet'}</span>
+          </div>
+        ))}</div>
+      </section>
+
+      <section className="studio-card">
+        <div className="stack-header"><div><p className="eyebrow">Nasiko / MCP · {info.mcp.length} connector{info.mcp.length === 1 ? '' : 's'}</p><h3>Tools Nasiko lists</h3></div><Plug size={16} /></div>
+        <Rich text={'Nasiko’s MCP gateway lists tool servers and decides which agent may call which tool. The Studio’s own connector is registered there with a look-only key that is kept inside Nasiko, never shown. The tools below are what Nasiko itself reports.'} />
+        <div className="studio-review-actions" style={{ margin: '8px 0' }}>
+          <button type="button" className="button button-primary" disabled={!info.signedIn || busy !== ''} onClick={() => void connectMcp()}>{busy === 'mcp' ? 'Connecting…' : info.mcp.some((c) => c.name === 'working-backwards-studio' && c.status === 'active') ? 'Reconnect the Studio’s tools' : 'Connect the Studio’s tools'}</button>
+          {!info.signedIn && <small className="studio-muted">Connect first.</small>}
+        </div>
+        <div className="studio-list">{info.mcp.length === 0 && info.signedIn && <p className="studio-muted">No connector is registered in Nasiko yet.</p>}{info.mcp.map((c) => (
+          <div key={c.id} className="studio-list-row">
+            <div className="studio-row-main"><strong>{c.displayName}</strong><small>{c.url} · {c.auth} · {c.tools.length} tool{c.tools.length === 1 ? '' : 's'}</small>{c.error && <small className="studio-warn">{c.error}</small>}
+              {c.tools.length > 0 && <details><summary>Tools</summary><ul>{c.tools.map((t) => <li key={t.name}><code>{t.name}</code>{t.description ? `: ${t.description}` : ''}</li>)}</ul></details>}</div>
+            <span className={c.status === 'active' && c.connected ? 'studio-ok' : 'studio-warn'}>{c.status === 'active' && c.connected ? 'active' : c.status || 'not connected'}</span>
           </div>
         ))}</div>
       </section>

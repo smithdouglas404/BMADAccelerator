@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clearLink, getLink, health, listAgents, login, publicLink, saveLink, spend } from "@/lib/nasiko/client";
 import { allSpecs } from "@/lib/nasiko/agents";
+import { listConnectors } from "@/lib/nasiko/mcp";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic";
 // faked when Nasiko is away: the card says what it could not reach. The password never leaves the server.
 export async function GET() {
   const link = await getLink();
-  const out: Record<string, unknown> = { link: publicLink(link), health: null, signedIn: false, agents: [], spend: null, studioAgents: [], problem: "" };
+  const out: Record<string, unknown> = { link: publicLink(link), health: null, signedIn: false, agents: [], spend: null, studioAgents: [], mcp: [], problem: "" };
   out.studioAgents = (await allSpecs()).map((s) => ({ name: s.name, displayName: s.displayName, kind: s.kind, product: s.useCaseName ?? "", description: s.description }));
   if (!link.url) return NextResponse.json(out);
   out.health = await health(link.url);
@@ -20,6 +21,7 @@ export async function GET() {
   }
   out.signedIn = true;
   out.agents = agents.body.filter((a) => a.name.startsWith("studio-")).map((a) => ({ id: a.id, name: a.name, displayName: a.display_name || a.name, status: a.status, version: a.version }));
+  out.mcp = (await listConnectors()).connectors;
   const s = await spend("7d");
   out.spend = s.ok ? s.body : null;
   return NextResponse.json(out);
