@@ -114,5 +114,6 @@ test("usage event: one run becomes one intake event shaped the way Nasiko re-der
 test("usage event: the verdicts come from the body, and an unknown answer counts as not stored", () => {
   assert.equal(intakeVerdicts("<html>web page</html>").size, 0);
   assert.equal(intakeVerdicts({ events: [{ event_id: "a", status: "accepted" }, { event_id: "b", status: "rejected" }] }).get("b"), "rejected");
+  assert.equal(intakeVerdicts({ data: { results: [{ event_id: "c", status: "duplicate" }] } }).get("c"), "duplicate"); // the real answer shape
   assert.equal(intakeVerdicts({ results: [{ event_id: "c", status: "duplicate" }] }).get("c"), "duplicate");
 });
